@@ -11,8 +11,11 @@ categories.workspace = true
 
 [dependencies]
 lakers-shared.workspace = true
-
+hexlit = "0.5.3"
 log = "0.4"
+# software implementations from rustcrypto
+# lakers-crypto-rustcrypto = { workspace = true, optional = true }
+# rand_core = { version = "0.6.4", optional = true, default-features = false }
 
 [dev-dependencies]
 lakers-ead-authz = { workspace = true }
@@ -24,6 +27,7 @@ hexlit = "0.5.3"
 default = [ "test-ead-none" ]
 test-ead-none = [ ]
 test-ead-authz = [ ]
+# rustcrypto = [ "lakers-crypto-rustcrypto", "rand_core/getrandom" ]
 
 [lib]
 crate-type = ["rlib"]
