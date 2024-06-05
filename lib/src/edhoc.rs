@@ -571,7 +571,7 @@ fn encode_message_2(g_y: &BytesP256ElemLen, ciphertext_2: &BufferCiphertext2) ->
     output
 }
 
-fn compute_th_2(
+pub fn compute_th_2(
     crypto: &mut impl CryptoTrait,
     g_y: &BytesP256ElemLen,
     h_message_1: &BytesHashLen,
@@ -629,7 +629,7 @@ fn compute_th_4(
 }
 
 // TODO: consider moving this to a new 'edhoc crypto primitives' module
-fn edhoc_kdf(
+pub fn edhoc_kdf(
     crypto: &mut impl CryptoTrait,
     prk: &BytesHashLen,
     label: u8,
@@ -791,7 +791,7 @@ fn decrypt_message_3(
 }
 
 // output must hold id_cred.len() + cred.len()
-fn encode_kdf_context(
+pub fn encode_kdf_context(
     c_r: Option<ConnId>, // only present for MAC_2
     id_cred: &BytesIdCred,
     th: &BytesHashLen,
@@ -975,7 +975,7 @@ fn compute_prk_4e3m(
     crypto.hkdf_extract(salt_4e3m, &g_iy)
 }
 
-fn compute_salt_3e2m(
+pub fn compute_salt_3e2m(
     crypto: &mut impl CryptoTrait,
     prk_2e: &BytesHashLen,
     th_2: &BytesHashLen,

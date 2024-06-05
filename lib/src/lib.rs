@@ -26,6 +26,8 @@ pub use lakers_ead_authz::*;
 mod edhoc;
 pub use edhoc::*;
 
+mod edhoc_psk;
+
 // TODO: clean these structs and remove the cred_x whre they are not needed anymore
 /// Starting point for performing EDHOC in the role of the Initiator.
 #[derive(Debug)]

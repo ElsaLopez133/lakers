@@ -85,6 +85,7 @@ pub const EDHOC_SUPPORTED_SUITES: BytesSupportedSuites = [0x2u8];
 
 pub type BytesEad2 = [u8; 0];
 pub type BytesIdCred = [u8; ID_CRED_LEN];
+pub type BytesIdCredPSK = [u8; ID_CRED_LEN];
 pub type Bytes8 = [u8; 8];
 pub type BytesCcmKeyLen = [u8; AES_CCM_KEY_LEN];
 pub type BytesCcmIvLen = [u8; AES_CCM_IV_LEN];
