@@ -61,6 +61,7 @@ mod tests {
     fn test_example_usage() {
         let mut crypto = default_crypto();
         let psk: BytesP256ElemLen = [1; P256_ELEM_LEN]; // Example psk
+        println!("PSK: {:?}", psk);
         //let h_message_1: BytesHashLen = [0; SHA256_DIGEST_LEN]; // TODO
         let h_message_1: BytesHashLen = hex!("ca02cabda5a8902749b42f711050bb4dbd52153e87527594b39f50cdf019888c");
         let g_y: BytesP256ElemLen = hex!("419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d5");
@@ -97,6 +98,8 @@ mod tests {
         println!("MAC 2: {:?}", mac_2);
 
         // Add assertions to validate the results if needed
-        //assert!(true); // Placeholder assertion, replace with actual assertions
+        let psk_check = encrypt_decrypt_psk(&mut crypto, &prk_2e, &th_3, &encryption);
+        println!("PSK recover: {:?}", psk_check);
+        assert!(psk == psk_check); // Placeholder assertion, replace with actual assertions
     }
 }
