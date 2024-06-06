@@ -921,7 +921,7 @@ fn encode_plaintext_2(
 /// Apply the XOR base encryption for ciphertext_2 in place. This will decrypt (or decrypt) the bytes
 /// in the ciphertext_2 argument (which may alternatively contain plaintext), returning the cipher
 /// (or plain-)text.
-fn encrypt_decrypt_ciphertext_2(
+pub fn encrypt_decrypt_ciphertext_2(
     crypto: &mut impl CryptoTrait,
     prk_2e: &BytesHashLen,
     th_2: &BytesHashLen,

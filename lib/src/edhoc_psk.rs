@@ -5,7 +5,51 @@ use hexlit::hex;
 //#[derive(Clone, Copy, Debug)]
 pub const ID_CRED_PSK: [u8; 4] = hex!("a104412b");
 
-fn compute_keystream_3()
+
+//Encrypt psk variant 2
+fn encrypt_decrypt_psk(
+    crypto: &mut impl CryptoTrait,
+    prk_2e: &BytesHashLen,
+    th_3: &BytesHashLen,
+    psk: &BytesP256ElemLen,
+) -> BytesHashLen {
+    // convert the transcript hash th_2 to BytesMaxContextBuffer type
+    let mut th_3_context: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
+    th_3_context[..th_3.len()].copy_from_slice(&th_3[..]);
+
+    // KEYSTREAM_3 = EDHOC-KDF( PRK_2e,   0, TH_3,      psk_length )
+    let keystream_3 = compute_keystream_3(crypto, &prk_2e, &th_3);
+
+    let mut result = BytesP256ElemLen::default();
+    for i in 0..P256_ELEM_LEN {
+        result[i] = psk[i] ^ keystream_3[i];
+    }
+
+    result
+}
+// Compute KEYSTRAM_3
+fn compute_keystream_3(
+    crypto: &mut impl CryptoTrait,
+    prk_2e: &BytesP256ElemLen,
+    th_3: &BytesHashLen,
+) -> BytesHashLen {
+    let mut th_3_context: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
+    th_3_context[..th_3.len()].copy_from_slice(&th_3[..]);
+
+    let keystream_3_buf = edhoc_kdf(
+        crypto,
+        prk_2e,
+        11u8,
+        &th_3_context,
+        SHA256_DIGEST_LEN,
+        P256_ELEM_LEN, // psk len
+    );
+
+    let mut keystream_3: BytesHashLen = [0x00; SHA256_DIGEST_LEN];
+    keystream_3[..].copy_from_slice(&keystream_3_buf[..SHA256_DIGEST_LEN]);
+    
+    keystream_3
+}
 
 fn compute_salt_2e(
     crypto: &mut impl CryptoTrait,
@@ -125,6 +169,7 @@ mod tests {
     fn test_example_usage() {
         let mut crypto = default_crypto();
         let psk: BytesP256ElemLen = [1; P256_ELEM_LEN]; // Example psk
+        println!("PSK: {:?}", psk);
         //let h_message_1: BytesHashLen = [0; SHA256_DIGEST_LEN]; // TODO
         let h_message_1: BytesHashLen = hex!("ca02cabda5a8902749b42f711050bb4dbd52153e87527594b39f50cdf019888c");
         let g_y: BytesP256ElemLen = hex!("419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d5");
@@ -174,7 +219,16 @@ mod tests {
         let mac_3 = compute_mac_3(&mut crypto, &prk_4e3m, &th_3, &id_cred_psk, &cred, &ead_3);
         println!("MAC 3: {:?}", mac_3); 
 
+        // Compute KESYTREAM_3
+        let keystream_3 = compute_keystream_3(&mut crypto, &prk_2e, &th_3);
+        println!("KEYSTREAM 3: {:?}", keystream_3);
+
+        // Encrypt psk for variant 2
+        let encryption = encrypt_decrypt_psk(&mut crypto, &prk_2e, &th_3, &psk);
+        println!("encryption of psk: {:?}", encryption);
         // Add assertions to validate the results if needed
-        //assert!(true); // Placeholder assertion, replace with actual assertions
+        let psk_check = encrypt_decrypt_psk(&mut crypto, &prk_2e, &th_3, &encryption);
+        println!("PSK recover: {:?}", psk_check);
+        assert!(psk == psk_check); // Placeholder assertion, replace with actual assertions
     }
 }
