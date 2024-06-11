@@ -71,18 +71,16 @@ pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocResponder<Crypto: CryptoTrait> {
     state: ResponderStart, // opaque state
-    r: BytesP256ElemLen,   // private authentication key of R
+    r: &'a [u8],           // private authentication key of R
     cred_r: CredentialRPK, // R's full credential
-    psk: Option<&'a [u8]>,
     crypto: Crypto,
 }
 
 #[derive(Debug)]
 pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
     state: ProcessingM1,   // opaque state
-    r: BytesP256ElemLen,   // private authentication key of R
+    r: &'a [u8],           // private authentication key of R
     cred_r: CredentialRPK, // R's full credential
-    psk: Option<&'a [u8]>,
     crypto: Crypto,
 }
 
@@ -122,7 +120,6 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
             },
             r,
             cred_r,
-            psk,
             crypto,
         }
     }
@@ -139,7 +136,6 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
                 state,
                 r: self.r,
                 cred_r: self.cred_r,
-                psk: self.psk,
                 crypto: self.crypto,
             },
             c_i,
@@ -165,11 +161,10 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             &self.state,
             &mut self.crypto,
             self.cred_r,
-            &self.r,
+            self.r.try_into().expect("Wrong length of private key"),
             c_r,
             cred_transfer,
             ead_2,
-            EDHOC_METHOD,
         ) {
             Ok((state, message_2)) => Ok((
                 EdhocResponderWaitM3 {

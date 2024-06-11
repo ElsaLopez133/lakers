@@ -3,51 +3,9 @@ pub use crate::edhoc::*;
 use hexlit::hex;
 
 //#[derive(Clone, Copy, Debug)]
+pub const ID_CRED_PSK: [u8; 4] = hex!("a104412b");
 
-//Encrypt psk variant 2
-fn encrypt_decrypt_psk(
-    crypto: &mut impl CryptoTrait,
-    prk_2e: &BytesHashLen,
-    th_3: &BytesHashLen,
-    psk: &BytesP256ElemLen,
-) -> BytesHashLen {
-    // convert the transcript hash th_2 to BytesMaxContextBuffer type
-    let mut th_3_context: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
-    th_3_context[..th_3.len()].copy_from_slice(&th_3[..]);
-
-    // KEYSTREAM_3 = EDHOC-KDF( PRK_2e,   0, TH_3,      psk_length )
-    let keystream_3 = compute_keystream_3(crypto, &prk_2e, &th_3);
-
-    let mut result = BytesP256ElemLen::default();
-    for i in 0..P256_ELEM_LEN {
-        result[i] = psk[i] ^ keystream_3[i];
-    }
-
-    result
-}
-// Compute KEYSTRAM_3
-fn compute_keystream_3(
-    crypto: &mut impl CryptoTrait,
-    prk_2e: &BytesP256ElemLen,
-    th_3: &BytesHashLen,
-) -> BytesHashLen {
-    let mut th_3_context: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
-    th_3_context[..th_3.len()].copy_from_slice(&th_3[..]);
-
-    let keystream_3_buf = edhoc_kdf(
-        crypto,
-        prk_2e,
-        11u8,
-        &th_3_context,
-        SHA256_DIGEST_LEN,
-        P256_ELEM_LEN, // psk len
-    );
-
-    let mut keystream_3: BytesHashLen = [0x00; SHA256_DIGEST_LEN];
-    keystream_3[..].copy_from_slice(&keystream_3_buf[..SHA256_DIGEST_LEN]);
-    
-    keystream_3
-}
+fn compute_keystream_3()
 
 fn compute_salt_2e(
     crypto: &mut impl CryptoTrait,
@@ -162,15 +120,12 @@ mod tests {
     use lakers_crypto::default_crypto;
     const G_XY_TV: BytesP256ElemLen = hex!("2f0cb7e860ba538fbf5c8bded009f6259b4b628fe1eb7dbe9378e5ecf7a824ba");
     const G_X_TV: BytesP256ElemLen = hex!("8af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6");
-    pub const ID_CRED_PSK: [u8; 4] = hex!("a104412b");
-    pub const CRED_PSK: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
     // Example usage test function
     #[test]
     fn test_example_usage() {
         let mut crypto = default_crypto();
-        let psk: BytesP256ElemLen = CredentialRPK::new(CRED_PSK.try_into().unwrap()).unwrap().public_key; // Example psk
-        println!("PSK: {:?}", psk);
-
+        let psk: BytesP256ElemLen = [1; P256_ELEM_LEN]; // Example psk
+        //let h_message_1: BytesHashLen = [0; SHA256_DIGEST_LEN]; // TODO
         let h_message_1: BytesHashLen = hex!("ca02cabda5a8902749b42f711050bb4dbd52153e87527594b39f50cdf019888c");
         let g_y: BytesP256ElemLen = hex!("419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d5");
         let x: BytesP256ElemLen = hex!("368ec1f69aeb659ba37d5a8d45b21bdc0299dceaa8ef235f3ca42ce3530f9525");
@@ -219,27 +174,7 @@ mod tests {
         let mac_3 = compute_mac_3(&mut crypto, &prk_4e3m, &th_3, &id_cred_psk, &cred, &ead_3);
         println!("MAC 3: {:?}", mac_3); 
 
-        // Compute KESYTREAM_3
-        let keystream_3 = compute_keystream_3(&mut crypto, &prk_2e, &th_3);
-        println!("KEYSTREAM 3: {:?}", keystream_3);
-
-        // Encrypt psk for variant 2
-        let encryption = encrypt_decrypt_psk(&mut crypto, &prk_2e, &th_3, &psk);
-        println!("encryption of psk: {:?}", encryption);
         // Add assertions to validate the results if needed
-        let psk_check = encrypt_decrypt_psk(&mut crypto, &prk_2e, &th_3, &encryption);
-        println!("PSK recover: {:?}", psk_check);
-        assert!(psk == psk_check); // Placeholder assertion, replace with actual assertions
-    }
-    
-    #[test]
-    fn test_handhsake_psk() {
-        let cred_psk = CredentialRPK::new(CRED_PSK.try_into().unwrap()).unwrap();
-        println!("CRED PSK: {:?}", cred_psk);
-
-        let initiator = EdhocInitiator::new(default_crypto()); // can choose which identity to use after learning R's identity
-        let responder = EdhocResponder::new(default_crypto(), R, cred_psk.clone()); // has to select an identity before learning who is I
-
-
+        //assert!(true); // Placeholder assertion, replace with actual assertions
     }
 }
