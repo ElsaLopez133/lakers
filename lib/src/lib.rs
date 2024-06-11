@@ -73,6 +73,7 @@ pub struct EdhocResponder<Crypto: CryptoTrait> {
     state: ResponderStart, // opaque state
     r: BytesP256ElemLen,   // private authentication key of R
     cred_r: CredentialRPK, // R's full credential
+    psk: Option<&'a [u8]>,
     crypto: Crypto,
 }
 
@@ -81,6 +82,7 @@ pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
     state: ProcessingM1,   // opaque state
     r: BytesP256ElemLen,   // private authentication key of R
     cred_r: CredentialRPK, // R's full credential
+    psk: Option<&'a [u8]>,
     crypto: Crypto,
 }
 
@@ -120,6 +122,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
             },
             r,
             cred_r,
+            psk,
             crypto,
         }
     }
@@ -136,6 +139,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
                 state,
                 r: self.r,
                 cred_r: self.cred_r,
+                psk: self.psk,
                 crypto: self.crypto,
             },
             c_i,
@@ -165,6 +169,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             c_r,
             cred_transfer,
             ead_2,
+            EDHOC_METHOD,
         ) {
             Ok((state, message_2)) => Ok((
                 EdhocResponderWaitM3 {
