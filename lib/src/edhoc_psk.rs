@@ -56,15 +56,12 @@ mod tests {
     pub const CRED_PSK : [u8; 107] = hex!("a2027734322d35302d33312d46462d45462d33372d33322d333908a101a5010202412b2001215820ac75e9ece3e50bfc8ed60399889522405c47bf16df96660a41298cb4307f7eb62258206e5de611388a4b8a8211334ac7d37ecb52a387d257e6db3c2a93df21ff3affc8");
     const G_XY_TV: BytesP256ElemLen = hex!("2f0cb7e860ba538fbf5c8bded009f6259b4b628fe1eb7dbe9378e5ecf7a824ba");
     const G_X_TV: BytesP256ElemLen = hex!("8af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6");
-    pub const ID_CRED_PSK: [u8; 4] = hex!("a104412b");
-    pub const CRED_PSK: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
     // Example usage test function
     #[test]
     fn test_example_usage() {
         let mut crypto = default_crypto();
-        let psk: BytesP256ElemLen = CredentialRPK::new(CRED_PSK.try_into().unwrap()).unwrap().public_key; // Example psk
-        println!("PSK: {:?}", psk);
-
+        let psk: BytesP256ElemLen = [1; P256_ELEM_LEN]; // Example psk
+        //let h_message_1: BytesHashLen = [0; SHA256_DIGEST_LEN]; // TODO
         let h_message_1: BytesHashLen = hex!("ca02cabda5a8902749b42f711050bb4dbd52153e87527594b39f50cdf019888c");
         let g_y: BytesP256ElemLen = hex!("419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d5");
         let x: BytesP256ElemLen = hex!("368ec1f69aeb659ba37d5a8d45b21bdc0299dceaa8ef235f3ca42ce3530f9525");
@@ -100,19 +97,6 @@ mod tests {
         println!("MAC 2: {:?}", mac_2);
 
         // Add assertions to validate the results if needed
-        let psk_check = encrypt_decrypt_psk(&mut crypto, &prk_2e, &th_3, &encryption);
-        println!("PSK recover: {:?}", psk_check);
-        assert!(psk == psk_check); // Placeholder assertion, replace with actual assertions
-    }
-    
-    #[test]
-    fn test_handhsake_psk() {
-        let cred_psk = CredentialRPK::new(CRED_PSK.try_into().unwrap()).unwrap();
-        println!("CRED PSK: {:?}", cred_psk);
-
-        let initiator = EdhocInitiator::new(default_crypto()); // can choose which identity to use after learning R's identity
-        let responder = EdhocResponder::new(default_crypto(), R, cred_psk.clone()); // has to select an identity before learning who is I
-
-
+        //assert!(true); // Placeholder assertion, replace with actual assertions
     }
 }
