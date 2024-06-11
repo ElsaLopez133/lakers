@@ -96,18 +96,26 @@ pub fn r_prepare_message_2(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
     cred_r: CredentialRPK,
-    r: &BytesP256ElemLen, // R's static private DH key
+    r: Option<&BytesP256ElemLen>, // R's static private DH key or PSK
+    psk: Option<&BytesP256ElemLen>,
     c_r: ConnId,
     cred_transfer: CredentialTransfer,
     ead_2: &Option<EADItem>,
+    EDHOC_METHOD: u8,
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
     // compute TH_2
     let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
+    if EDHOC_METHOD == 4 {
+        let salt_2e = compute_salt_2e(&mut crypto, Some(&psk), &th_2);
+        let prk_2e = compute_prk_2e(&mut crypto, &x, &g_y, &salt_2e);
+    } else {
+        let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
+    }
 
     // compute prk_3e2m
-    let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
-    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x);
+
+    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x, &psk);
 
     // compute MAC_2
     let mac_2 = compute_mac_2(
@@ -974,13 +982,24 @@ fn compute_salt_4e3m(
 fn compute_prk_4e3m(
     crypto: &mut impl CryptoTrait,
     salt_4e3m: &BytesHashLen,
-    i: &BytesP256ElemLen,
-    g_y: &BytesP256ElemLen,
-) -> BytesHashLen {
-    // compute g_rx from static R's public key and private ephemeral key
-    let g_iy = crypto.p256_ecdh(i, g_y);
+    i: Option<&BytesP256ElemLen>,
+    g_y: Option<&BytesP256ElemLen>,
+    psk: Option<&BytesP256ElemLen>
+) -> Result<BytesHashLen, EDHOCError> {
+    match (i, g_y, psk) {
+        (Some(i), Some(g_y), None) => {
+        // compute g_rx from static R's public key and private ephemeral key
+        let g_iy = crypto.p256_ecdh(i, g_y);
+        // Extract PRK using HKDF
+        Ok(crypto.hkdf_extract(salt_4e3m, &g_iy))
+        },
 
-    crypto.hkdf_extract(salt_4e3m, &g_iy)
+        (None, None, Some(psk)) => {    
+        // Extract PRK using HKDF
+        Ok(crypto.hkdf_extract(salt_4e3m, &g_iy))
+        },
+        _ => Err(EDHOCError::InvalidArguments), // Appropriate error handling
+    }
 }
 
 pub fn compute_salt_3e2m(
@@ -1009,13 +1028,24 @@ pub fn compute_salt_3e2m(
 fn compute_prk_3e2m(
     crypto: &mut impl CryptoTrait,
     salt_3e2m: &BytesHashLen,
-    x: &BytesP256ElemLen,
-    g_r: &BytesP256ElemLen,
-) -> BytesHashLen {
-    // compute g_rx from static R's public key and private ephemeral key
-    let g_rx = crypto.p256_ecdh(x, g_r);
+    x: Option<&BytesP256ElemLen>,
+    g_r: Option<&BytesP256ElemLen>,
+    psk: Option<&BytesP256ElemLen>
+) -> Result<BytesHashLen, EDHOCError> {
+    match (x, g_r, psk) {
+        (Some(x), Some(g_r), None) => {
+        // compute g_rx from static R's public key and private ephemeral key
+        let g_rx = crypto.p256_ecdh(x, g_r);
 
-    crypto.hkdf_extract(salt_3e2m, &g_rx)
+        // Extract PRK using HKDF
+        Ok(crypto.hkdf_extract(salt_3e2m, &g_rx))
+        },
+        (None, None, Some(psk)) => {    
+        // Extract PRK using HKDF
+        Ok(crypto.hkdf_extract(salt_3e2m, &psk))
+        },
+        _ => Err(EDHOCError::InvalidArguments), // Appropriate error handling
+    }
 }
 
 fn compute_prk_2e(
@@ -1029,6 +1059,29 @@ fn compute_prk_2e(
     // compute prk_2e as PRK_2e = HMAC-SHA-256( salt, G_XY )
 
     crypto.hkdf_extract(th_2, &g_xy)
+}
+
+fn compute_salt_2e(
+    crypto: &mut impl CryptoTrait,
+    psk: &BytesP256ElemLen,
+    th_2: &BytesHashLen,
+) -> BytesHashLen {
+    let mut th_2_context: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
+    th_2_context[..th_2.len()].copy_from_slice(&th_2[..]);
+
+    let salt_2e_buf = edhoc_kdf(
+        crypto,
+        psk,
+        1u8,
+        &th_2_context,
+        SHA256_DIGEST_LEN,
+        SHA256_DIGEST_LEN,
+    );
+
+    let mut salt_2e: BytesHashLen = [0x00; SHA256_DIGEST_LEN];
+    salt_2e[..].copy_from_slice(&salt_2e_buf[..SHA256_DIGEST_LEN]);
+
+    salt_2e
 }
 
 #[cfg(test)]

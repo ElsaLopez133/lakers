@@ -65,16 +65,18 @@ pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocResponder<'a, Crypto: CryptoTrait> {
     state: ResponderStart, // opaque state
-    r: &'a [u8],           // private authentication key of R
+    r: Option<&'a [u8]>, // private authentication key of R. r can now be Some(&'a [u8]) if the private authentication key is provided, or None if it is not.
     cred_r: CredentialRPK, // R's full credential
+    psk: Option<&'a [u8]>,
     crypto: Crypto,
 }
 
 #[derive(Debug)]
 pub struct EdhocResponderProcessedM1<'a, Crypto: CryptoTrait> {
     state: ProcessingM1,   // opaque state
-    r: &'a [u8],           // private authentication key of R
+    r: Option<&'a [u8]>,   // private authentication key of R
     cred_r: CredentialRPK, // R's full credential
+    psk: Option<&'a [u8]>,
     crypto: Crypto,
 }
 
@@ -97,15 +99,21 @@ pub struct EdhocResponderDone<Crypto: CryptoTrait> {
 }
 
 impl<'a, Crypto: CryptoTrait> EdhocResponder<'a, Crypto> {
-    pub fn new(mut crypto: Crypto, r: &'a [u8], cred_r: CredentialRPK) -> Self {
+    pub fn new(mut crypto: Crypto, r: Option<&'a [u8]>, cred_r: CredentialRPK, psk: Option<&'a [u8]>) -> Self {
         trace!("Initializing EdhocInitiator");
-        assert!(r.len() == P256_ELEM_LEN);
+        if let Some(r_bytes) = &r {
+            assert!(r_bytes.len() == P256_ELEM_LEN);
+        }
+        if let Some(psk_bytes) = &psk {
+            assert!(psk_bytes.len() == P256_ELEM_LEN);
+        }
         let (y, g_y) = crypto.p256_generate_key_pair();
 
         EdhocResponder {
             state: ResponderStart { y, g_y },
             r,
             cred_r,
+            psk,
             crypto,
         }
     }
@@ -129,6 +137,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponder<'a, Crypto> {
                 state,
                 r: self.r,
                 cred_r: self.cred_r,
+                psk: self.psk,
                 crypto: self.crypto,
             },
             c_i,
@@ -154,10 +163,12 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessedM1<'a, Crypto> {
             &self.state,
             &mut self.crypto,
             self.cred_r,
-            self.r.try_into().expect("Wrong length of private key"),
+            self.r.map(|r| r.try_into().expect("Wrong length of private key")),
+            self.psk.map(|psk| psk.try_into().expect("Wrong length of private key")),
             c_r,
             cred_transfer,
             ead_2,
+            EDHOC_METHOD,
         ) {
             Ok((state, message_2)) => Ok((
                 EdhocResponderWaitM3 {
