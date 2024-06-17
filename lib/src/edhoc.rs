@@ -1018,7 +1018,7 @@ fn compute_prk_3e2m(
     crypto.hkdf_extract(salt_3e2m, &g_rx)
 }
 
-fn compute_prk_2e(
+pub fn compute_prk_2e(
     crypto: &mut impl CryptoTrait,
     x: &BytesP256ElemLen,
     g_y: &BytesP256ElemLen,
