@@ -1,4 +1,5 @@
 use core::panic;
+use lakers_shared::Crypto;
 
 pub type BufferCred = EdhocBuffer<128>;
 pub type BufferKid = EdhocBuffer<16>;
@@ -115,7 +116,7 @@ impl Credential for CoseKey {
         }
 
         cred.extend_from_slice(cred_bytes).unwrap();
-        cred
+        Some(cred)
         }
     }
 
@@ -148,4 +149,38 @@ impl Credential for X509 {
         refs
     }
 }
+
+// Define a tests module
+#[cfg(test)]
+mod test {
+    use super::*;
+    use lakers_shared::Crypto;
+    use hexlit::hex;
+
+    const CRED_TV: &[u8] = &hex!("a2026b6578616d706c652e65647508a101a501020241322001215820bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f02258204519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
+    const G_A_TV: &[u8] = &hex!("BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F0");
+    const ID_CRED_TV: &[u8] = &hex!("a1044132");
+    const KID_VALUE_TV: &[u8] = &hex!("32");
+
+    const CRED_PSK: &[u8] =
+        &hex!("A202686D79646F74626F7408A101A30104024132205050930FF462A77A3540CF546325DEA214");
+    const K: &[u8] = &hex!("50930FF462A77A3540CF546325DEA214");
+
+    #[test]
+    fn test_new_cose_key() {
+        let key = CoseKey::new(2, BufferKid::new_from_slice(KID_VALUE_TV).unwrap())
+            .with_x(G_A_TV.try_into().unwrap());
+        println!("CoseKey: {:?}", key);
+        assert!(key.get_credential_key() == G_A_TV);
+    }
+
+    #[test]
+    fn test_new_cose_key_psk() {
+        let key = CoseKey::new(4, BufferKid::new_from_slice(KID_VALUE_TV).unwrap())
+            .set_k(K.try_into().unwrap());
+
+        assert!(key.get_credential_key() == K);
+    }
+}
+
 

@@ -54,8 +54,8 @@ mod tests {
     use lakers_crypto::default_crypto;
     pub const ID_CRED_PSK: [u8; 4] = hex!("a104412b");
     pub const CRED_PSK : [u8; 107] = hex!("a2027734322d35302d33312d46462d45462d33372d33322d333908a101a5010202412b2001215820ac75e9ece3e50bfc8ed60399889522405c47bf16df96660a41298cb4307f7eb62258206e5de611388a4b8a8211334ac7d37ecb52a387d257e6db3c2a93df21ff3affc8");
-    const G_XY_TV: BytesP256ElemLen = hex!("2f0cb7e860ba538fbf5c8bded009f6259b4b628fe1eb7dbe9378e5ecf7a824ba");
-    const G_X_TV: BytesP256ElemLen = hex!("8af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6");
+    //const G_XY_TV: BytesP256ElemLen = hex!("2f0cb7e860ba538fbf5c8bded009f6259b4b628fe1eb7dbe9378e5ecf7a824ba");
+    //const G_X_TV: BytesP256ElemLen = hex!("8af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6");
     // Example usage test function
     #[test]
     fn test_example_usage() {

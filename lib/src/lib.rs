@@ -24,6 +24,7 @@ pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
 pub use lakers_ead_authz::*;
 
 mod edhoc;
+pub mod cred_new_elsa;
 pub use edhoc::*;
 
 mod edhoc_psk;
@@ -69,7 +70,7 @@ pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
 
 /// Starting point for performing EDHOC in the role of the Responder.
 #[derive(Debug)]
-pub struct EdhocResponder<Crypto: CryptoTrait> {
+pub struct EdhocResponder<'a, Crypto: CryptoTrait> {
     state: ResponderStart, // opaque state
     r: &'a [u8],           // private authentication key of R
     cred_r: CredentialRPK, // R's full credential
@@ -77,7 +78,7 @@ pub struct EdhocResponder<Crypto: CryptoTrait> {
 }
 
 #[derive(Debug)]
-pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
+pub struct EdhocResponderProcessedM1<'a, Crypto: CryptoTrait> {
     state: ProcessingM1,   // opaque state
     r: &'a [u8],           // private authentication key of R
     cred_r: CredentialRPK, // R's full credential
@@ -112,7 +113,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponder<'a, Crypto> {
             state: ResponderStart {
                 y,
                 g_y,
-                method: method.into(),
+                method : EDHOC_METHOD,
             },
             r,
             cred_r,
@@ -123,7 +124,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponder<'a, Crypto> {
     pub fn process_message_1(
         mut self,
         message_1: &BufferMessage1,
-    ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, Option<EADItem>), EDHOCError> {
+    ) -> Result<(EdhocResponderProcessedM1<'a,Crypto>, ConnId, Option<EADItem>), EDHOCError> {
         trace!("Enter process_message_1");
         let (state, c_i, ead_1) = r_process_message_1(&self.state, &mut self.crypto, message_1)?;
 
@@ -140,7 +141,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponder<'a, Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
+impl<'a, Crypto: CryptoTrait> EdhocResponderProcessedM1<'a, Crypto> {
     pub fn prepare_message_2(
         mut self,
         cred_transfer: CredentialTransfer,
@@ -553,7 +554,7 @@ mod test {
     fn test_new_responder() {
         let _responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
+            //EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             CredentialRPK::new(CRED_R.try_into().unwrap()).unwrap(),
         );
@@ -578,7 +579,7 @@ mod test {
         let message_1_tv = EdhocMessageBuffer::from_hex(MESSAGE_1_TV);
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
+            //EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             CredentialRPK::new(CRED_R.try_into().unwrap()).unwrap(),
         );
@@ -592,7 +593,7 @@ mod test {
         // responder or initiator
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
+            //EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             CredentialRPK::new(CRED_R.try_into().unwrap()).unwrap(),
         );
@@ -622,7 +623,7 @@ mod test {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
+            //EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             cred_r.clone(),
         ); // has to select an identity before learning who is I
