@@ -120,6 +120,7 @@ impl Credential {
             Err(EDHOCError::ParsingError)
         }
     }
+
     /// Returns a COSE_Header map with a single entry representing a credential by value.
     ///
     /// For example, if the credential is a CCS:
@@ -168,6 +169,7 @@ impl Credential {
 mod test {
     use super::*;
     use hexlit::hex;
+    use rstest::rstest;
 
     const CRED_TV: &[u8] = &hex!("a2026b6578616d706c652e65647508a101a501020241322001215820bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f02258204519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
     const G_A_TV: &[u8] = &hex!("BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F0");
@@ -219,5 +221,18 @@ mod test {
         //     CredentialKey::Symmetric(K.try_into().unwrap())
         // );
         // assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
+    }
+
+    #[rstest]
+    #[case(&[0x0D], &[0xa1, 0x04, 0x41, 0x0D])] // two optimizations: omit kid label and encode as CBOR integer
+    #[case(&[0x41, 0x18], &[0xa1, 0x04, 0x41, 0x18])] // one optimization: omit kid label
+    #[case(CRED_TV, ID_CRED_BY_VALUE_TV)] // regular credential by value
+    fn test_id_cred_from_encoded_plaintext(#[case] input: &[u8], #[case] expected: &[u8]) {
+        assert_eq!(
+            IdCredNew::from_encoded_plaintext(input)
+                .unwrap()
+                .as_full_value(),
+            expected
+        );
     }
 }
