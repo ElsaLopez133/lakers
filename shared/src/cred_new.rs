@@ -31,7 +31,6 @@ pub struct Credential {
     pub cred_type: CredentialType,
 }
 
-// FIXME: should handle errors instead of panicking
 impl Credential {
     /// Creates a new credential with the given bytes, key and type.
     pub fn new(bytes: BufferCred, key: CredentialKey, cred_type: CredentialType) -> Self {
@@ -52,18 +51,53 @@ impl Credential {
 
     /// Parse a CCS style credential
     ///
-    /// If the given value matches the shape Lakers expects of a CCS, its public key and key ID are
-    /// extracted into a full credential.
+    /// If the given value matches the shape lakers expects of a CCS, i.e. credentials from RFC9529,
+    /// its public key and key ID are extracted into a full credential.
     pub fn parse_ccs(value: &[u8]) -> Result<Self, EDHOCError> {
-        // Implementing in terms of the old structure, to be moved in here in later versions of
-        // this change set
-        let (public_key, kid) = CredentialRPK::parse(value)?;
-        Ok(Self {
-            bytes: BufferCred::new_from_slice(value).map_err(|_| EDHOCError::ParsingError)?,
-            key: CredentialKey::EC2Compact(public_key),
-            kid: Some(BufferKid::new_from_slice(&[kid]).unwrap()),
-            cred_type: CredentialType::CCS,
-        })
+        const CCS_PREFIX_LEN: usize = 3;
+        const CNF_AND_COSE_KEY_PREFIX_LEN: usize = 8;
+        const COSE_KEY_FIRST_ITEMS_LEN: usize = 6;
+
+        if value.len()
+            < 3 + CCS_PREFIX_LEN
+                + 1
+                + CNF_AND_COSE_KEY_PREFIX_LEN
+                + COSE_KEY_FIRST_ITEMS_LEN
+                + P256_ELEM_LEN
+        {
+            Err(EDHOCError::ParsingError)
+        } else {
+            let subject_len = CBORDecoder::info_of(value[2]) as usize;
+
+            let id_cred_offset: usize = CCS_PREFIX_LEN
+                .checked_add(subject_len)
+                .and_then(|x| x.checked_add(CNF_AND_COSE_KEY_PREFIX_LEN))
+                .ok_or(EDHOCError::ParsingError)?;
+
+            let g_a_x_offset: usize = id_cred_offset
+                .checked_add(COSE_KEY_FIRST_ITEMS_LEN)
+                .ok_or(EDHOCError::ParsingError)?;
+
+            if g_a_x_offset
+                .checked_add(P256_ELEM_LEN)
+                .map_or(false, |end| end <= value.len())
+            {
+                let public_key: BytesKeyEC2 = value[g_a_x_offset..g_a_x_offset + P256_ELEM_LEN]
+                    .try_into()
+                    .expect("Wrong key length");
+                let kid = value[id_cred_offset];
+
+                Ok(Self {
+                    bytes: BufferCred::new_from_slice(value)
+                        .map_err(|_| EDHOCError::ParsingError)?,
+                    key: CredentialKey::EC2Compact(public_key),
+                    kid: Some(BufferKid::new_from_slice(&[kid]).unwrap()),
+                    cred_type: CredentialType::CCS,
+                })
+            } else {
+                Err(EDHOCError::ParsingError)
+            }
+        }
     }
 
     /// Parse a CCS style credential, but the key is a symmetric key
@@ -71,7 +105,6 @@ impl Credential {
     /// If the given value matches the shape Lakers expects of a CCS, its public key and key ID are
     /// extracted into a full credential.
     pub fn parse_ccs_psk(value: &[u8]) -> Result<Self, EDHOCError> {
-        // TODO: actually implement this
         const CCS_PREFIX_LEN: usize = 3;
         const CNF_AND_COSE_KEY_PREFIX_LEN: usize = 8;
         const COSE_KEY_FIRST_ITEMS_LEN: usize = 4; //COSE for symmetric key
