@@ -202,6 +202,7 @@ impl ConnId {
 #[derive(PartialEq, Debug)]
 pub enum EDHOCMethod {
     StatStat = 3,
+    Psk_var1 = 4,
     // add others, such as:
     // PSK1 = ?,
     // PSK2 = ?,

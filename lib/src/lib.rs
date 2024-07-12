@@ -106,11 +106,16 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     pub fn new(
         mut crypto: Crypto,
         method: EDHOCMethod,
-        r: BytesP256ElemLen,
+        r: Option<BytesP256ElemLen>,
         cred_r: Credential,
     ) -> Self {
         trace!("Initializing EdhocResponder");
         let (y, g_y) = crypto.p256_generate_key_pair();
+
+        let r = match method {
+            EDHOCMethod::StatStat => r.unwrap(),
+            EDHOCMethod::Psk_var1 => BytesP256ElemLen::default(),
+        };
 
         EdhocResponder {
             state: ResponderStart {
@@ -269,8 +274,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         }
     }
 
-    pub fn set_identity(&mut self, i: BytesP256ElemLen, cred_i: Credential) {
-        self.i = Some(i);
+    pub fn set_identity(&mut self, i: Option<BytesP256ElemLen>, cred_i: Credential) {
+        self.i = i;
         self.cred_i = Some(cred_i);
     }
 
@@ -342,13 +347,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
     pub fn set_identity(
         &mut self,
-        i: BytesP256ElemLen,
+        i: Option<BytesP256ElemLen>,
         cred_i: Credential,
     ) -> Result<(), EDHOCError> {
         if self.i.is_some() || self.cred_i.is_some() {
             return Err(EDHOCError::IdentityAlreadySet);
         }
-        self.i = Some(i);
+        self.i = i;
         self.cred_i = Some(cred_i);
         Ok(())
     }
