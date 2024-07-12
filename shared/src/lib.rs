@@ -204,6 +204,10 @@ pub enum EDHOCMethod {
     StatStat = 3,
     Psk_var1 = 4,
     // add others, such as:
+<<<<<<< HEAD
+=======
+    PSK1 = 4,
+>>>>>>> 7360a1c (psk-variant1)
     // PSK2 = ?,
 }
 
