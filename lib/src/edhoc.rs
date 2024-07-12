@@ -261,7 +261,19 @@ pub fn i_prepare_message_1(
     ead_1: &Option<EADItem>, // FIXME: make it a list of EADItem
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
-    let message_1 = encode_message_1(state.method, &state.suites_i, &state.g_x, c_i, ead_1)?;
+    let id_cred = match state.method {
+        EDHOCMethod::StatStat => None,
+        EDHOCMethod::PSK1 => state.cred_i.by_kid()?,
+    };
+
+    let message_1 = encode_message_1(
+        state.method,
+        &state.suites_i,
+        &state.g_x,
+        c_i,
+        id_cred.as_encoded_value(),
+        ead_1,
+    )?;
 
     let mut message_1_buf: BytesMaxBuffer = [0x00; MAX_BUFFER_LEN];
     message_1_buf[..message_1.len].copy_from_slice(message_1.as_slice());
@@ -474,6 +486,7 @@ fn encode_message_1(
     suites: &EdhocBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
+    id_cred: Option<&[u8]>,
     ead_1: &Option<EADItem>,
 ) -> Result<BufferMessage1, EDHOCError> {
     let mut output = BufferMessage1::new();
@@ -514,6 +527,12 @@ fn encode_message_1(
     let c_i = c_i.as_slice();
     output.len = 3 + raw_suites_len + P256_ELEM_LEN + c_i.len();
     output.content[3 + raw_suites_len + P256_ELEM_LEN..][..c_i.len()].copy_from_slice(c_i);
+
+    if let Some(id_cred) = id_cred {
+        output
+            .extend_from_slice(id_cred)
+            .or(Err(EDHOCError::EncodingError))?;
+    }
 
     if let Some(ead_1) = ead_1 {
         match encode_ead_item(ead_1) {
