@@ -322,13 +322,14 @@ pub struct InitiatorStart {
     pub method: u8,
     pub x: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_x: BytesP256ElemLen, // ephemeral public key of myself
+    pub id_cred_psk: IdCred,   // in PSK-1, I sends the id_cred_psk in message_1
 }
 
 #[derive(Debug)]
 pub struct ResponderStart {
-    pub method: u8,
     pub y: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_y: BytesP256ElemLen, // ephemeral public key of myself
+    pub method: u8,
 }
 
 #[derive(Default, Debug)]
@@ -339,7 +340,7 @@ pub struct ProcessingM1 {
     pub c_i: ConnId,
     pub g_x: BytesP256ElemLen, // ephemeral public key of the initiator
     pub h_message_1: BytesHashLen,
-    pub id_cred_psk: IdCred,
+    pub id_cred_psk: IdCred, // R retrieves cred_psk from id_cred_psk
 }
 
 #[derive(Default, Clone, Debug)]
@@ -354,6 +355,7 @@ pub struct WaitM3 {
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
+    pub id_cred_psk: IdCred, // TODO: not sure it is needed. Look at r_parse_message_3, since id_cred_psk is not in the plaintext_3
 }
 
 #[derive(Debug, Default)]
@@ -685,31 +687,24 @@ mod edhoc_parser {
             // consume c_i encoded as single-byte int (we still do not support bstr encoding)
             let c_i = ConnId::from_int_raw(decoder.int_raw()?);
 
-            // if there is still more to parse, it can be ID_CRED_PSK and EAD_1, or just EAD_1
-            if rcvd_message_1.len > decoder.position() {
-                // NOTE: the current implementation only supports one EAD handler
-                // NOTE: We assume there is ID_CRED_PSK and EAD
-                let id_cred_psk = match decoder.any_as_encoded() {
-                    Ok(encoded_value) => match IdCred::from_encoded_value(encoded_value) {
-                        Ok(id_cred) => Some(id_cred),
-                        Err(_) => None,
-                    },
+            // for psk-1, there is id_cred_psk sent in message_1
+            let id_cred_psk = match decoder.any_as_encoded() {
+                Ok(encoded_value) => match IdCred::from_encoded_value(encoded_value) {
+                    Ok(id_cred) => Some(id_cred),
                     Err(_) => None,
-                };
-                if rcvd_message_1.len > decoder.position() {
-                    let ead_res = parse_ead(decoder.remaining_buffer()?);
-                    if let Ok(ead_1) = ead_res {
-                        Ok((method, suites_i, g_x, c_i, id_cred_psk, ead_1))
-                    } else {
-                        Err(ead_res.unwrap_err())
-                    }
-                } else if decoder.finished() {
-                    Ok((method, suites_i, g_x, c_i, id_cred_psk, None))
+                },
+                Err(_) => None,
+            };
+            // if there is more to parse, is EAD_1
+            if rcvd_message_1.len > decoder.position() {
+                let ead_res = parse_ead(decoder.remaining_buffer()?);
+                if let Ok(ead_1) = ead_res {
+                    Ok((method, suites_i, g_x, c_i, id_cred_psk, ead_1))
                 } else {
-                    Err(EDHOCError::ParsingError)
+                    Err(ead_res.unwrap_err())
                 }
             } else if decoder.finished() {
-                Ok((method, suites_i, g_x, c_i, None, None))
+                Ok((method, suites_i, g_x, c_i, id_cred_psk, None))
             } else {
                 Err(EDHOCError::ParsingError)
             }
@@ -783,7 +778,8 @@ mod edhoc_parser {
 
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
-    ) -> Result<(IdCred, Option<EADItem>), EDHOCError> {
+    ) -> Result<(Option<EADItem>), EDHOCError> {
+        // Change: Remove IdCRed as first argument of Result since ther eis no id_cred in PSK
         trace!("Enter decode_plaintext_3");
         // NOTE: There is no MAC_3
         //let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
@@ -791,7 +787,7 @@ mod edhoc_parser {
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
-        let id_cred_psk = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
+        //let id_cred = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
         //mac_3[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
 
@@ -800,12 +796,12 @@ mod edhoc_parser {
             // assume only one EAD item
             let ead_res = parse_ead(decoder.remaining_buffer()?);
             if let Ok(ead_3) = ead_res {
-                Ok((id_cred_psk, ead_3))
+                Ok(ead_3)
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((id_cred_psk, None))
+            Ok(None)
         } else {
             Err(EDHOCError::ParsingError)
         }

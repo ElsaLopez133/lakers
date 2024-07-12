@@ -31,7 +31,7 @@ pub struct EdhocInitiator<Crypto: CryptoTrait> {
     state: InitiatorStart, // opaque state
     //i: Option<BytesP256ElemLen>, // static public key of myself
     //cred_i: Option<Credential>,
-    cred_psk: Credential,
+    cred_psk: Option<Credential>,
     crypto: Crypto,
 }
 
@@ -40,7 +40,7 @@ pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
     state: WaitM2, // opaque state
     //i: Option<BytesP256ElemLen>,
     //cred_i: Option<Credential>,
-    cred_psk: Credential,
+    cred_psk: Option<Credential>,
     crypto: Crypto,
 }
 
@@ -49,7 +49,7 @@ pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
     state: ProcessingM2, // opaque state
     //i: Option<BytesP256ElemLen>,
     //cred_i: Option<Credential>,
-    cred_psk: Credential,
+    cred_psk: Option<Credential>,
     crypto: Crypto,
 }
 
@@ -57,7 +57,7 @@ pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
 pub struct EdhocInitiatorProcessedM2<Crypto: CryptoTrait> {
     state: ProcessedM2, // opaque state
     //cred_i: Option<Credential>,
-    cred_psk: Credential,
+    cred_psk: Option<Credential>,
     crypto: Crypto,
 }
 
@@ -73,7 +73,7 @@ pub struct EdhocResponder<Crypto: CryptoTrait> {
     state: ResponderStart, // opaque state
     //r: Option<BytesP256ElemLen>,   // private authentication key of R
     //cred_r: Option<Credential>,    // R's full credential
-    cred_psk: Credential,
+    cred_psk: Option<Credential>,
     crypto: Crypto,
 }
 
@@ -82,7 +82,7 @@ pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
     state: ProcessingM1, // opaque state
     //r: Option<BytesP256ElemLen>, // private authentication key of R
     //cred_r: Option<Credential>,  // R's full credential
-    cred_psk: Credential, // Not sure we need it since we have id_cred_psk in the state
+    cred_psk: Option<Credential>, // Not sure we need it since we have id_cred_psk in the state
     crypto: Crypto,
 }
 
@@ -108,7 +108,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     pub fn new(
         mut crypto: Crypto,
         method: EDHOCMethod,
-        cred_psk: Credential,
+        cred_psk: Option<Credential>,
         //r: Option<BytesP256ElemLen>,
         //cred_r: Option<Credential>,
     ) -> Self {
@@ -165,7 +165,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
         match r_prepare_message_2(
             &self.state,
             &mut self.crypto,
-            self.cred_r,
+            self.cred_psk,
             //&self.r,
             c_r,
             cred_transfer,
@@ -258,6 +258,7 @@ impl<Crypto: CryptoTrait> EdhocResponderDone<Crypto> {
 impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     pub fn new(mut crypto: Crypto, method: EDHOCMethod, selected_suite: EDHOCSuite) -> Self {
         trace!("Initializing EdhocInitiator");
+        let id_cred_psk: IdCred = Some(id_cred_psk); // TODO: how to define this
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
 
@@ -267,6 +268,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
                 g_x,
                 method: method.into(),
                 suites_i,
+                id_cred_psk,
             },
             cred_psk: Credential,
             //i: None,

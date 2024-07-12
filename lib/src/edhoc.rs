@@ -109,8 +109,6 @@ pub fn r_prepare_message_2(
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
 
     // TODO: cred_psk is in the state or should it be retrieved from id_cred_psk?
-    // TODO: this is icnorrect
-    let cred_psk = IdCred::from_encoded_value(id_cred_psk);
     let prk_3e2m = compute_prk_3e2m_psk(crypto, &salt_3e2m, cred_psk);
 
     // compute MAC_2
@@ -125,8 +123,8 @@ pub fn r_prepare_message_2(
     );
 
     // compute ciphertext_2
-    let plaintext_2 =
-        encode_plaintext_2(c_r, state.id_cred_psk.as_encoded_value(), &mac_2, &ead_2)?;
+    let plaintext_2 = encode_plaintext_2(c_r, &mac_2, &ead_2)?;
+    //encode_plaintext_2(c_r, state.id_cred_psk.as_encoded_value(), &mac_2, &ead_2)?;
 
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
@@ -146,6 +144,7 @@ pub fn r_prepare_message_2(
             y: state.y,
             prk_3e2m: prk_3e2m,
             th_3: th_3,
+            id_cred_psk: state.id_cred_psk,
         },
         message_2,
     ))
@@ -156,22 +155,25 @@ pub fn r_parse_message_3(
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, Option<EADItem>), EDHOCError> {
+    // TODO: this changes since plaintext_3 is different.,
+    // id_cred_psk is not cinluded in plaintext_3.
+    // But it is needed ofr th_4 and th_3. Save it on state as well??
     let plaintext_3 = decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, message_3);
 
     if let Ok(plaintext_3) = plaintext_3 {
         let decoded_p3_res = decode_plaintext_3(&plaintext_3);
 
-        if let Ok((id_cred_psk, ead_3)) = decoded_p3_res {
+        if let Ok((ead_3)) = decoded_p3_res {
             Ok((
                 ProcessingM3 {
                     y: state.y,
                     prk_3e2m: state.prk_3e2m,
                     th_3: state.th_3,
-                    id_cred_psk: id_cred_psk.clone(),
+                    id_cred_psk: state.id_cred_psk,
                     plaintext_3, // NOTE: this is needed for th_4, which needs valid_cred_i, which is only available at the 'verify' step
                     ead_3: ead_3.clone(), // NOTE: this clone could be avoided by using a reference or an index to the ead_3 item in plaintext_3
                 },
-                id_cred_psk,
+                state.id_cred_psk,
                 ead_3,
             ))
         } else {
@@ -722,6 +724,7 @@ fn encrypt_message_3(
     output
 }
 
+// TODO: decryption changes since message_3 has a different structure
 fn decrypt_message_3(
     crypto: &mut impl CryptoTrait,
     prk_3e2m: &BytesHashLen,
@@ -843,7 +846,7 @@ fn compute_mac_2(
 
 fn encode_plaintext_2(
     c_r: ConnId,
-    id_cred_r: &[u8],
+    // id_cred_r: &[u8],
     mac_2: &BytesMac2,
     ead_2: &Option<EADItem>,
 ) -> Result<BufferPlaintext2, EDHOCError> {
@@ -854,9 +857,9 @@ fn encode_plaintext_2(
         .extend_from_slice(c_r)
         .or(Err(EDHOCError::EncodingError))?;
     // id_cred_r.write_to_message(&mut plaintext_2)?;
-    plaintext_2
-        .extend_from_slice(id_cred_r)
-        .or(Err(EDHOCError::EncodingError))?;
+    // plaintext_2
+    //     .extend_from_slice(id_cred_r)
+    //     .or(Err(EDHOCError::EncodingError))?;
     let offset_cred = plaintext_2.len;
 
     plaintext_2.content[offset_cred] = CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8;
@@ -944,9 +947,9 @@ fn compute_prk_4e3m(
 pub fn compute_prk_4e3m_psk(
     crypto: &mut impl CryptoTrait,
     salt_4e3m: &BytesHashLen,
-    cred_psk: &BytesP256ElemLen,
+    cred_psk: Credential,
 ) -> BytesHashLen {
-    compute_prk_3e2m(crypto, salt_4e3m, cred_psk)
+    compute_prk_3e2m_psk(crypto, salt_4e3m, cred_psk.bytes)
 }
 
 fn compute_salt_3e2m(
@@ -987,9 +990,9 @@ fn compute_prk_3e2m(
 pub fn compute_prk_3e2m_psk(
     crypto: &mut impl CryptoTrait,
     salt_3e2m: &BytesHashLen,
-    cred_psk: &BytesP256ElemLen, //TODO: what is the psk type? len?
+    cred_psk: Credential, //TODO
 ) -> BytesHashLen {
-    crypto.hkdf_extract(salt_3e2m, cred_psk)
+    crypto.hkdf_extract(salt_3e2m, cred_psk.bytes)
 }
 
 fn compute_prk_2e(
