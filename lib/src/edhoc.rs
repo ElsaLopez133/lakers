@@ -261,9 +261,27 @@ pub fn i_prepare_message_1(
     ead_1: &Option<EADItem>, // FIXME: make it a list of EADItem
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
+
+    // if (state.method == EDHOCMethod::Psk_var1 && state.cred_i==None) {
+    //     return Err(EDHOCError::MissingIdentity);
+    // }
+
+    // let cred_i = state.cred_i.unwrap();
+
+    // let mut id_cred : Option<IdCred> = None;
+    // if (state.method == EDHOCMethod::Psk_var1) {
+    //     id_cred = Some(cred_i.by_kid()?);
+    // }
+
     let id_cred = match state.method {
         EDHOCMethod::StatStat => None,
-        EDHOCMethod::PSK1 => state.cred_i.by_kid()?,
+        EDHOCMethod::Psk_var1 => {
+            if let Some(cred_i) = state.cred_i {
+                Some(cred_i.by_kid()?)
+            } else {
+                None
+            }
+        }
     };
 
     let message_1 = encode_message_1(
@@ -271,7 +289,7 @@ pub fn i_prepare_message_1(
         &state.suites_i,
         &state.g_x,
         c_i,
-        id_cred.as_encoded_value(),
+        id_cred,
         ead_1,
     )?;
 
@@ -482,17 +500,17 @@ fn encode_ead_item(ead_1: &EADItem) -> Result<EdhocMessageBuffer, EDHOCError> {
 }
 
 fn encode_message_1(
-    method: u8,
+    method: EDHOCMethod,
     suites: &EdhocBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
-    id_cred: Option<&[u8]>,
+    id_cred: Option<IdCred>,
     ead_1: &Option<EADItem>,
 ) -> Result<BufferMessage1, EDHOCError> {
     let mut output = BufferMessage1::new();
     let mut raw_suites_len: usize = 0;
 
-    output.content[0] = method; // CBOR unsigned int less than 24 is encoded verbatim
+    output.content[0] = method as u8; // CBOR unsigned int less than 24 is encoded verbatim
 
     if suites.len == 1 {
         // only one suite, will be encoded as a single integer
@@ -530,7 +548,7 @@ fn encode_message_1(
 
     if let Some(id_cred) = id_cred {
         output
-            .extend_from_slice(id_cred)
+            .extend_from_slice(id_cred.as_encoded_value())
             .or(Err(EDHOCError::EncodingError))?;
     }
 

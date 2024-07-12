@@ -25,7 +25,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let cred: Credential = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
 
-    let initiator = EdhocInitiator::new(
+    let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
         EDHOCMethod::Psk_var1,
         EDHOCSuite::CipherSuite2,
@@ -34,6 +34,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+    initiator.set_identity(None, cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     msg_1_buf.extend_from_slice(message_1.as_slice());
     println!("message_1 len = {}", msg_1_buf.len());
@@ -48,7 +49,6 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
     let valid_cred_r = credential_check_or_fetch(Some(cred), id_cred_r).unwrap();
-    initiator.set_identity(None, cred);
     let initiator = initiator.verify_message_2(valid_cred_r)?;
 
     let mut msg_3 = Vec::from(c_r.as_cbor());

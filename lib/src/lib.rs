@@ -263,6 +263,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
                 g_x,
                 method: method.into(),
                 suites_i,
+                cred_i: None,
             },
             i: None,
             cred_i: None,

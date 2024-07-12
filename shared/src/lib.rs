@@ -199,12 +199,11 @@ impl ConnId {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum EDHOCMethod {
     StatStat = 3,
     Psk_var1 = 4,
     // add others, such as:
-    PSK1 = 4,
     // PSK2 = ?,
 }
 
@@ -320,7 +319,7 @@ impl ErrCode {
 #[repr(C)]
 pub struct InitiatorStart {
     pub suites_i: EdhocBuffer<MAX_SUITES_LEN>,
-    pub method: u8,
+    pub method: EDHOCMethod,
     pub x: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_x: BytesP256ElemLen, // ephemeral public key of myself,
     pub cred_i: Option<Credential>,
