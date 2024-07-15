@@ -1,3 +1,4 @@
+use crate::credential_check_or_fetch;
 use lakers_shared::{Crypto as CryptoTrait, *};
 
 pub fn edhoc_exporter(
@@ -56,7 +57,25 @@ pub fn r_process_message_1(
 ) -> Result<(ProcessingM1, ConnId, Option<EADItem>), EDHOCError> {
     // Step 1: decode message_1
     // g_x will be saved to the state
-    if let Ok((method, suites_i, g_x, c_i, ead_1)) = parse_message_1(message_1) {
+    if let Ok((method, suites_i, g_x, c_i, id_cred, ead_1)) = parse_message_1(message_1) {
+        // Define credential.
+        let valid_cred_r = state.cred_r;
+        if method == EDHOCMethod::Psk_var1.into() {
+            let valid_cred_r: Credential =
+                credential_check_or_fetch(Some(state.cred_r), id_cred.unwrap()).unwrap();
+        };
+        // let cred_r = match method {
+        //     m if m== EDHOCMethod::StatStat.into() => state.cred_r,
+        //     m if m == EDHOCMethod::Psk_var1.into() => {
+        //         if let Some(id_cred) = id_cred {
+        //             Some(state.cred_r.with_kid(id_cred.as_full_value()))
+        //         } else {
+        //             None
+        //         }
+        //     }
+        //     _ => return Err(EDHOCError::UnsupportedMethod),
+        // };
+
         // verify that the method is supported
         if method == EDHOC_METHOD {
             // Step 2: verify that the selected cipher suite is supported
@@ -68,11 +87,13 @@ pub fn r_process_message_1(
 
                 Ok((
                     ProcessingM1 {
+                        method,
                         y: state.y,
                         g_y: state.g_y,
                         c_i,
                         g_x,
                         h_message_1,
+                        cred_r: valid_cred_r,
                     },
                     c_i,
                     ead_1,
@@ -92,7 +113,7 @@ pub fn r_prepare_message_2(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
     cred_r: Credential,
-    r: &BytesP256ElemLen, // R's static private DH key
+    r: Option<&BytesP256ElemLen>, // R's static private DH key
     c_r: ConnId,
     cred_transfer: CredentialTransfer,
     ead_2: &Option<EADItem>,
@@ -103,7 +124,13 @@ pub fn r_prepare_message_2(
     // compute prk_3e2m
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
-    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x);
+
+    let prk_3e2m = match cred_r.key {
+        CredentialKey::EC2Compact(public_key) => {
+            compute_prk_3e2m(crypto, &salt_3e2m, r.unwrap(), &public_key)
+        }
+        CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &salt_3e2m, &psk),
+    };
 
     let id_cred_r = match cred_transfer {
         CredentialTransfer::ByValue => cred_r.by_value()?,
@@ -262,17 +289,6 @@ pub fn i_prepare_message_1(
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
 
-    // if (state.method == EDHOCMethod::Psk_var1 && state.cred_i==None) {
-    //     return Err(EDHOCError::MissingIdentity);
-    // }
-
-    // let cred_i = state.cred_i.unwrap();
-
-    // let mut id_cred : Option<IdCred> = None;
-    // if (state.method == EDHOCMethod::Psk_var1) {
-    //     id_cred = Some(cred_i.by_kid()?);
-    // }
-
     let id_cred = match state.method {
         EDHOCMethod::StatStat => None,
         EDHOCMethod::Psk_var1 => {
@@ -302,6 +318,7 @@ pub fn i_prepare_message_1(
     Ok((
         WaitM2 {
             x: state.x,
+            method: state.method.into(),
             h_message_1,
         },
         message_1,
@@ -328,6 +345,7 @@ pub fn i_parse_message_2<'a>(
 
         if let Ok((c_r_2, id_cred_r, mac_2, ead_2)) = plaintext_2_decoded {
             let state = ProcessingM2 {
+                method: state.method,
                 mac_2,
                 prk_2e,
                 th_2,
@@ -361,7 +379,7 @@ pub fn i_verify_message_2(
         CredentialKey::EC2Compact(public_key) => {
             compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
         }
-        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+        CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &salt_3e2m, &psk),
     };
 
     let expected_mac_2 = compute_mac_2(
@@ -1021,6 +1039,20 @@ fn compute_prk_3e2m(
     let g_rx = crypto.p256_ecdh(x, g_r);
 
     crypto.hkdf_extract(salt_3e2m, &g_rx)
+}
+
+fn compute_prk_3e2m_psk(
+    crypto: &mut impl CryptoTrait,
+    salt_3e2m: &BytesHashLen,
+    cred: &BytesKeyAES128, //TODO: what is the psk type? len?
+) -> BytesHashLen {
+    let expanded_cred: [u8; 32] = {
+        let mut temp = [0u8; 32]; // Create a new 32-byte array filled with zeros
+        temp[..cred.len()].copy_from_slice(cred); // Copy the existing data
+        temp // Return the expanded array
+    };
+
+    crypto.hkdf_extract(salt_3e2m, &expanded_cred)
 }
 
 fn compute_prk_2e(

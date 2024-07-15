@@ -66,17 +66,17 @@ pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
 /// Starting point for performing EDHOC in the role of the Responder.
 #[derive(Debug)]
 pub struct EdhocResponder<Crypto: CryptoTrait> {
-    state: ResponderStart, // opaque state
-    r: BytesP256ElemLen,   // private authentication key of R
-    cred_r: Credential,    // R's full credential
+    state: ResponderStart,       // opaque state
+    r: Option<BytesP256ElemLen>, // private authentication key of R
+    cred_r: Credential,          // R's full credential
     crypto: Crypto,
 }
 
 #[derive(Debug)]
 pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
-    state: ProcessingM1, // opaque state
-    r: BytesP256ElemLen, // private authentication key of R
-    cred_r: Credential,  // R's full credential
+    state: ProcessingM1,         // opaque state
+    r: Option<BytesP256ElemLen>, // private authentication key of R
+    cred_r: Credential,          // R's full credential
     crypto: Crypto,
 }
 
@@ -108,16 +108,17 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         trace!("Initializing EdhocResponder");
         let (y, g_y) = crypto.p256_generate_key_pair();
 
-        let r = match method {
-            EDHOCMethod::StatStat => r.unwrap(),
-            EDHOCMethod::Psk_var1 => BytesP256ElemLen::default(),
-        };
+        // let r = match method {
+        //     EDHOCMethod::StatStat => r.unwrap(),
+        //     EDHOCMethod::Psk_var1 => BytesP256ElemLen::default(),
+        // };
 
         EdhocResponder {
             state: ResponderStart {
                 y,
                 g_y,
                 method: method.into(),
+                cred_r: cred_r,
             },
             r,
             cred_r,
@@ -134,9 +135,9 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
 
         Ok((
             EdhocResponderProcessedM1 {
-                state,
+                state: state.clone(),
                 r: self.r,
-                cred_r: self.cred_r,
+                cred_r: state.cred_r,
                 crypto: self.crypto,
             },
             c_i,
@@ -162,7 +163,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             &self.state,
             &mut self.crypto,
             self.cred_r,
-            &self.r,
+            self.r.as_ref(),
             c_r,
             cred_transfer,
             ead_2,
