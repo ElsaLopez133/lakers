@@ -183,7 +183,14 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
     pub fn parse_message_3(
         mut self,
         message_3: &'a BufferMessage3,
-    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, Option<EADItem>), EDHOCError> {
+    ) -> Result<
+        (
+            EdhocResponderProcessingM3<Crypto>,
+            Option<IdCred>,
+            Option<EADItem>,
+        ),
+        EDHOCError,
+    > {
         trace!("Enter parse_message_3");
         match r_parse_message_3(&mut self.state, &mut self.crypto, message_3) {
             Ok((state, id_cred_i, ead_3)) => Ok((
@@ -317,7 +324,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
         (
             EdhocInitiatorProcessingM2<Crypto>,
             ConnId,
-            IdCred,
+            Option<IdCred>,
             Option<EADItem>,
         ),
         EDHOCError,

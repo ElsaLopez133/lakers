@@ -358,6 +358,7 @@ pub struct WaitM2 {
 
 #[derive(Default, Debug)]
 pub struct WaitM3 {
+    pub method: u8,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
@@ -374,13 +375,14 @@ pub struct ProcessingM2 {
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: EdhocMessageBuffer,
     pub c_r: ConnId,
-    pub id_cred_r: IdCred,
+    pub id_cred_r: Option<IdCred>,
     pub ead_2: Option<EADItem>,
 }
 
 #[derive(Default, Debug)]
 #[repr(C)]
 pub struct ProcessedM2 {
+    pub method: u8,
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
@@ -388,11 +390,12 @@ pub struct ProcessedM2 {
 
 #[derive(Default, Debug)]
 pub struct ProcessingM3 {
-    pub mac_3: BytesMac3,
+    pub method: u8,
+    pub mac_3: Option<BytesMac3>,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
-    pub id_cred_i: IdCred,
+    pub id_cred_i: Option<IdCred>,
     pub plaintext_3: EdhocMessageBuffer,
     pub ead_3: Option<EADItem>,
 }
@@ -753,8 +756,9 @@ mod edhoc_parser {
     }
 
     pub fn decode_plaintext_2(
+        method: u8,
         plaintext_2: &BufferCiphertext2,
-    ) -> Result<(ConnId, IdCred, BytesMac2, Option<EADItem>), EDHOCError> {
+    ) -> Result<(ConnId, Option<IdCred>, BytesMac2, Option<EADItem>), EDHOCError> {
         trace!("Enter decode_plaintext_2");
         let mut mac_2: BytesMac2 = [0x00; MAC_LENGTH_2];
 
@@ -763,7 +767,13 @@ mod edhoc_parser {
         let c_r = ConnId::from_int_raw(decoder.int_raw()?);
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
-        let id_cred_r = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
+        let id_cred_r = match method {
+            m if m == EDHOCMethod::StatStat.into() => {
+                Some(IdCred::from_encoded_value(decoder.any_as_encoded()?)?)
+            }
+            m if m == EDHOCMethod::Psk_var1.into() => None,
+            _ => return Err(EDHOCError::UnsupportedMethod),
+        };
 
         mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
 
@@ -784,17 +794,34 @@ mod edhoc_parser {
     }
 
     pub fn decode_plaintext_3(
+        method: u8,
         plaintext_3: &BufferPlaintext3,
-    ) -> Result<(IdCred, BytesMac3, Option<EADItem>), EDHOCError> {
+    ) -> Result<(Option<IdCred>, Option<BytesMac3>, Option<EADItem>), EDHOCError> {
         trace!("Enter decode_plaintext_3");
         let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
 
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
-        let id_cred_i = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
-        mac_3[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
+        let id_cred_i = match method {
+            m if m == EDHOCMethod::Psk_var1.into() => None,
+            m if m == EDHOCMethod::StatStat.into() => {
+                Some(IdCred::from_encoded_value(decoder.any_as_encoded()?)?)
+            }
+            _ => return Err(EDHOCError::UnsupportedMethod),
+        };
+
+        let mac_3 = match method {
+            m if m == EDHOCMethod::Psk_var1.into() => None,
+            m if m == EDHOCMethod::StatStat.into() => {
+                let mut mac_array = [0u8; MAC_LENGTH_3];
+                mac_array.copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
+                Some(mac_array)
+            }
+            _ => return Err(EDHOCError::UnsupportedMethod),
+        };
+        //mac_3[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
 
         // if there is still more to parse, the rest will be the EAD_3
         if plaintext_3.len > decoder.position() {
