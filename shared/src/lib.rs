@@ -324,30 +324,34 @@ impl ErrCode {
 pub struct InitiatorStart {
     pub suites_i: EdhocBuffer<MAX_SUITES_LEN>,
     pub method: EDHOCMethod,
-    pub x: BytesP256ElemLen,   // ephemeral private key of myself
-    pub g_x: BytesP256ElemLen, // ephemeral public key of myself,
-    pub cred_i: Option<Credential>,
+    pub x: BytesP256ElemLen,        // ephemeral private key of myself
+    pub g_x: BytesP256ElemLen,      // ephemeral public key of myself,
+    pub cred_i: Option<Credential>, // Added for PSK variant
 }
 
 #[derive(Debug)]
 pub struct ResponderStart {
-    pub method: u8,
+    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen,   // ephemeral private key of myself
-    pub g_y: BytesP256ElemLen, // ephemeral public key of myself
+    pub g_y: BytesP256ElemLen, // ephemeral public key of myself,
+    pub cred_r: Credential,    // Added for PSK variant
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Clone)]
 pub struct ProcessingM1 {
+    pub method: u8,
     pub y: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub c_i: ConnId,
     pub g_x: BytesP256ElemLen, // ephemeral public key of the initiator
     pub h_message_1: BytesHashLen,
+    pub cred_r: Credential, // Added for PSK variant
 }
 
 #[derive(Default, Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
+    pub method: u8,
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
 }
@@ -362,6 +366,7 @@ pub struct WaitM3 {
 #[derive(Debug, Default)]
 #[repr(C)]
 pub struct ProcessingM2 {
+    pub method: u8,
     pub mac_2: BytesMac2,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
@@ -670,6 +675,7 @@ mod edhoc_parser {
             EdhocBuffer<MAX_SUITES_LEN>,
             BytesP256ElemLen,
             ConnId,
+            Option<IdCred>,
             Option<EADItem>,
         ),
         EDHOCError,
@@ -685,18 +691,27 @@ mod edhoc_parser {
             // consume c_i encoded as single-byte int (we still do not support bstr encoding)
             let c_i = ConnId::from_int_raw(decoder.int_raw()?);
 
+            // PSK-1: id_cred is sent as kid value
+            let id_cred = match method {
+                m if m == EDHOCMethod::StatStat.into() => None,
+                m if m == EDHOCMethod::Psk_var1.into() => {
+                    Some(IdCred::from_encoded_value(decoder.any_as_encoded()?)?)
+                }
+                _ => return Err(EDHOCError::UnsupportedMethod),
+            };
+
             // if there is still more to parse, the rest will be the EAD_1
             if rcvd_message_1.len > decoder.position() {
                 // NOTE: since the current implementation only supports one EAD handler,
                 // we assume only one EAD item
                 let ead_res = parse_ead(decoder.remaining_buffer()?);
                 if let Ok(ead_1) = ead_res {
-                    Ok((method, suites_i, g_x, c_i, ead_1))
+                    Ok((method, suites_i, g_x, c_i, id_cred, ead_1))
                 } else {
                     Err(ead_res.unwrap_err())
                 }
             } else if decoder.finished() {
-                Ok((method, suites_i, g_x, c_i, None))
+                Ok((method, suites_i, g_x, c_i, id_cred, None))
             } else {
                 Err(EDHOCError::ParsingError)
             }
