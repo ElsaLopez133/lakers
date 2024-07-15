@@ -149,7 +149,13 @@ pub fn r_prepare_message_2(
     );
 
     // compute ciphertext_2
-    let plaintext_2 = encode_plaintext_2(c_r, id_cred_r.as_encoded_value(), &mac_2, &ead_2)?;
+    let plaintext_2 = match state.method {
+        m if m == EDHOCMethod::StatStat.into() => {
+            encode_plaintext_2(c_r, Some(id_cred_r.as_encoded_value()), &mac_2, &ead_2)
+        }
+        m if m == EDHOCMethod::Psk_var1.into() => encode_plaintext_2(c_r, None, &mac_2, &ead_2),
+        _ => Err(EDHOCError::UnsupportedMethod),
+    }?;
 
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
@@ -166,6 +172,7 @@ pub fn r_prepare_message_2(
 
     Ok((
         WaitM3 {
+            method: state.method,
             y: state.y,
             prk_3e2m: prk_3e2m,
             th_3: th_3,
@@ -178,15 +185,16 @@ pub fn r_parse_message_3(
     state: &mut WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
-) -> Result<(ProcessingM3, IdCred, Option<EADItem>), EDHOCError> {
+) -> Result<(ProcessingM3, Option<IdCred>, Option<EADItem>), EDHOCError> {
     let plaintext_3 = decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, message_3);
 
     if let Ok(plaintext_3) = plaintext_3 {
-        let decoded_p3_res = decode_plaintext_3(&plaintext_3);
+        let decoded_p3_res = decode_plaintext_3(state.method, &plaintext_3);
 
         if let Ok((id_cred_i, mac_3, ead_3)) = decoded_p3_res {
             Ok((
                 ProcessingM3 {
+                    method: state.method,
                     mac_3,
                     y: state.y,
                     prk_3e2m: state.prk_3e2m,
@@ -223,14 +231,19 @@ pub fn r_verify_message_3(
     };
 
     // compute mac_3
-    let expected_mac_3 = compute_mac_3(
-        crypto,
-        &prk_4e3m,
-        &state.th_3,
-        state.id_cred_i.as_full_value(),
-        valid_cred_i.bytes.as_slice(),
-        &state.ead_3,
-    );
+    let expected_mac_3 = match state.method {
+        m if m == EDHOCMethod::StatStat.into() => Some(compute_mac_3(
+            crypto,
+            &prk_4e3m,
+            &state.th_3,
+            state.id_cred_i.unwrap().as_full_value(),
+            valid_cred_i.bytes.as_slice(),
+            &state.ead_3,
+        )),
+        m if m == EDHOCMethod::Psk_var1.into() => None,
+        _ => return Err(EDHOCError::UnsupportedMethod),
+    };
+    //let mac_3_ref: Option<&[u8; 8]> = expected_mac_3.as_ref().map(|m| m);
 
     // verify mac_3
     if state.mac_3 == expected_mac_3 {
@@ -330,7 +343,7 @@ pub fn i_parse_message_2<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, IdCred, Option<EADItem>), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, Option<IdCred>, Option<EADItem>), EDHOCError> {
     let res = parse_message_2(message_2);
     if let Ok((g_y, ciphertext_2)) = res {
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
@@ -341,7 +354,7 @@ pub fn i_parse_message_2<'a>(
         let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
 
         // decode plaintext_2
-        let plaintext_2_decoded = decode_plaintext_2(&plaintext_2);
+        let plaintext_2_decoded = decode_plaintext_2(state.method, &plaintext_2);
 
         if let Ok((c_r_2, id_cred_r, mac_2, ead_2)) = plaintext_2_decoded {
             let state = ProcessingM2 {
@@ -386,7 +399,7 @@ pub fn i_verify_message_2(
         crypto,
         &prk_3e2m,
         state.c_r,
-        state.id_cred_r.as_full_value(),
+        state.id_cred_r.unwrap().as_full_value(),
         valid_cred_r.bytes.as_slice(),
         &state.th_2,
         &state.ead_2,
@@ -405,9 +418,15 @@ pub fn i_verify_message_2(
 
         let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
 
-        let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y);
+        let prk_4e3m = match valid_cred_r.key {
+            CredentialKey::EC2Compact(public_key) => {
+                compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y)
+            }
+            CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &salt_3e2m, &psk), //prk_4e3m = prk_3e2m
+        };
 
         let state = ProcessedM2 {
+            method: state.method,
             prk_3e2m: prk_3e2m,
             prk_4e3m: prk_4e3m,
             th_3: th_3,
@@ -431,16 +450,30 @@ pub fn i_prepare_message_3(
         CredentialTransfer::ByReference => cred_i.by_kid()?,
     };
 
-    let mac_3 = compute_mac_3(
-        crypto,
-        &state.prk_4e3m,
-        &state.th_3,
-        id_cred_i.as_full_value(),
-        cred_i.bytes.as_slice(),
-        ead_3,
-    );
+    let mac_3 = match state.method {
+        m if m == EDHOCMethod::StatStat.into() => Some(compute_mac_3(
+            crypto,
+            &state.prk_4e3m,
+            &state.th_3,
+            id_cred_i.as_full_value(),
+            cred_i.bytes.as_slice(),
+            ead_3,
+        )),
+        m if m == EDHOCMethod::Psk_var1.into() => None,
+        _ => return Err(EDHOCError::UnsupportedMethod),
+    };
+    let mac_3_ref: Option<&[u8; 8]> = mac_3.as_ref().map(|m| m);
 
-    let plaintext_3 = encode_plaintext_3(id_cred_i.as_encoded_value(), &mac_3, &ead_3)?;
+    // compute ciphertext_2
+    let plaintext_3 = match state.method {
+        m if m == EDHOCMethod::StatStat.into() => {
+            encode_plaintext_3(Some(id_cred_i.as_encoded_value()), mac_3_ref, &ead_3)
+        }
+        m if m == EDHOCMethod::Psk_var1.into() => encode_plaintext_3(None, None, &ead_3),
+        _ => Err(EDHOCError::UnsupportedMethod),
+    }?;
+
+    //let plaintext_3 = encode_plaintext_3(id_cred_i.as_encoded_value(), &mac_3, &ead_3)?;
     let message_3 = encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3);
 
     let th_4 = compute_th_4(crypto, &state.th_3, &plaintext_3, cred_i.bytes.as_slice());
@@ -668,21 +701,25 @@ fn edhoc_kdf(
 }
 
 fn encode_plaintext_3(
-    id_cred_i: &[u8],
-    mac_3: &BytesMac3,
+    id_cred_i: Option<&[u8]>,
+    mac_3: Option<&BytesMac3>,
     ead_3: &Option<EADItem>,
 ) -> Result<BufferPlaintext3, EDHOCError> {
     let mut plaintext_3: BufferPlaintext3 = BufferPlaintext3::new();
 
     // plaintext: P = ( ? PAD, ID_CRED_I / bstr / int, Signature_or_MAC_3, ? EAD_3 )
     // id_cred_i.write_to_message(&mut plaintext_3)?;
-    plaintext_3
-        .extend_from_slice(id_cred_i)
-        .or(Err(EDHOCError::EncodingError))?;
+    if let Some(id_cred) = id_cred_i {
+        plaintext_3
+            .extend_from_slice(id_cred)
+            .or(Err(EDHOCError::EncodingError))?;
+    };
     let offset_cred = plaintext_3.len;
-    plaintext_3.content[offset_cred] = CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8;
-    plaintext_3.content[offset_cred + 1..][..mac_3.len()].copy_from_slice(&mac_3[..]);
-    plaintext_3.len = offset_cred + 1 + mac_3.len();
+    if let Some(mac_3) = mac_3 {
+        plaintext_3.content[offset_cred] = CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8;
+        plaintext_3.content[offset_cred + 1..][..mac_3.len()].copy_from_slice(&mac_3[..]);
+        plaintext_3.len = offset_cred + 1 + mac_3.len();
+    }
 
     if let Some(ead_3) = ead_3 {
         match encode_ead_item(ead_3) {
@@ -908,7 +945,7 @@ fn compute_mac_2(
 
 fn encode_plaintext_2(
     c_r: ConnId,
-    id_cred_r: &[u8],
+    id_cred_r: Option<&[u8]>,
     mac_2: &BytesMac2,
     ead_2: &Option<EADItem>,
 ) -> Result<BufferPlaintext2, EDHOCError> {
@@ -919,9 +956,13 @@ fn encode_plaintext_2(
         .extend_from_slice(c_r)
         .or(Err(EDHOCError::EncodingError))?;
     // id_cred_r.write_to_message(&mut plaintext_2)?;
-    plaintext_2
-        .extend_from_slice(id_cred_r)
-        .or(Err(EDHOCError::EncodingError))?;
+
+    if let Some(id_cred) = id_cred_r {
+        plaintext_2
+            .extend_from_slice(id_cred)
+            .or(Err(EDHOCError::EncodingError))?;
+    };
+
     let offset_cred = plaintext_2.len;
 
     plaintext_2.content[offset_cred] = CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8;
