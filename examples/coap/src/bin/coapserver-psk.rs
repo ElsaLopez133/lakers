@@ -42,6 +42,7 @@ fn main() {
                 let message_1: EdhocMessageBuffer = request.message.payload[1..]
                     .try_into()
                     .expect("wrong length");
+                println!("message_1_rcvd:{:?}", message_1);
                 let result = responder.process_message_1(&message_1);
 
                 if let Ok((responder, _c_i, ead_1)) = result {
