@@ -13,7 +13,7 @@
 //! respectively, through which the EDHOC key material can be obtained.
 //!
 //! [EDHOC]: https://datatracker.ietf.org/doc/html/rfc9528
-#![cfg_attr(not(test), no_std)]
+//#![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::trace;
 pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
@@ -130,6 +130,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         message_1: &BufferMessage1,
     ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, Option<EADItem>), EDHOCError> {
         trace!("Enter process_message_1");
+        println!("Responder processes message_1");
         let (state, c_i, ead_1) = r_process_message_1(&self.state, &mut self.crypto, message_1)?;
 
         Ok((
@@ -157,7 +158,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             Some(c_r) => c_r,
             None => generate_connection_identifier_cbor(&mut self.crypto),
         };
-
+        println!("Responder prepares message_2");
         match r_prepare_message_2(
             &self.state,
             &mut self.crypto,
@@ -281,6 +282,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     pub fn set_identity(&mut self, i: Option<BytesP256ElemLen>, cred_i: Credential) {
         self.i = i;
         self.cred_i = Some(cred_i);
+        self.state.cred_i = Some(cred_i);
     }
 
     pub fn prepare_message_1(

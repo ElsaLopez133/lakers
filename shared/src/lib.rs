@@ -9,7 +9,7 @@
 //! [lakers-ead]: https://docs.rs/lakers-ead/latest/lakers_ead/
 // NOTE: if there is no python-bindings feature, which will be the case for embedded builds,
 //       then the crate will be no_std
-#![cfg_attr(not(feature = "python-bindings"), no_std)]
+//#![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
 pub use edhoc_parser::*;
@@ -690,18 +690,23 @@ mod edhoc_parser {
         if let Ok((suites_i, mut decoder)) = parse_suites_i(decoder) {
             let mut g_x: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
             g_x.copy_from_slice(decoder.bytes_sized(P256_ELEM_LEN)?);
+            println!("g_x: {:?}", g_x);
 
             // consume c_i encoded as single-byte int (we still do not support bstr encoding)
             let c_i = ConnId::from_int_raw(decoder.int_raw()?);
+            println!("c_i: {:?}", c_i);
 
             // PSK-1: id_cred is sent as kid value
             let id_cred = match method {
                 m if m == EDHOCMethod::StatStat.into() => None,
                 m if m == EDHOCMethod::Psk_var1.into() => {
+                    println!("we are in psk-var-1");
+                    println!("decoder.any_as_encoded():{:?}", decoder.any_as_encoded()?);
                     Some(IdCred::from_encoded_value(decoder.any_as_encoded()?)?)
                 }
                 _ => return Err(EDHOCError::UnsupportedMethod),
             };
+            println!("id_cred:{:?}", id_cred);
 
             // if there is still more to parse, the rest will be the EAD_1
             if rcvd_message_1.len > decoder.position() {
@@ -731,10 +736,12 @@ mod edhoc_parser {
         let mut ciphertext_2: BufferCiphertext2 = BufferCiphertext2::new();
 
         let mut decoder = CBORDecoder::new(rcvd_message_2.as_slice());
-
+        println!("decoder: {:?}", decoder);
         // message_2 consists of 1 bstr element; this element in turn contains the concatenation of g_y and ciphertext_2
         let decoded = decoder.bytes()?;
+        println!("decoded: {:?}", decoded);
         if decoder.finished() {
+            println!("decoder finished");
             if let Some(key) = decoded.get(0..P256_ELEM_LEN) {
                 let mut g_y: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
                 g_y.copy_from_slice(key);

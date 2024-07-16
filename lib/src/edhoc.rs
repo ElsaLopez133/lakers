@@ -60,6 +60,7 @@ pub fn r_process_message_1(
     if let Ok((method, suites_i, g_x, c_i, id_cred, ead_1)) = parse_message_1(message_1) {
         // Define credential.
         let valid_cred_r = state.cred_r;
+        println!("valid_cred_r: {:?}", valid_cred_r);
         if method == EDHOCMethod::Psk_var1.into() {
             let valid_cred_r: Credential =
                 credential_check_or_fetch(Some(state.cred_r), id_cred.unwrap()).unwrap();
@@ -301,17 +302,18 @@ pub fn i_prepare_message_1(
     ead_1: &Option<EADItem>, // FIXME: make it a list of EADItem
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
-
     let id_cred = match state.method {
         EDHOCMethod::StatStat => None,
         EDHOCMethod::Psk_var1 => {
             if let Some(cred_i) = state.cred_i {
-                Some(cred_i.by_kid()?)
+                cred_i.kid
+                //Some(cred_i.by_kid()?)
             } else {
                 None
             }
         }
     };
+    println!("id_cred: {:?}", id_cred);
 
     let message_1 = encode_message_1(
         state.method,
@@ -321,9 +323,11 @@ pub fn i_prepare_message_1(
         id_cred,
         ead_1,
     )?;
+    println!("message_1 after encode_message_1: {:?}", message_1);
 
     let mut message_1_buf: BytesMaxBuffer = [0x00; MAX_BUFFER_LEN];
     message_1_buf[..message_1.len].copy_from_slice(message_1.as_slice());
+    println!("message_1_buf: {:?}", message_1_buf);
 
     // hash message_1 here to avoid saving the whole message in the state
     let h_message_1 = crypto.sha256_digest(&message_1_buf, message_1.len);
@@ -344,7 +348,9 @@ pub fn i_parse_message_2<'a>(
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
 ) -> Result<(ProcessingM2, ConnId, Option<IdCred>, Option<EADItem>), EDHOCError> {
+    println!("parsing message_2");
     let res = parse_message_2(message_2);
+    println!("message_2 parsed: {:?}", res);
     if let Ok((g_y, ciphertext_2)) = res {
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
 
@@ -555,7 +561,8 @@ fn encode_message_1(
     suites: &EdhocBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
-    id_cred: Option<IdCred>,
+    //id_cred: Option<IdCred>,
+    id_cred: Option<EdhocBuffer<16>>,
     ead_1: &Option<EADItem>,
 ) -> Result<BufferMessage1, EDHOCError> {
     let mut output = BufferMessage1::new();
@@ -597,12 +604,18 @@ fn encode_message_1(
     output.len = 3 + raw_suites_len + P256_ELEM_LEN + c_i.len();
     output.content[3 + raw_suites_len + P256_ELEM_LEN..][..c_i.len()].copy_from_slice(c_i);
 
+    // if let Some(id_cred) = id_cred {
+    //     output
+    //         .extend_from_slice(id_cred.as_encoded_value())
+    //         .or(Err(EDHOCError::EncodingError))?;
+    // }
     if let Some(id_cred) = id_cred {
-        output
-            .extend_from_slice(id_cred.as_encoded_value())
-            .or(Err(EDHOCError::EncodingError))?;
+        //println!("id_cred[0]: {:?}", id_cred[0]);
+        output.content[output.len] = id_cred[0];
+        output.len = 1 + output.len;
     }
 
+    println!("output_len:{:?}", output.len);
     if let Some(ead_1) = ead_1 {
         match encode_ead_item(ead_1) {
             Ok(ead_1) => output
