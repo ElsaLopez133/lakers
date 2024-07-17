@@ -159,7 +159,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             Some(c_r) => c_r,
             None => generate_connection_identifier_cbor(&mut self.crypto),
         };
-        println!("Responder prepares message_2");
+        println!("Responder prepares and sends message_2");
         match r_prepare_message_2(
             &self.state,
             &mut self.crypto,
@@ -369,10 +369,14 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         valid_cred_r: Credential,
     ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
         trace!("Enter verify_message_2");
-        let Some(i) = self.i else {
+        if self.state.method == EDHOCMethod::StatStat.into() && self.i == None {
             return Err(EDHOCError::MissingIdentity);
-        };
-        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, &i) {
+        }
+        // let Some(i) = self.i else {
+        //     return Err(EDHOCError::MissingIdentity);
+        // };
+
+        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, self.i.as_ref()) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {
                 state,
                 cred_i: self.cred_i,

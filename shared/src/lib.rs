@@ -49,7 +49,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = SCALE_FACTOR * (128 + 64);
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 3u8; // stat-stat is the only supported method
+pub const EDHOC_METHOD: u8 = 4u8; // stat-stat is the only supported method
 pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
@@ -344,20 +344,23 @@ pub struct ProcessingM1 {
     pub cred_r: Credential, // Added for PSK variant
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
     pub method: u8,
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
+    pub cred_i: Option<Credential>, // Added for PSK variant
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct WaitM3 {
     pub method: u8,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
+    pub salt_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
+    pub cred_r: Option<Credential>,
 }
 
 #[derive(Debug, Default)]
@@ -390,6 +393,7 @@ pub struct ProcessingM3 {
     pub mac_3: Option<BytesMac3>,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
+    pub salt_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
     pub id_cred_i: Option<IdCred>,
     pub plaintext_3: EdhocMessageBuffer,
@@ -686,23 +690,22 @@ mod edhoc_parser {
         if let Ok((suites_i, mut decoder)) = parse_suites_i(decoder) {
             let mut g_x: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
             g_x.copy_from_slice(decoder.bytes_sized(P256_ELEM_LEN)?);
-            println!("g_x: {:?}", g_x);
+            //println!("g_x: {:?}", g_x);
 
             // consume c_i encoded as single-byte int (we still do not support bstr encoding)
             let c_i = ConnId::from_int_raw(decoder.int_raw()?);
-            println!("c_i: {:?}", c_i);
+            //println!("c_i: {:?}", c_i);
 
             // PSK-1: id_cred is sent as kid value
             let id_cred = match method {
                 m if m == EDHOCMethod::StatStat.into() => None,
                 m if m == EDHOCMethod::Psk_var1.into() => {
-                    println!("we are in psk-var-1");
-                    println!("decoder.any_as_encoded():{:?}", decoder.any_as_encoded()?);
-                    Some(IdCred::from_encoded_value(decoder.any_as_encoded()?)?)
+                    let input = decoder.any_as_encoded()?;
+                    Some(IdCred::from_encoded_value(&input)?)
                 }
                 _ => return Err(EDHOCError::UnsupportedMethod),
             };
-            println!("id_cred:{:?}", id_cred);
+            //println!("id_cred:{:?}", id_cred);
 
             // if there is still more to parse, the rest will be the EAD_1
             if rcvd_message_1.len > decoder.position() {
@@ -732,12 +735,11 @@ mod edhoc_parser {
         let mut ciphertext_2: BufferCiphertext2 = BufferCiphertext2::new();
 
         let mut decoder = CBORDecoder::new(rcvd_message_2.as_slice());
-        println!("decoder: {:?}", decoder);
+        println!("decoder:{:?}", decoder);
         // message_2 consists of 1 bstr element; this element in turn contains the concatenation of g_y and ciphertext_2
         let decoded = decoder.bytes()?;
-        println!("decoded: {:?}", decoded);
+        println!("decoded:{:?}", decoded);
         if decoder.finished() {
-            println!("decoder finished");
             if let Some(key) = decoded.get(0..P256_ELEM_LEN) {
                 let mut g_y: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
                 g_y.copy_from_slice(key);
@@ -766,19 +768,28 @@ mod edhoc_parser {
         let mut mac_2: BytesMac2 = [0x00; MAC_LENGTH_2];
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
+        println!("decoder:{:?}", decoder);
 
         let c_r = ConnId::from_int_raw(decoder.int_raw()?);
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
         let id_cred_r = match method {
             m if m == EDHOCMethod::StatStat.into() => {
-                Some(IdCred::from_encoded_value(decoder.any_as_encoded()?)?)
+                let input = decoder.any_as_encoded()?;
+                let id_cred = Some(IdCred::from_encoded_value(&input)?);
+                mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
+                id_cred
             }
-            m if m == EDHOCMethod::Psk_var1.into() => None,
+            m if m == EDHOCMethod::Psk_var1.into() => {
+                println!("we are here");
+                // FIXME: id_cred_r should be the same as id_cred_i, but it is not sent directly
+                mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
+                None
+            }
             _ => return Err(EDHOCError::UnsupportedMethod),
         };
 
-        mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
+        //mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
 
         // if there is still more to parse, the rest will be the EAD_2
         if plaintext_2.len > decoder.position() {
@@ -810,7 +821,8 @@ mod edhoc_parser {
         let id_cred_i = match method {
             m if m == EDHOCMethod::Psk_var1.into() => None,
             m if m == EDHOCMethod::StatStat.into() => {
-                Some(IdCred::from_encoded_value(decoder.any_as_encoded()?)?)
+                let input = decoder.any_as_encoded()?;
+                Some(IdCred::from_encoded_value(&input)?)
             }
             _ => return Err(EDHOCError::UnsupportedMethod),
         };
