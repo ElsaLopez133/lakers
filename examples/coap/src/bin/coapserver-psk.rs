@@ -76,9 +76,10 @@ fn main() {
                     // anyway legally
                     continue;
                 };
-                let cred_psk = Credential::parse_ccs(CRED_PSK.try_into().unwrap()).unwrap();
+                println!("message_3 parsed");
+                let cred = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let valid_cred_i =
-                    credential_check_or_fetch(Some(cred_psk), id_cred_i.unwrap()).unwrap();
+                    credential_check_or_fetch(Some(cred), id_cred_i.unwrap()).unwrap();
                 let Ok((mut responder, prk_out)) = responder.verify_message_3(valid_cred_i) else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;
