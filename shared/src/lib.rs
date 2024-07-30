@@ -49,7 +49,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = SCALE_FACTOR * (128 + 64);
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 4u8; // stat-stat is the only supported method
+pub const EDHOC_METHOD: u8 = 5u8; // stat-stat is the only supported method
 pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
@@ -769,31 +769,30 @@ mod edhoc_parser {
 
     pub fn parse_message_3(
         rcvd_message_3: &BufferMessage3,
-    ) -> Result<(BytesKeyKid, BufferCiphertext3), EDHOCError> {
+    ) -> Result<(BufferCiphertext3, BufferCiphertext3), EDHOCError> {
         trace!("Enter parse_message_3");
-        let mut ciphertext_3b: BufferCiphertext3 = BufferCiphertext3::new();
+        let message_slice = rcvd_message_3.as_slice();
+        println!("message_slice :{:?}", message_slice);
 
-        // FIXME: len should be different from 4 (BytesKeyAES128)
-        if rcvd_message_3.len >= 4 {
-            let mut ciphertext_3a = [0x00; 4];
-            ciphertext_3a.copy_from_slice(&rcvd_message_3.as_slice()[..4]);
-            println!("ciphertext_3a: {:?}", ciphertext_3a);
-
-            if ciphertext_3b
-                .fill_with_slice(&rcvd_message_3.as_slice()[4..])
-                .is_ok()
-            {
-                println!("ciphertext_3b length: {}", ciphertext_3b.len);
-                println!("ciphertext_3b: {:?}", ciphertext_3b);
-                Ok((ciphertext_3a, ciphertext_3b))
-            } else {
-                println!("Error: Failed to fill ciphertext_3b");
-                Err(EDHOCError::ParsingError)
-            }
-        } else {
-            println!("Error: Received data too short");
-            Err(EDHOCError::ParsingError)
+        // Get the first byte and convert it to length
+        let first_byte = message_slice[0];
+        let (ciphertext_3a_len, header_len) = decode_cbor_length(first_byte)?;
+        let mut ciphertext_3a = BufferCiphertext3::new();
+        // Ensure we have enough data
+        if message_slice.len() < header_len + ciphertext_3a_len {
+            return Err(EDHOCError::ParsingError);
         }
+        ciphertext_3a.fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
+        println!("ciphertext_3a: {:?}", ciphertext_3a);
+
+        let mut ciphertext_3b = BufferCiphertext3::new();
+        ciphertext_3b
+            .fill_with_slice(&message_slice[ciphertext_3a_len + 1..])
+            .map_err(|_| EDHOCError::ParsingError)?;
+        println!("ciphertext_3b length: {}", ciphertext_3b.len);
+        println!("ciphertext_3b: {:?}", ciphertext_3b);
+
+        Ok((ciphertext_3a, ciphertext_3b))
     }
 
     pub fn decode_plaintext_2(
@@ -895,6 +894,45 @@ mod edhoc_parser {
         } else {
             Err(EDHOCError::ParsingError)
         }
+    }
+}
+
+pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHOCError> {
+    trace!("Enter decode_plaintext_3");
+
+    let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
+    println!("decoder plaintext_3a:{:?}", decoder);
+    // the id_cred may have been encoded as a single int, a byte string, or a map
+    let id_cred = decoder.bytes()?;
+    Ok(id_cred)
+}
+
+fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
+    println!("decoder_function");
+    let mut decoder = CBORDecoder::new(data);
+    println!("decoder:{:?}", data);
+    // Assuming ciphertext_3a is encoded as a byte string
+    println!("decoder_bytes:{:?}", decoder.bytes()?);
+    let bytes = decoder.bytes()?;
+    println!("bytes:{:?}", bytes);
+
+    if bytes.len() != 4 {
+        return Err(EDHOCError::ParsingError);
+    }
+
+    let mut ciphertext_3a = [0u8; 4];
+    ciphertext_3a.copy_from_slice(&bytes);
+    println!("ciphertext_3a:{:?}", ciphertext_3a);
+
+    Ok((ciphertext_3a, &data[decoder.position()..]))
+}
+
+fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
+    match first_byte & 0x1F {
+        n @ 0..=23 => Ok((n as usize, 1)),
+        24 => Ok((24, 2)),                  // Next byte is the length
+        25 => Ok((25, 3)),                  // Next 2 bytes are the length
+        _ => Err(EDHOCError::ParsingError), // Unsupported length encoding
     }
 }
 
