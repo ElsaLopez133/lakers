@@ -311,12 +311,12 @@ pub fn r_verify_message_3(
     // compute salt_4e3m
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
-    let prk_4e3m = match valid_cred_i.key {
-        CredentialKey::EC2Compact(public_key) => {
-            compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
-        }
-        CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &state.salt_3e2m, &psk), //prk_4e3m = prk_3e2m
-    };
+    // let prk_4e3m = match valid_cred_i.key {
+    //     CredentialKey::EC2Compact(public_key) => {
+    //         compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
+    //     }
+    //     CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &state.salt_3e2m, &psk), //prk_4e3m = prk_3e2m
+    // };
 
     let prk_4e3m = match valid_cred_i.key {
         CredentialKey::EC2Compact(public_key) => {
@@ -345,6 +345,7 @@ pub fn r_verify_message_3(
             &state.ead_3,
         )),
         m if m == EDHOCMethod::Psk_var1.into() => None,
+        m if m == EDHOCMethod::Psk_var2.into() => None,
         _ => return Err(EDHOCError::UnsupportedMethod),
     };
     //let mac_3_ref: Option<&[u8; 8]> = expected_mac_3.as_ref().map(|m| m);
