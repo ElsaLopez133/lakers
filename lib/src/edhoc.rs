@@ -234,22 +234,20 @@ pub fn r_parse_message_3(
         let res = parse_message_3(message_3);
         match res {
             Ok((ciphertext_3a, ciphertext_3b)) => {
-                //let mut message_3: BufferMessage3 = BufferMessage3::new();
-
-                let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
-                ct_3a.fill_with_slice(ciphertext_3a.as_slice()).unwrap();
-                let plaintext_3a =
-                    encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
+                let plaintext_3a = encrypt_decrypt_ciphertext_3a(
+                    crypto,
+                    &state.prk_3e2m,
+                    &state.th_3,
+                    &ciphertext_3a,
+                );
                 println!("plaintext_3a:{:?}", plaintext_3a);
-                //message_3.extend_from_slice(plaintext_3a.as_slice()).unwrap();
+
                 let id_cred_psk = IdCred::from_full_value(&plaintext_3a.as_slice())?;
 
                 let plaintext_3b =
                     decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &ciphertext_3b)?;
                 println!("plaintext_3b:{:?}", plaintext_3b);
-                //message_3.extend_from_slice(plaintext_3b?.as_slice()).unwrap();
-                //println!("message_3:{:?}", message_3);
-                //Ok(message_3)
+
                 Ok((Some(id_cred_psk), plaintext_3b))
             }
             Err(e) => Err(e),
@@ -259,7 +257,6 @@ pub fn r_parse_message_3(
         Ok((None, plaintext_3b))
     };
 
-    //let (id_cred_psk, plaintext_3) = result?.clone();
     println!("plaintext_3a, plaintext_3b:{:?}", result);
 
     if let Ok((id_cred_psk, plaintext_3)) = result {
@@ -648,22 +645,26 @@ pub fn i_prepare_message_3(
         // compute ciphertext_3a
         let plaintext_3a = id_cred_i;
         println!("plaintext_3a len :{:?}", plaintext_3a.bytes.len);
-        println!("plaintext_3a :{:?}", plaintext_3a.bytes);
+        // Encode plaintext_3a as CBOR
+        let pt_3a = plaintext_3a.as_full_value();
+        println!("plaintext_3a :{:?}", pt_3a);
         let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
-        ct_3a
-            .fill_with_slice(plaintext_3a.bytes.as_slice())
-            .unwrap();
+        ct_3a.fill_with_slice(pt_3a).unwrap();
         let ciphertext_3a =
             encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
         println!("ciphertext_3a:{:?}", ciphertext_3a);
+        // CBOR encoding of ct_3a
+        let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
+        println!("encoded_ct_3a:{:?}", encoded_ciphertext_3a);
 
         //compute regular message_3
         println!("plaintext_3b:{:?}", plaintext_3);
         let regular_message_3 =
             encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3);
         println!("ciphertext_3b:{:?}", regular_message_3);
+
         message_3
-            .extend_from_slice(ciphertext_3a.as_slice())
+            .extend_from_slice(encoded_ciphertext_3a.as_slice())
             .unwrap();
         message_3
             .extend_from_slice(regular_message_3.as_slice())
@@ -947,6 +948,16 @@ fn encode_plaintext_3(
     } else {
         Ok(plaintext_3)
     }
+}
+
+fn encode_ciphertext_3a(ciphertext: EdhocMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
+    let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
+    // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
+    ciphertext_3a.content[0] = CBOR_MAJOR_BYTE_STRING | (ciphertext.len as u8);
+    ciphertext_3a.content[1..][..ciphertext.len].copy_from_slice(ciphertext.as_slice());
+    ciphertext_3a.len = 1 + ciphertext.len;
+
+    Ok(ciphertext_3a)
 }
 
 fn encode_enc_structure(th_3: &BytesHashLen) -> BytesEncStructureLen {
