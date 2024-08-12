@@ -66,8 +66,8 @@ async fn main(spawner: Spawner) {
         mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     }
 
-    let cred_i = CredentialRPK::new(common::CRED_I.try_into().unwrap()).unwrap();
-    let cred_r = CredentialRPK::new(common::CRED_R.try_into().unwrap()).unwrap();
+    let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+    let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
 
     let mut initiator = EdhocInitiator::new(lakers_crypto::default_crypto());
 
@@ -84,9 +84,9 @@ async fn main(spawner: Spawner) {
             let message_2: EdhocMessageBuffer =
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
             let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
-            let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
+            let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
             let initiator = initiator
-                .verify_message_2(common::I, cred_i, valid_cred_r)
+                .verify_message_2(valid_cred_r)
                 .unwrap();
 
             let (mut initiator, message_3, i_prk_out) = initiator

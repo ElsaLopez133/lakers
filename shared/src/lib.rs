@@ -9,7 +9,7 @@
 //! [lakers-ead]: https://docs.rs/lakers-ead/latest/lakers_ead/
 // NOTE: if there is no python-bindings feature, which will be the case for embedded builds,
 //       then the crate will be no_std
-//#![cfg_attr(not(feature = "python-bindings"), no_std)]
+#![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
 pub use edhoc_parser::*;
@@ -202,8 +202,8 @@ impl ConnId {
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum EDHOCMethod {
     StatStat = 3,
-    Psk_var1 = 4,
-    Psk_var2 = 5,
+    PSK1 = 4,
+    PSK2 = 5,
     // add others, such as:
     // PSK2 = ?,
 }
@@ -691,23 +691,23 @@ mod edhoc_parser {
         if let Ok((suites_i, mut decoder)) = parse_suites_i(decoder) {
             let mut g_x: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
             g_x.copy_from_slice(decoder.bytes_sized(P256_ELEM_LEN)?);
-            println!("g_x: {:?}", g_x);
+            //println!("g_x: {:?}", g_x);
 
             // consume c_i encoded as single-byte int (we still do not support bstr encoding)
             let c_i = ConnId::from_int_raw(decoder.int_raw()?);
-            println!("c_i: {:?}", c_i);
+            //println!("c_i: {:?}", c_i);
 
             // PSK-1: id_cred is sent as kid value
             let id_cred = match method {
                 m if m == EDHOCMethod::StatStat.into() => None,
-                m if m == EDHOCMethod::Psk_var2.into() => None,
-                m if m == EDHOCMethod::Psk_var1.into() => {
+                m if m == EDHOCMethod::PSK2.into() => None,
+                m if m == EDHOCMethod::PSK1.into() => {
                     let input = decoder.any_as_encoded()?;
                     Some(IdCred::from_encoded_value(&input)?)
                 }
                 _ => return Err(EDHOCError::UnsupportedMethod),
             };
-            println!("id_cred:{:?}", id_cred);
+            //println!("id_cred:{:?}", id_cred);
 
             // if there is still more to parse, the rest will be the EAD_1
             if rcvd_message_1.len > decoder.position() {
@@ -737,12 +737,11 @@ mod edhoc_parser {
         let mut ciphertext_2: BufferCiphertext2 = BufferCiphertext2::new();
 
         let mut decoder = CBORDecoder::new(rcvd_message_2.as_slice());
-        println!("decoder:{:?}", decoder);
+        //println!("decoder:{:?}", decoder);
         // message_2 consists of 1 bstr element; this element in turn contains the concatenation of g_y and ciphertext_2
         let decoded = decoder.bytes()?;
-        println!("decoded:{:?}", decoded);
+        //println!("decoded:{:?}", decoded);
         if decoder.finished() {
-            println!("we are here");
             if let Some(key) = decoded.get(0..P256_ELEM_LEN) {
                 let mut g_y: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
                 g_y.copy_from_slice(key);
@@ -768,7 +767,7 @@ mod edhoc_parser {
     ) -> Result<(BufferCiphertext3, BufferCiphertext3), EDHOCError> {
         trace!("Enter parse_message_3");
         let message_slice = rcvd_message_3.as_slice();
-        println!("message_slice :{:?}", message_slice);
+        //println!("message_slice :{:?}", message_slice);
 
         // Get the first byte and convert it to length
         let first_byte = message_slice[0];
@@ -779,14 +778,14 @@ mod edhoc_parser {
             return Err(EDHOCError::ParsingError);
         }
         ciphertext_3a.fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
-        println!("ciphertext_3a: {:?}", ciphertext_3a);
+        //println!("ciphertext_3a: {:?}", ciphertext_3a);
 
         let mut ciphertext_3b = BufferCiphertext3::new();
         ciphertext_3b
             .fill_with_slice(&message_slice[ciphertext_3a_len + 1..])
             .map_err(|_| EDHOCError::ParsingError)?;
-        println!("ciphertext_3b length: {}", ciphertext_3b.len);
-        println!("ciphertext_3b: {:?}", ciphertext_3b);
+        //println!("ciphertext_3b length: {}", ciphertext_3b.len);
+        //println!("ciphertext_3b: {:?}", ciphertext_3b);
 
         Ok((ciphertext_3a, ciphertext_3b))
     }
@@ -799,7 +798,7 @@ mod edhoc_parser {
         let mut mac_2: Option<[u8; MAC_LENGTH_2]> = None;
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
-        println!("decoder:{:?}", decoder);
+        //println!("decoder:{:?}", decoder);
 
         let c_r = ConnId::from_int_raw(decoder.int_raw()?);
 
@@ -812,19 +811,19 @@ mod edhoc_parser {
                 mac_2.copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
                 (id_cred, Some(mac_2))
             }
-            m if m == EDHOCMethod::Psk_var1.into() => {
+            m if m == EDHOCMethod::PSK1.into() => {
                 // FIXME: id_cred_r should be the same as id_cred_i, but it is not sent directly
                 let mut mac_2 = [0x00; MAC_LENGTH_2];
                 mac_2.copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
                 (None, Some(mac_2))
             }
-            m if m == EDHOCMethod::Psk_var2.into() => {
+            m if m == EDHOCMethod::PSK2.into() => {
                 // There is no mac_2
                 (None, None)
             }
             _ => return Err(EDHOCError::UnsupportedMethod),
         };
-        println!("id_cred_r from plaintext_2:{:?}", id_cred_r);
+        //println!("id_cred_r from plaintext_2:{:?}", id_cred_r);
         //mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
 
         // if there is still more to parse, the rest will be the EAD_2
@@ -851,12 +850,12 @@ mod edhoc_parser {
         let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
 
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
-        println!("decoder plaintext_3:{:?}", decoder);
+        //println!("decoder plaintext_3:{:?}", decoder);
         // the id_cred may have been encoded as a single int, a byte string, or a map
 
         let id_cred_i = match method {
-            m if m == EDHOCMethod::Psk_var1.into() => None,
-            m if m == EDHOCMethod::Psk_var2.into() => None,
+            m if m == EDHOCMethod::PSK1.into() => None,
+            m if m == EDHOCMethod::PSK2.into() => None,
             m if m == EDHOCMethod::StatStat.into() => {
                 let input = decoder.any_as_encoded()?;
                 Some(IdCred::from_encoded_value(&input)?)
@@ -865,8 +864,8 @@ mod edhoc_parser {
         };
 
         let mac_3 = match method {
-            m if m == EDHOCMethod::Psk_var1.into() => None,
-            m if m == EDHOCMethod::Psk_var2.into() => None,
+            m if m == EDHOCMethod::PSK1.into() => None,
+            m if m == EDHOCMethod::PSK2.into() => None,
             m if m == EDHOCMethod::StatStat.into() => {
                 let mut mac_array = [0u8; MAC_LENGTH_3];
                 mac_array.copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
@@ -897,20 +896,19 @@ pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHO
     trace!("Enter decode_plaintext_3");
 
     let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
-    println!("decoder plaintext_3a:{:?}", decoder);
+    //println!("decoder plaintext_3a:{:?}", decoder);
     // the id_cred may have been encoded as a single int, a byte string, or a map
     let id_cred = decoder.bytes()?;
     Ok(id_cred)
 }
 
 fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
-    println!("decoder_function");
     let mut decoder = CBORDecoder::new(data);
-    println!("decoder:{:?}", data);
+    //println!("decoder:{:?}", data);
     // Assuming ciphertext_3a is encoded as a byte string
-    println!("decoder_bytes:{:?}", decoder.bytes()?);
+    //println!("decoder_bytes:{:?}", decoder.bytes()?);
     let bytes = decoder.bytes()?;
-    println!("bytes:{:?}", bytes);
+    //println!("bytes:{:?}", bytes);
 
     if bytes.len() != 4 {
         return Err(EDHOCError::ParsingError);
@@ -918,7 +916,7 @@ fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
 
     let mut ciphertext_3a = [0u8; 4];
     ciphertext_3a.copy_from_slice(&bytes);
-    println!("ciphertext_3a:{:?}", ciphertext_3a);
+    //println!("ciphertext_3a:{:?}", ciphertext_3a);
 
     Ok((ciphertext_3a, &data[decoder.position()..]))
 }

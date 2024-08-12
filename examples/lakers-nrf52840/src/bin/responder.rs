@@ -69,8 +69,8 @@ async fn main(spawner: Spawner) {
 
         info!("Received message_1");
 
-        let cred_r = CredentialRPK::new(common::CRED_R.try_into().unwrap()).unwrap();
-        let responder = EdhocResponder::new(lakers_crypto::default_crypto(), &common::R, cred_r);
+        let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+        let responder = EdhocResponder::new(lakers_crypto::default_crypto(), EDHOCMethod::PSK2, &None, cred_r);
 
         let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
 
@@ -113,8 +113,8 @@ async fn main(spawner: Spawner) {
                             continue;
                         };
 
-                        let cred_i =
-                            CredentialRPK::new(common::CRED_I.try_into().unwrap()).unwrap();
+                        let cred_i: Credential = 
+                            Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
                         let valid_cred_i =
                             credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
 
