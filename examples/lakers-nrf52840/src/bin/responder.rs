@@ -5,12 +5,10 @@ use common::{Packet, PacketError, ADV_ADDRESS, ADV_CRC_INIT, CRC_POLY, FREQ, MAX
 use defmt::info;
 use defmt::unwrap;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
@@ -61,7 +59,7 @@ async fn main(spawner: Spawner) {
     }
 
     loop {
-        let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
+        let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
         let mut c_r: Option<ConnId> = None;
         let pckt = common::receive_and_filter(&mut radio, Some(0xf5)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
@@ -70,7 +68,7 @@ async fn main(spawner: Spawner) {
         info!("Received message_1");
 
         let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-        let responder = EdhocResponder::new(lakers_crypto::default_crypto(), EDHOCMethod::PSK2, &None, cred_r);
+        let responder = EdhocResponder::new(lakers_crypto::default_crypto(), EDHOCMethod::PSK2, None, cred_r);
 
         let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
 
@@ -116,7 +114,7 @@ async fn main(spawner: Spawner) {
                         let cred_i: Credential = 
                             Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
                         let valid_cred_i =
-                            credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
+                            credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
 
                         let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i)
                         else {

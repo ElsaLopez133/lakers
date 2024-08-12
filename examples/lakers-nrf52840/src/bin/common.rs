@@ -1,12 +1,7 @@
 use embassy_nrf::radio::ble::Radio;
-use embassy_nrf::saadc::Time;
-use embassy_nrf::{peripherals, radio};
-use embassy_time::Duration;
 use embassy_time::TimeoutError;
-use embassy_time::WithTimeout;
 use hexlit::hex;
 
-use defmt::info;
 
 pub const MAX_PDU: usize = 258;
 pub const FREQ: u32 = 2408;
@@ -15,7 +10,7 @@ pub const ADV_CRC_INIT: u32 = 0xffff;
 pub const CRC_POLY: u32 = 0x00065b;
 
 
-oub const ID_CRED: &[u8] = &hex!("a1044120");
+pub const ID_CRED: &[u8] = &hex!("a1044120");
 pub const CRED_PSK: &[u8] =
     &hex!("A202686D79646F74626F7408A101A30104024132205050930FF462A77A3540CF546325DEA214");
 
@@ -153,8 +148,8 @@ pub async fn transmit_and_wait_response(
     mut packet: Packet,
     filter: Option<u8>,
 ) -> Result<Packet, PacketError> {
-    let mut rcvd_packet: Packet = Default::default();
-    let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
+    let rcvd_packet: Packet = Default::default();
+    let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
 
     radio.transmit(packet.as_bytes()).await?;
     let resp = receive_and_filter(radio, filter).await?;
@@ -170,7 +165,7 @@ pub async fn transmit_without_response(
     Ok(())
 }
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_char;
 #[no_mangle]
 pub extern "C" fn strstr(cs: *const c_char, ct: *const c_char) -> *mut c_char {
     panic!("strstr handler!");
