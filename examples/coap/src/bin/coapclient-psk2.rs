@@ -27,7 +27,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
-        EDHOCMethod::Psk_var2,
+        EDHOCMethod::PSK2,
         EDHOCSuite::CipherSuite2,
     );
     println!("\n---------MESSAGE_1-----------\n");
@@ -44,7 +44,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     if response.get_status() != &ResponseType::Changed {
         panic!("Message 1 response error: {:?}", response.get_status());
     }
-    println!(".\n---------MESSAGE_1-----------\n");
+    println!("\n---------MESSAGE_2-----------\n");
     //println!("response_vec = {:02x?}", response.message.payload);
     println!("message_2 len = {}", response.message.payload.len());
 

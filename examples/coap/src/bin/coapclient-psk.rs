@@ -27,14 +27,15 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
-        EDHOCMethod::Psk_var1,
+        EDHOCMethod::PSK1,
         EDHOCSuite::CipherSuite2,
     );
-
+    println!("\n---------MESSAGE_1-----------\n");
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     initiator.set_identity(None, cred);
+    //println!("cred:{:?}", cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     msg_1_buf.extend_from_slice(message_1.as_slice());
     println!("message_1 len = {}", msg_1_buf.len());
@@ -43,17 +44,20 @@ fn client_handshake() -> Result<(), EDHOCError> {
     if response.get_status() != &ResponseType::Changed {
         panic!("Message 1 response error: {:?}", response.get_status());
     }
-    println!("response_vec = {:02x?}", response.message.payload);
+    println!("\n---------MESSAGE_2-----------\n");
+    //println!("response_vec = {:02x?}", response.message.payload);
     println!("message_2 len = {}", response.message.payload.len());
 
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
+    //println!("I after parsing m2:{:?}", initiator);
     let valid_cred_r = credential_check_or_fetch(Some(cred), id_cred_r.unwrap()).unwrap();
-    println!("initiator verifies message_2");
+    //println!("initiator verifies message_2");
     let initiator = initiator.verify_message_2(valid_cred_r)?;
 
+    println!("\n---------MESSAGE_3-----------\n");
     let mut msg_3 = Vec::from(c_r.as_cbor());
-    println!("initiator prepares message_3");
+    //println!("initiator prepares message_3");
     let (mut initiator, message_3, prk_out) =
         initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
     msg_3.extend_from_slice(message_3.as_slice());
@@ -61,7 +65,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let _response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
     // we don't care about the response to message_3 for now
-
+    
+    println!("\n---------END-----------\n");
     println!("EDHOC exchange successfully completed");
     println!("PRK_out: {:02x?}", prk_out);
 

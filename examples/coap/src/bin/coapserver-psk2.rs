@@ -34,19 +34,19 @@ fn main() {
                     Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
-                    EDHOCMethod::Psk_var2,
+                    EDHOCMethod::PSK2,
                     None,
                     cred_psk,
                 );
-                println!("cred:{:?}", cred_psk);
+                //println!("cred:{:?}", cred_psk);
 
-                println!("---------MESSAGE_1-----------\n");
+                println!("\n---------MESSAGE_1-----------\n");
                 let message_1: EdhocMessageBuffer = request.message.payload[1..]
                     .try_into()
                     .expect("wrong length");
-                println!("message_1_rcvd:{:?}", message_1);
+                //println!("message_1_rcvd:{:?}", message_1);
                 let result = responder.process_message_1(&message_1);
-                println!("---------MESSAGE_2-----------\n");
+                println!("\n---------MESSAGE_2-----------\n");
                 if let Ok((responder, _c_i, ead_1)) = result {
                     let c_r =
                         generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
@@ -62,7 +62,7 @@ fn main() {
                     response.set_status(ResponseType::BadRequest);
                 }
             } else {
-                println!("---------MESSAGE_3-----------\n");
+                println!("\n---------MESSAGE_3-----------\n");
                 // potentially message 3
                 println!("Received message 3");
                 let c_r_rcvd = ConnId::from_int_raw(request.message.payload[0]);
@@ -79,7 +79,7 @@ fn main() {
                     // anyway legally
                     continue;
                 };
-                println!("message_3 parsed");
+                //println!("message_3 parsed");
                 let cred = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let valid_cred_i =
                     credential_check_or_fetch(Some(cred), id_cred_i.unwrap()).unwrap();
