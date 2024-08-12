@@ -2,19 +2,15 @@
 #![no_main]
 
 use defmt::info;
-use defmt::unwrap;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use embassy_time::WithTimeout;
-use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
-use lakers_crypto::{default_crypto, CryptoTrait};
 
 extern crate alloc;
 
@@ -68,11 +64,17 @@ async fn main(spawner: Spawner) {
 
     let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
     let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-
-    let mut initiator = EdhocInitiator::new(lakers_crypto::default_crypto());
+    info!("cred_r:{:?}", cred_r.bytes.content);
+    
+    let mut initiator = EdhocInitiator::new(
+        lakers_crypto::default_crypto(),
+        EDHOCMethod::PSK2,
+        EDHOCSuite::CipherSuite2,
+    );
 
     // Send Message 1 over raw BLE and convert the response to byte
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+    initiator.set_identity(None, cred_i);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
     let pckt_1 = common::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
         .expect("Buffer not long enough");
@@ -89,9 +91,8 @@ async fn main(spawner: Spawner) {
                 .verify_message_2(valid_cred_r)
                 .unwrap();
 
-            let (mut initiator, message_3, i_prk_out) = initiator
-                .prepare_message_3(CredentialTransfer::ByReference, &None)
-                .unwrap();
+            let (initiator, message_3, i_prk_out) = initiator
+                .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
 
             common::transmit_without_response(
                 &mut radio,
