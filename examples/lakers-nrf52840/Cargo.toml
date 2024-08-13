@@ -13,6 +13,8 @@ categories.workspace = true
 embassy-executor = { git =  "https://github.com/embassy-rs/embassy", branch = "main", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"] }
 embassy-time = { git =  "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "defmt-timestamp-uptime"] }
 embassy-nrf = { git =  "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
+nrf52840-hal = "0.16.0"  # Use the latest version available
+embedded-hal = "0.2.7"  # or whichever version you're using
 
 # lakers
 lakers = { package = "lakers", path = "../../lib", default-features = false }
