@@ -13,7 +13,7 @@
 //! respectively, through which the EDHOC key material can be obtained.
 //!
 //! [EDHOC]: https://datatracker.ietf.org/doc/html/rfc9528
-#![cfg_attr(not(test), no_std)]
+//#![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::trace;
 pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
@@ -28,7 +28,6 @@ pub use edhoc::*;
 #[derive(Debug)]
 pub struct EdhocInitiator<Crypto: CryptoTrait> {
     state: InitiatorStart,       // opaque state
-    i: Option<BytesP256ElemLen>, // static public key of myself
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
@@ -36,7 +35,6 @@ pub struct EdhocInitiator<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
     state: WaitM2, // opaque state
-    i: Option<BytesP256ElemLen>,
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
@@ -44,7 +42,6 @@ pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
     state: ProcessingM2, // opaque state
-    i: Option<BytesP256ElemLen>,
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
@@ -66,7 +63,6 @@ pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocResponder<Crypto: CryptoTrait> {
     state: ResponderStart,       // opaque state
-    r: Option<BytesP256ElemLen>, // private authentication key of R
     cred_r: Credential,          // R's full credential
     crypto: Crypto,
 }
@@ -74,7 +70,6 @@ pub struct EdhocResponder<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
     state: ProcessingM1,         // opaque state
-    r: Option<BytesP256ElemLen>, // private authentication key of R
     cred_r: Credential,          // R's full credential
     crypto: Crypto,
 }
@@ -101,16 +96,10 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     pub fn new(
         mut crypto: Crypto,
         method: EDHOCMethod,
-        r: Option<BytesP256ElemLen>,
         cred_r: Credential,
     ) -> Self {
         trace!("Initializing EdhocResponder");
         let (y, g_y) = crypto.p256_generate_key_pair();
-
-        // let r = match method {
-        //     EDHOCMethod::StatStat => r.unwrap(),
-        //     EDHOCMethod::PSK1 => BytesP256ElemLen::default(),
-        // };
 
         EdhocResponder {
             state: ResponderStart {
@@ -119,7 +108,6 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
                 method: method.into(),
                 cred_r: cred_r,
             },
-            r,
             cred_r,
             crypto,
         }
@@ -136,7 +124,6 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         Ok((
             EdhocResponderProcessedM1 {
                 state: state.clone(),
-                r: self.r,
                 cred_r: state.cred_r,
                 crypto: self.crypto,
             },
@@ -163,7 +150,6 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             &self.state,
             &mut self.crypto,
             self.cred_r,
-            self.r.as_ref(),
             c_r,
             cred_transfer,
             ead_2,
@@ -267,20 +253,18 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
 
         EdhocInitiator {
             state: InitiatorStart {
+                method,
                 x,
                 g_x,
-                method: method.into(),
                 suites_i,
                 cred_i: None,
             },
-            i: None,
             cred_i: None,
             crypto,
         }
     }
 
-    pub fn set_identity(&mut self, i: Option<BytesP256ElemLen>, cred_i: Credential) {
-        self.i = i;
+    pub fn set_identity(&mut self, cred_i: Credential) {
         self.cred_i = Some(cred_i);
         self.state.cred_i = Some(cred_i);
     }
@@ -299,7 +283,6 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
             Ok((state, message_1)) => Ok((
                 EdhocInitiatorWaitM2 {
                     state,
-                    i: self.i,
                     cred_i: self.cred_i,
                     crypto: self.crypto,
                 },
@@ -336,7 +319,6 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
             Ok((state, c_r, id_cred_r, ead_2)) => Ok((
                 EdhocInitiatorProcessingM2 {
                     state,
-                    i: self.i,
                     cred_i: self.cred_i,
                     crypto: self.crypto,
                 },
@@ -352,13 +334,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
     pub fn set_identity(
         &mut self,
-        i: Option<BytesP256ElemLen>,
         cred_i: Credential,
     ) -> Result<(), EDHOCError> {
-        if self.i.is_some() || self.cred_i.is_some() {
-            return Err(EDHOCError::IdentityAlreadySet);
-        }
-        self.i = i;
         self.cred_i = Some(cred_i);
         Ok(())
     }
@@ -368,14 +345,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         valid_cred_r: Credential,
     ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
         trace!("Enter verify_message_2");
-        if self.state.method == EDHOCMethod::StatStat.into() && self.i == None {
-            return Err(EDHOCError::MissingIdentity);
-        }
-        // let Some(i) = self.i else {
-        //     return Err(EDHOCError::MissingIdentity);
-        // };
 
-        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, self.i.as_ref()) {
+        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {
                 state,
                 cred_i: self.cred_i,

@@ -24,3 +24,4 @@ cscope*
 # plots
 color-map-gpi
 plots/
+old_results/

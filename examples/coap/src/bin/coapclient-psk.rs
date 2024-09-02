@@ -34,7 +34,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
-    initiator.set_identity(None, cred);
+    initiator.set_identity(cred);
     //println!("cred:{:?}", cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     msg_1_buf.extend_from_slice(message_1.as_slice());
@@ -50,14 +50,11 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
-    //println!("I after parsing m2:{:?}", initiator);
     let valid_cred_r = credential_check_or_fetch(Some(cred), id_cred_r.unwrap()).unwrap();
-    //println!("initiator verifies message_2");
     let initiator = initiator.verify_message_2(valid_cred_r)?;
 
     println!("\n---------MESSAGE_3-----------\n");
     let mut msg_3 = Vec::from(c_r.as_cbor());
-    //println!("initiator prepares message_3");
     let (mut initiator, message_3, prk_out) =
         initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
     msg_3.extend_from_slice(message_3.as_slice());
@@ -68,13 +65,13 @@ fn client_handshake() -> Result<(), EDHOCError> {
     
     println!("\n---------END-----------\n");
     println!("EDHOC exchange successfully completed");
-    println!("PRK_out: {:02x?}", prk_out);
+    // println!("PRK_out: {:02x?}", prk_out);
 
     let mut oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     let mut oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    println!("OSCORE secret: {:02x?}", oscore_secret);
-    println!("OSCORE salt: {:02x?}", oscore_salt);
+    // println!("OSCORE secret: {:02x?}", oscore_secret);
+    // println!("OSCORE salt: {:02x?}", oscore_salt);
 
     // context of key update is a test vector from draft-ietf-lake-traces
     let prk_out_new = initiator.edhoc_key_update(&[

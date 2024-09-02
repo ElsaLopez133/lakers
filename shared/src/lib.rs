@@ -9,7 +9,7 @@
 //! [lakers-ead]: https://docs.rs/lakers-ead/latest/lakers_ead/
 // NOTE: if there is no python-bindings feature, which will be the case for embedded builds,
 //       then the crate will be no_std
-#![cfg_attr(not(feature = "python-bindings"), no_std)]
+//#![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
 pub use edhoc_parser::*;
@@ -49,7 +49,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = SCALE_FACTOR * (128 + 64);
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 5u8; // stat-stat is the only supported method
+pub const EDHOC_METHOD: u8 = 4u8; // stat-stat is the only supported method
 pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
@@ -336,7 +336,6 @@ pub struct ResponderStart {
 
 #[derive(Debug, Clone)]
 pub struct ProcessingM1 {
-    pub method: u8,
     pub y: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub c_i: ConnId,
@@ -348,7 +347,6 @@ pub struct ProcessingM1 {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
-    pub method: u8,
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
     pub cred_i: Option<Credential>, // Added for PSK variant
@@ -356,7 +354,6 @@ pub struct WaitM2 {
 
 #[derive(Clone, Debug)]
 pub struct WaitM3 {
-    pub method: u8,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub salt_3e2m: BytesHashLen,
@@ -367,8 +364,7 @@ pub struct WaitM3 {
 #[derive(Debug, Default)]
 #[repr(C)]
 pub struct ProcessingM2 {
-    pub method: u8,
-    pub mac_2: Option<BytesMac2>,
+    pub mac_2: BytesMac2,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
@@ -382,7 +378,6 @@ pub struct ProcessingM2 {
 #[derive(Default, Debug)]
 #[repr(C)]
 pub struct ProcessedM2 {
-    pub method: u8,
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
@@ -390,8 +385,6 @@ pub struct ProcessedM2 {
 
 #[derive(Default, Debug)]
 pub struct ProcessingM3 {
-    pub method: u8,
-    pub mac_3: Option<BytesMac3>,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub salt_3e2m: BytesHashLen,
@@ -698,15 +691,8 @@ mod edhoc_parser {
             //println!("c_i: {:?}", c_i);
 
             // PSK-1: id_cred is sent as kid value
-            let id_cred = match method {
-                m if m == EDHOCMethod::StatStat.into() => None,
-                m if m == EDHOCMethod::PSK2.into() => None,
-                m if m == EDHOCMethod::PSK1.into() => {
-                    let input = decoder.any_as_encoded()?;
-                    Some(IdCred::from_encoded_value(&input)?)
-                }
-                _ => return Err(EDHOCError::UnsupportedMethod),
-            };
+            let input = decoder.any_as_encoded()?;
+            let id_cred = Some(IdCred::from_encoded_value(&input)?);
             //println!("id_cred:{:?}", id_cred);
 
             // if there is still more to parse, the rest will be the EAD_1
@@ -737,10 +723,10 @@ mod edhoc_parser {
         let mut ciphertext_2: BufferCiphertext2 = BufferCiphertext2::new();
 
         let mut decoder = CBORDecoder::new(rcvd_message_2.as_slice());
-        //println!("decoder:{:?}", decoder);
+        // println!("decoder:{:?}", decoder);
         // message_2 consists of 1 bstr element; this element in turn contains the concatenation of g_y and ciphertext_2
         let decoded = decoder.bytes()?;
-        //println!("decoded:{:?}", decoded);
+        // println!("decoded:{:?}", decoder.bytes());
         if decoder.finished() {
             if let Some(key) = decoded.get(0..P256_ELEM_LEN) {
                 let mut g_y: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
@@ -791,11 +777,9 @@ mod edhoc_parser {
     }
 
     pub fn decode_plaintext_2(
-        method: u8,
         plaintext_2: &BufferCiphertext2,
-    ) -> Result<(ConnId, Option<IdCred>, Option<BytesMac2>, Option<EADItem>), EDHOCError> {
+    ) -> Result<(ConnId, Option<IdCred>, BytesMac2, Option<EADItem>), EDHOCError> {
         trace!("Enter decode_plaintext_2");
-        let mut mac_2: Option<[u8; MAC_LENGTH_2]> = None;
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
         //println!("decoder:{:?}", decoder);
@@ -803,27 +787,8 @@ mod edhoc_parser {
         let c_r = ConnId::from_int_raw(decoder.int_raw()?);
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
-        let (id_cred_r, mac_2) = match method {
-            m if m == EDHOCMethod::StatStat.into() => {
-                let input = decoder.any_as_encoded()?;
-                let id_cred = Some(IdCred::from_encoded_value(&input)?);
-                let mut mac_2 = [0x00; MAC_LENGTH_2];
-                mac_2.copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
-                (id_cred, Some(mac_2))
-            }
-            m if m == EDHOCMethod::PSK1.into() => {
-                // FIXME: id_cred_r should be the same as id_cred_i, but it is not sent directly
-                let mut mac_2 = [0x00; MAC_LENGTH_2];
-                mac_2.copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
-                (None, Some(mac_2))
-            }
-            m if m == EDHOCMethod::PSK2.into() => {
-                // There is no mac_2
-                (None, None)
-            }
-            _ => return Err(EDHOCError::UnsupportedMethod),
-        };
-        //println!("id_cred_r from plaintext_2:{:?}", id_cred_r);
+        let mut mac_2 = [0x00; MAC_LENGTH_2];
+        mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);        //println!("id_cred_r from plaintext_2:{:?}", id_cred_r);
         //mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
 
         // if there is still more to parse, the rest will be the EAD_2
@@ -831,61 +796,35 @@ mod edhoc_parser {
             // assume only one EAD item
             let ead_res = parse_ead(decoder.remaining_buffer()?);
             if let Ok(ead_2) = ead_res {
-                Ok((c_r, id_cred_r, mac_2, ead_2))
+                Ok((c_r, None, mac_2, ead_2))
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((c_r, id_cred_r, mac_2, None))
+            Ok((c_r, None, mac_2, None))
         } else {
             Err(EDHOCError::ParsingError)
         }
     }
 
     pub fn decode_plaintext_3(
-        method: u8,
         plaintext_3: &BufferPlaintext3,
     ) -> Result<(Option<IdCred>, Option<BytesMac3>, Option<EADItem>), EDHOCError> {
         trace!("Enter decode_plaintext_3");
-        let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
-
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
         //println!("decoder plaintext_3:{:?}", decoder);
-        // the id_cred may have been encoded as a single int, a byte string, or a map
-
-        let id_cred_i = match method {
-            m if m == EDHOCMethod::PSK1.into() => None,
-            m if m == EDHOCMethod::PSK2.into() => None,
-            m if m == EDHOCMethod::StatStat.into() => {
-                let input = decoder.any_as_encoded()?;
-                Some(IdCred::from_encoded_value(&input)?)
-            }
-            _ => return Err(EDHOCError::UnsupportedMethod),
-        };
-
-        let mac_3 = match method {
-            m if m == EDHOCMethod::PSK1.into() => None,
-            m if m == EDHOCMethod::PSK2.into() => None,
-            m if m == EDHOCMethod::StatStat.into() => {
-                let mut mac_array = [0u8; MAC_LENGTH_3];
-                mac_array.copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
-                Some(mac_array)
-            }
-            _ => return Err(EDHOCError::UnsupportedMethod),
-        };
-        //mac_3[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
 
         // if there is still more to parse, the rest will be the EAD_3
         if plaintext_3.len > decoder.position() {
             // assume only one EAD item
             let ead_res = parse_ead(decoder.remaining_buffer()?);
             if let Ok(ead_3) = ead_res {
-                Ok((id_cred_i, mac_3, ead_3))
+                Ok((None, None, ead_3))
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((id_cred_i, mac_3, None))
+            Ok((None, None, None))
         } else {
             Err(EDHOCError::ParsingError)
         }
@@ -900,25 +839,6 @@ pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHO
     // the id_cred may have been encoded as a single int, a byte string, or a map
     let id_cred = decoder.bytes()?;
     Ok(id_cred)
-}
-
-fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
-    let mut decoder = CBORDecoder::new(data);
-    //println!("decoder:{:?}", data);
-    // Assuming ciphertext_3a is encoded as a byte string
-    //println!("decoder_bytes:{:?}", decoder.bytes()?);
-    let bytes = decoder.bytes()?;
-    //println!("bytes:{:?}", bytes);
-
-    if bytes.len() != 4 {
-        return Err(EDHOCError::ParsingError);
-    }
-
-    let mut ciphertext_3a = [0u8; 4];
-    ciphertext_3a.copy_from_slice(&bytes);
-    //println!("ciphertext_3a:{:?}", ciphertext_3a);
-
-    Ok((ciphertext_3a, &data[decoder.position()..]))
 }
 
 fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
