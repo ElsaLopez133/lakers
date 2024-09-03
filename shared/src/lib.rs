@@ -9,7 +9,7 @@
 //! [lakers-ead]: https://docs.rs/lakers-ead/latest/lakers_ead/
 // NOTE: if there is no python-bindings feature, which will be the case for embedded builds,
 //       then the crate will be no_std
-//#![cfg_attr(not(feature = "python-bindings"), no_std)]
+#![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
 pub use edhoc_parser::*;
@@ -328,7 +328,6 @@ pub struct InitiatorStart {
 
 #[derive(Debug)]
 pub struct ResponderStart {
-    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_y: BytesP256ElemLen, // ephemeral public key of myself,
     pub cred_r: Credential,    // Added for PSK variant

@@ -13,7 +13,7 @@
 //! respectively, through which the EDHOC key material can be obtained.
 //!
 //! [EDHOC]: https://datatracker.ietf.org/doc/html/rfc9528
-//#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::trace;
 pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
@@ -95,7 +95,6 @@ pub struct EdhocResponderDone<Crypto: CryptoTrait> {
 impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     pub fn new(
         mut crypto: Crypto,
-        method: EDHOCMethod,
         cred_r: Credential,
     ) -> Self {
         trace!("Initializing EdhocResponder");
@@ -105,7 +104,6 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
             state: ResponderStart {
                 y,
                 g_y,
-                method: method.into(),
                 cred_r: cred_r,
             },
             cred_r,

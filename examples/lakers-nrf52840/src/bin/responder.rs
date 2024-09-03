@@ -10,10 +10,10 @@ use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
 use {defmt_rtt as _, panic_probe as _};
-use nrf52840_hal::pac;
-use nrf52840_hal::prelude::*;
+// use nrf52840_hal::pac;
+// use nrf52840_hal::prelude::*;
 //use nrf52840_hal::gpio::{Level, Output, OutputDrive, Pin};
-use embassy_time::{Duration, Timer};
+// use embassy_time::{Duration, Timer};
 
 use lakers::*;
 
