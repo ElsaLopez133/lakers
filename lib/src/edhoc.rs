@@ -109,7 +109,7 @@ pub fn r_prepare_message_2(
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
 
     let prk_3e2m = match cred_r.key {
-        CredentialKey::Symmetric(psk) => compute_prk_2e(crypto, &state.y, &state.g_x, &th_2),
+        CredentialKey::Symmetric(psk) => prk_2e,
         _ => panic!("Unsuported key type"),
     };
     //println!("prk_3e2m:{:?}", prk_3e2m);
