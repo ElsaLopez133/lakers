@@ -27,7 +27,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
-        EDHOCMethod::PSK1,
+        EDHOCMethod::PSK2,
         EDHOCSuite::CipherSuite2,
     );
     println!("\n---------MESSAGE_1-----------\n");
@@ -73,8 +73,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let mut oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     let mut oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    println!("OSCORE secret: {:02x?}", oscore_secret);
-    println!("OSCORE salt: {:02x?}", oscore_salt);
+    // println!("OSCORE secret: {:02x?}", oscore_secret);
+    // println!("OSCORE salt: {:02x?}", oscore_salt);
 
     // context of key update is a test vector from draft-ietf-lake-traces
     let prk_out_new = initiator.edhoc_key_update(&[
@@ -82,14 +82,14 @@ fn client_handshake() -> Result<(), EDHOCError> {
         0xea,
     ]);
 
-    println!("PRK_out after key update: {:02x?}?", prk_out_new);
+    // println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
     // compute OSCORE secret and salt after key update
     oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    println!("OSCORE secret after key update: {:02x?}", oscore_secret);
-    println!("OSCORE salt after key update: {:02x?}", oscore_salt);
+    // println!("OSCORE secret after key update: {:02x?}", oscore_secret);
+    // println!("OSCORE salt after key update: {:02x?}", oscore_salt);
 
     Ok(())
 }
