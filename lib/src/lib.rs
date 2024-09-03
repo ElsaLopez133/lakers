@@ -267,7 +267,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         }
     }
 
-    pub fn set_identity(&mut self, i: Option<BytesP256ElemLen>, cred_i: Credential) {
+    pub fn set_identity(&mut self, cred_i: Credential) {
         self.cred_i = Some(cred_i);
         self.state.cred_i = Some(cred_i);
     }
