@@ -808,7 +808,7 @@ mod edhoc_parser {
 
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
-    ) -> Result<(Option<IdCred>, Option<BytesMac3>, Option<EADItem>), EDHOCError> {
+    ) -> Result<(Option<IdCred>, Option<EADItem>), EDHOCError> {
         trace!("Enter decode_plaintext_3");
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
         //println!("decoder plaintext_3:{:?}", decoder);
@@ -818,12 +818,12 @@ mod edhoc_parser {
             // assume only one EAD item
             let ead_res = parse_ead(decoder.remaining_buffer()?);
             if let Ok(ead_3) = ead_res {
-                Ok((None, None, ead_3))
+                Ok((None, ead_3))
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((None, None, None))
+            Ok((None, None))
         } else {
             Err(EDHOCError::ParsingError)
         }

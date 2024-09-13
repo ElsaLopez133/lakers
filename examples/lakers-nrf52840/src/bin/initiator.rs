@@ -79,7 +79,6 @@ async fn main(spawner: Spawner) {
 
     let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
     let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-    //info!("cred_r:{:?}", cred_r.bytes.content);
     
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
@@ -130,7 +129,7 @@ async fn main(spawner: Spawner) {
 
             // led_pin_p0_24.set_high().unwrap();
             let (initiator, message_3, i_prk_out) = initiator
-                .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
+                .prepare_message_3(&None).unwrap();
             // led_pin_p0_24.set_low().unwrap();
             info!("Send message_3");
             //led_pin_p0_25.set_high().unwrap();

@@ -358,7 +358,6 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
     pub fn prepare_message_3(
         mut self,
-        cred_transfer: CredentialTransfer,
         ead_3: &Option<EADItem>,
     ) -> Result<
         (
@@ -376,7 +375,6 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
             &mut self.state,
             &mut self.crypto,
             cred_i,
-            cred_transfer,
             ead_3,
         ) {
             Ok((state, message_3, prk_out)) => Ok((
