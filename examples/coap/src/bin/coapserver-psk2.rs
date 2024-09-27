@@ -34,8 +34,6 @@ fn main() {
                     Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
-                    EDHOCMethod::PSK2,
-                    None,
                     cred_psk,
                 );
                 //println!("cred:{:?}", cred_psk);
@@ -83,33 +81,48 @@ fn main() {
                 let cred = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let valid_cred_i =
                     credential_check_or_fetch(Some(cred), id_cred_i.unwrap()).unwrap();
-                let Ok((mut responder, prk_out)) = responder.verify_message_3(valid_cred_i) else {
+                let Ok(mut responder) = responder.verify_message_3(valid_cred_i) else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;
                 };
+                // Prepare message_4
+                println!("Preparing message_4");
+                let ead_4: Option<EADItem> = None;
+                let result = responder.prepare_message_4(CredentialTransfer::ByReference, &ead_4);
+                match result {
+                    Ok((mut responder, message_4, prk_out)) => {
+                        // Handle the success case
+                        println!("Message 4 prepared successfully");
+                        // Use responder, message_4, and prk_out as needed
+                        // send empty ack back
+                        response.message.payload = b"".to_vec();
 
-                // send empty ack back
-                response.message.payload = b"".to_vec();
+                        println!("EDHOC exchange successfully completed");
+                        // println!("PRK_out: {:02x?}", prk_out);
 
-                println!("EDHOC exchange successfully completed");
-                println!("PRK_out: {:02x?}", prk_out);
+                        let mut _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
+                        // println!("OSCORE secret: {:02x?}", _oscore_secret);
+                        let mut _oscore_salt = responder.edhoc_exporter(1u8, &[], 8); // label is 1
+                        // println!("OSCORE salt: {:02x?}", _oscore_salt);
 
-                let mut _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
-                println!("OSCORE secret: {:02x?}", _oscore_secret);
-                let mut _oscore_salt = responder.edhoc_exporter(1u8, &[], 8); // label is 1
-                println!("OSCORE salt: {:02x?}", _oscore_salt);
+                        // context of key update is a test vector from draft-ietf-lake-traces
+                        let prk_out_new = responder.edhoc_key_update(&[
+                            0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02,
+                            0xb8, 0xbc, 0xea,
+                        ]);
+                        // println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
-                // context of key update is a test vector from draft-ietf-lake-traces
-                let prk_out_new = responder.edhoc_key_update(&[
-                    0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02,
-                    0xb8, 0xbc, 0xea,
-                ]);
-                println!("PRK_out after key update: {:02x?}?", prk_out_new);
-
-                _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
-                println!("OSCORE secret after key update: {:02x?}", _oscore_secret);
-                _oscore_salt = responder.edhoc_exporter(1u8, &[], 8); // label is 1
-                println!("OSCORE salt after key update: {:02x?}", _oscore_salt);
+                        _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
+                        // println!("OSCORE secret after key update: {:02x?}", _oscore_secret);
+                        _oscore_salt = responder.edhoc_exporter(1u8, &[], 8); // label is 1
+                        // println!("OSCORE salt after key update: {:02x?}", _oscore_salt);
+                    },
+                    Err(e) => {
+                        // Handle the error case
+                        println!("Error preparing message 4: {:?}", e);
+                        // Decide how to proceed in case of an error
+                    }
+                }
             }
             response.set_status(ResponseType::Changed);
         } else {

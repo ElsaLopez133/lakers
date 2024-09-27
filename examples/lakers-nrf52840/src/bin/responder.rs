@@ -156,11 +156,26 @@ async fn main(spawner: Spawner) {
                             info!("EDHOC error at verify_message_3");
                             continue;
                         };
-                        // led_pin_p0_24.set_low().unwrap();
-                        // led_pin_p0_26.set_low().unwrap();
-                        info!("Handshake completed. prk_out: {:X}", prk_out);
 
-                        unwrap!(spawner.spawn(example_application_task(prk_out)));
+                        // Prepare message_4
+                        info!("Preparing message_4");
+                        let message_4 = responder.prepare_message_4(None);
+                        info!("Sending message_4");
+                        match common::transmit_without_response(
+                            &mut radio, 
+                            Packet::new_from_slice(message_4.as_slice(), Some(0xf5)).expect("wrong length"),
+                        ).await{
+                            Ok(_) => {
+                                info!("Message_4 sent succesfully");
+                                info!("Handhsake completed. prk_out: {:X}", prk_out);
+
+                                unwrap!(spawner.spawn(example_application_task(prk_out)));
+                            },
+                            Err(_) => {
+                                info!("Failed to send message_4");
+                                continue;
+                            }
+                        }
                     } else {
                         info!("Another packet interrupted the handshake.");
                         continue;

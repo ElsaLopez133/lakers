@@ -54,6 +54,12 @@ pub struct EdhocInitiatorProcessedM2<Crypto: CryptoTrait> {
 }
 
 #[derive(Debug)]
+pub struct EdhocInitiatorProcessingM3<Crypto: CryptoTrait> {
+    state: ProcessingM3, // opaque state
+    cred_i: Option<Credential>,
+    crypto: Crypto,
+}
+#[derive(Debug)]
 pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
     state: Completed,
     crypto: Crypto,
@@ -83,6 +89,18 @@ pub struct EdhocResponderWaitM3<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocResponderProcessingM3<Crypto: CryptoTrait> {
     state: ProcessingM3, // opaque state
+    crypto: Crypto,
+}
+
+#[derive(Debug)]
+pub struct EdhocResponderProcessedM3<Crypto: CryptoTrait> {
+    state: ProcessedM3, // opaque state
+    crypto: Crypto,
+}
+
+#[derive(Debug)]
+pub struct EdhocResponderPreparingM4<Crypto: CryptoTrait> {
+    state: ProcessedM3, // opaque state
     crypto: Crypto,
 }
 
@@ -200,14 +218,43 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
     pub fn verify_message_3(
         mut self,
         cred_i: Credential,
-    ) -> Result<(EdhocResponderDone<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    ) -> Result<(EdhocResponderProcessedM3<Crypto>), EDHOCError> {
         trace!("Enter verify_message_3");
         match r_verify_message_3(&mut self.state, &mut self.crypto, cred_i) {
-            Ok((state, prk_out)) => Ok((
+            Ok(state) => Ok(
+                EdhocResponderProcessedM3 {
+                    state,
+                    crypto: self.crypto,
+                }
+            ),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
+    pub fn prepare_message_4(
+        mut self,
+        cred_transfer: CredentialTransfer,
+        ead_4: &Option<EADItem>,
+    ) -> Result<(
+        EdhocResponderDone<Crypto>, 
+        BufferMessage4, 
+        [u8; SHA256_DIGEST_LEN]
+    ), EDHOCError> {
+        trace!("Enter prepare_message_4");
+        match r_prepare_message_4(
+            &self.state,
+            &mut self.crypto,
+            cred_transfer,
+            ead_4,
+        ) {
+            Ok((state, message_4, prk_out)) => Ok((
                 EdhocResponderDone {
                     state,
                     crypto: self.crypto,
                 },
+                message_4,
                 prk_out,
             )),
             Err(error) => Err(error),

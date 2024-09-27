@@ -34,8 +34,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
-    initiator.set_identity(None, cred);
-    //println!("cred:{:?}", cred);
+    initiator.set_identity(cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     msg_1_buf.extend_from_slice(message_1.as_slice());
     println!("message_1 len = {}", msg_1_buf.len());
@@ -63,8 +62,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     msg_3.extend_from_slice(message_3.as_slice());
     println!("message_3 len = {}", msg_3.len());
 
-    let _response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
-    // we don't care about the response to message_3 for now
+    let response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
+    println!("\n---------MESSAGE_4-----------\n");
+    let (mut initiator, ead_4) = initiator.parse_message_4(&response)?;
 
     println!("\n---------END-----------\n");
     println!("EDHOC exchange successfully completed");
@@ -73,8 +73,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let mut oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     let mut oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    println!("OSCORE secret: {:02x?}", oscore_secret);
-    println!("OSCORE salt: {:02x?}", oscore_salt);
+    // println!("OSCORE secret: {:02x?}", oscore_secret);
+    // println!("OSCORE salt: {:02x?}", oscore_salt);
 
     // context of key update is a test vector from draft-ietf-lake-traces
     let prk_out_new = initiator.edhoc_key_update(&[
@@ -82,14 +82,14 @@ fn client_handshake() -> Result<(), EDHOCError> {
         0xea,
     ]);
 
-    println!("PRK_out after key update: {:02x?}?", prk_out_new);
+    // println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
     // compute OSCORE secret and salt after key update
     oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    println!("OSCORE secret after key update: {:02x?}", oscore_secret);
-    println!("OSCORE salt after key update: {:02x?}", oscore_salt);
+    // println!("OSCORE secret after key update: {:02x?}", oscore_secret);
+    // println!("OSCORE salt after key update: {:02x?}", oscore_salt);
 
     Ok(())
 }
