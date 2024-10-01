@@ -131,23 +131,44 @@ async fn main(spawner: Spawner) {
             // led_pin_p0_26.set_high().unwrap();
 
             // led_pin_p0_24.set_high().unwrap();
-            let (initiator, message_3, i_prk_out) = initiator
+            let (initiator, message_3) = initiator
                 .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
             // led_pin_p0_24.set_low().unwrap();
             info!("Send message_3");
             //led_pin_p0_25.set_high().unwrap();
-            common::transmit_without_response(
-                &mut radio,
-                common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
-                    .unwrap(),
+            let pckt_3 = common::Packet::new_from_slice(message_3.as_slice(), Some(0xf5))
+            .expect("Buffer not long enough");
+            info!("Send message_3 and wait message_4");
+            //led_pin_p0_15.set_high().unwrap();
+            let rcvd = common::transmit_and_wait_response(
+                &mut radio, 
+                common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0])).unwrap(),
+                Some(0xf5)
                 // &mut led_pin_p0_25
-            )
-            .await;
+            ).await;
             //led_pin_p0_25.set_low().unwrap();
             // led_pin_p0_26.set_low().unwrap();
 
-            info!("Handshake completed. prk_out = {:X}", i_prk_out);
+            match rcvd {
+                Ok(pckt_4) => {
+                    info!("Received message_2");
+                    // led_pin_p0___.set_high().unwrap();
+                    let message_4: EdhocMessageBuffer =
+                        pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
+        
+                    // led_pin_p0___.set_high().unwrap();
+                    let (initiator, ead_4) = initiator.parse_message_4(&message_4).unwrap();
+                    // led_pin_p0___.set_low().unwrap();
+                    let (mut initiator, prk_out) = initiator.verify_message_4().unwrap();
+
+                    info!("Handshake completed. prk_out = {:X}", prk_out);
+            }
+            Err(_) => panic!("parsing error"),
+        }
+
+        
         }
         Err(_) => panic!("parsing error"),
     }
+
 }

@@ -18,6 +18,7 @@ use {defmt_rtt as _, panic_probe as _};
 use lakers::*;
 
 use core::ffi::c_char;
+use core::result;
 
 extern crate alloc;
 
@@ -127,52 +128,54 @@ async fn main(spawner: Spawner) {
             match message_3 {
                 Ok(message_3) => {
                     info!("Received message_3");
-                    // led_pin_p0_26.set_high().unwrap();
-
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
-
+                    
                     if rcvd_c_r == c_r.unwrap() {
                         let message_3: EdhocMessageBuffer = message_3.pdu[1..message_3.len]
                             .try_into()
                             .expect("wrong length");
-                        // led_pin_p0_11.set_high().unwrap();
-                        let Ok((responder, id_cred_i, _ead_3)) =
-                            responder.parse_message_3(&message_3)
-                        else {
-                            info!("EDHOC error at parse_message_3");
-                            // We don't get another chance, it's popped and can't be used any further
-                            // anyway legally
-                            continue;
-                        };
-                        // led_pin_p0_11.set_low().unwrap();
-
-                        let cred_i: Credential = 
-                            Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-                        let valid_cred_i =
-                            credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
-                        // led_pin_p0_24.set_high().unwrap();
-                        let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i)
-                        else {
-                            info!("EDHOC error at verify_message_3");
-                            continue;
-                        };
-
-                        // Prepare message_4
-                        info!("Preparing message_4");
-                        let message_4 = responder.prepare_message_4(None);
-                        info!("Sending message_4");
-                        match common::transmit_without_response(
-                            &mut radio, 
-                            Packet::new_from_slice(message_4.as_slice(), Some(0xf5)).expect("wrong length"),
-                        ).await{
-                            Ok(_) => {
-                                info!("Message_4 sent succesfully");
-                                info!("Handhsake completed. prk_out: {:X}", prk_out);
-
-                                unwrap!(spawner.spawn(example_application_task(prk_out)));
+                        
+                        match responder.parse_message_3(&message_3) {
+                            Ok((responder, id_cred_i, _ead_3)) => {
+                                let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+                                let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
+                                
+                                match responder.verify_message_3(valid_cred_i) {
+                                    Ok(responder) => {
+                                        info!("Preparing message_4");
+                                        let ead_4: Option<EADItem> = None;
+                                        
+                                        match responder.prepare_message_4(CredentialTransfer::ByReference, &ead_4) {
+                                            Ok((mut responder, message_4, prk_out)) => {
+                                                match common::transmit_without_response(
+                                                    &mut radio,
+                                                    Packet::new_from_slice(message_4.as_slice(), Some(0xf5)).expect("wrong length"),
+                                                ).await {
+                                                    Ok(_) => {
+                                                        info!("Message_4 sent successfully");
+                                                        info!("Handshake completed. prk_out: {:X}", prk_out);
+                                                        unwrap!(spawner.spawn(example_application_task(prk_out)));
+                                                    },
+                                                    Err(_) => {
+                                                        info!("Failed to send message_4");
+                                                        continue;
+                                                    }
+                                                }
+                                            },
+                                            Err(e) => {
+                                                info!("Error preparing message 4");
+                                                continue;
+                                            }
+                                        }
+                                    },
+                                    Err(_) => {
+                                        info!("EDHOC error at verify_message_3");
+                                        continue;
+                                    }
+                                }
                             },
                             Err(_) => {
-                                info!("Failed to send message_4");
+                                info!("EDHOC error at parse_message_3");
                                 continue;
                             }
                         }
@@ -180,13 +183,14 @@ async fn main(spawner: Spawner) {
                         info!("Another packet interrupted the handshake.");
                         continue;
                     }
-                }
+                },
                 Err(PacketError::TimeoutError) => info!("Timeout while waiting for message_3!"),
                 Err(_) => panic!("Unexpected error"),
             }
         }
     }
 }
+
 
 #[embassy_executor::task]
 async fn example_application_task(secret: BytesHashLen) {

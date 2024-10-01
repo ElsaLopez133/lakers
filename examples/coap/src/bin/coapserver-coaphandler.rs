@@ -115,8 +115,6 @@ impl coap_handler::Handler for EdhocHandler {
 
             let (responder, _c_i, ead_1) = EdhocResponder::new(
                 lakers_crypto::default_crypto(),
-                EDHOCMethod::StatStat,
-                R.try_into().expect("Wrong length of responder private key"),
                 cred_r,
             )
             .process_message_1(message_1)
@@ -181,7 +179,7 @@ impl coap_handler::Handler for EdhocHandler {
                 Credential::parse_ccs(CRED_I.try_into().expect("Static credential is too large"))
                     .expect("Static credential is not processable");
             let valid_cred_i =
-                credential_check_or_fetch(Some(cred_i), id_cred_i).map_err(render_error)?;
+                credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).map_err(render_error)?;
             let (mut responder, prk_out) =
                 responder.verify_message_3(valid_cred_i).map_err(|e| {
                     println!("EDHOC processing error: {:?}", e);

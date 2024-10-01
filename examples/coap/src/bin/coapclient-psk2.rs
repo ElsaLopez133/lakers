@@ -57,14 +57,23 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_3-----------\n");
     let mut msg_3 = Vec::from(c_r.as_cbor());
     //println!("initiator prepares message_3");
-    let (mut initiator, message_3, prk_out) =
+    let (mut initiator, message_3) =
         initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
     msg_3.extend_from_slice(message_3.as_slice());
     println!("message_3 len = {}", msg_3.len());
 
     let response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
+    if response.get_status() != &ResponseType::Changed {
+        panic!("Message 4 response error: {:?}", response.get_status());
+    }
     println!("\n---------MESSAGE_4-----------\n");
-    let (mut initiator, ead_4) = initiator.parse_message_4(&response)?;
+    println!("message_4 len = {}", response.message.payload.len());
+    let message_4 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
+
+    println!("Entering parse message 4");
+    let (mut initiator, ead_4) = initiator.parse_message_4(&message_4)?;
+    println!("Entering verify message 4");
+    let (mut initiator, prk_out) = initiator.verify_message_4()?;
 
     println!("\n---------END-----------\n");
     println!("EDHOC exchange successfully completed");
@@ -82,7 +91,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
         0xea,
     ]);
 
-    // println!("PRK_out after key update: {:02x?}?", prk_out_new);
+    println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
     // compute OSCORE secret and salt after key update
     oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0

@@ -95,10 +95,11 @@ fn main() {
                         println!("Message 4 prepared successfully");
                         // Use responder, message_4, and prk_out as needed
                         // send empty ack back
-                        response.message.payload = b"".to_vec();
+                        response.message.payload = Vec::from(message_4.as_slice());
+                        // response.message.payload = b"".to_vec();
 
                         println!("EDHOC exchange successfully completed");
-                        // println!("PRK_out: {:02x?}", prk_out);
+                        println!("PRK_out: {:02x?}", prk_out);
 
                         let mut _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
                         // println!("OSCORE secret: {:02x?}", _oscore_secret);
@@ -110,7 +111,7 @@ fn main() {
                             0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02,
                             0xb8, 0xbc, 0xea,
                         ]);
-                        // println!("PRK_out after key update: {:02x?}?", prk_out_new);
+                        println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
                         _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
                         // println!("OSCORE secret after key update: {:02x?}", _oscore_secret);
