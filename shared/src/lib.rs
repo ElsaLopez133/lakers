@@ -747,34 +747,6 @@ mod edhoc_parser {
         }
     }
 
-    pub fn parse_message_3(
-        rcvd_message_3: &BufferMessage3,
-    ) -> Result<(BufferCiphertext3, BufferCiphertext3), EDHOCError> {
-        trace!("Enter parse_message_3");
-        let message_slice = rcvd_message_3.as_slice();
-        //println!("message_slice :{:?}", message_slice);
-
-        // Get the first byte and convert it to length
-        let first_byte = message_slice[0];
-        let (ciphertext_3a_len, header_len) = decode_cbor_length(first_byte)?;
-        let mut ciphertext_3a = BufferCiphertext3::new();
-        // Ensure we have enough data
-        if message_slice.len() < header_len + ciphertext_3a_len {
-            return Err(EDHOCError::ParsingError);
-        }
-        ciphertext_3a.fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
-        //println!("ciphertext_3a: {:?}", ciphertext_3a);
-
-        let mut ciphertext_3b = BufferCiphertext3::new();
-        ciphertext_3b
-            .fill_with_slice(&message_slice[ciphertext_3a_len + 1..])
-            .map_err(|_| EDHOCError::ParsingError)?;
-        //println!("ciphertext_3b length: {}", ciphertext_3b.len);
-        //println!("ciphertext_3b: {:?}", ciphertext_3b);
-
-        Ok((ciphertext_3a, ciphertext_3b))
-    }
-
     pub fn decode_plaintext_2(
         plaintext_2: &BufferCiphertext2,
     ) -> Result<(ConnId, Option<IdCred>, BytesMac2, Option<EADItem>), EDHOCError> {
