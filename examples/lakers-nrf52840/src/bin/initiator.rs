@@ -151,8 +151,8 @@ async fn main(spawner: Spawner) {
 
             match rcvd {
                 Ok(pckt_4) => {
-                    info!("Received message_2");
-                    // led_pin_p0___.set_high().unwrap();
+                    info!("Received message_4");
+                    // led_pin_p0_26.set_high().unwrap();
                     let message_4: EdhocMessageBuffer =
                         pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
         
@@ -160,7 +160,8 @@ async fn main(spawner: Spawner) {
                     let (initiator, ead_4) = initiator.parse_message_4(&message_4).unwrap();
                     // led_pin_p0___.set_low().unwrap();
                     let (mut initiator, prk_out) = initiator.verify_message_4().unwrap();
-
+                    // led_pin_p0_26.set_low().unwrap();
+                    
                     info!("Handshake completed. prk_out = {:X}", prk_out);
             }
             Err(_) => panic!("parsing error"),

@@ -128,6 +128,7 @@ async fn main(spawner: Spawner) {
             match message_3 {
                 Ok(message_3) => {
                     info!("Received message_3");
+                    // led_pin_p0_26.set_high().unwrap();
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
                     
                     if rcvd_c_r == c_r.unwrap() {
@@ -135,16 +136,21 @@ async fn main(spawner: Spawner) {
                             .try_into()
                             .expect("wrong length");
                         
+                        // led_pin_p0_11.set_high().unwrap();
                         match responder.parse_message_3(&message_3) {
                             Ok((responder, id_cred_i, _ead_3)) => {
                                 let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
                                 let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
-                                
+                                // led_pin_p0_11.set_low().unwrap();
+
+                                // led_pin_p0_24.set_high().unwrap();
                                 match responder.verify_message_3(valid_cred_i) {
                                     Ok(responder) => {
+                                        // led_pin_p0_24.set_low().unwrap();
                                         info!("Preparing message_4");
+                                        // led_pin_p0_26.set_high().unwrap();
                                         let ead_4: Option<EADItem> = None;
-                                        
+                                        // led_pin_p0___.set_high().unwrap();
                                         match responder.prepare_message_4(CredentialTransfer::ByReference, &ead_4) {
                                             Ok((mut responder, message_4, prk_out)) => {
                                                 match common::transmit_without_response(
@@ -153,6 +159,8 @@ async fn main(spawner: Spawner) {
                                                 ).await {
                                                     Ok(_) => {
                                                         info!("Message_4 sent successfully");
+                                                        // led_pin_p0___.set_low().unwrap();
+                                                        // led_pin_p0_26.set_low().unwrap();
                                                         info!("Handshake completed. prk_out: {:X}", prk_out);
                                                         unwrap!(spawner.spawn(example_application_task(prk_out)));
                                                     },

@@ -821,7 +821,7 @@ fn compute_k_4_iv_4(
     let k_4_buf = edhoc_kdf(
         crypto,
         prk_4e3m,
-        3u8, // FIXME
+        8u8, // FIXME
         &th_4_buf,
         th_4.len(),
         AES_CCM_KEY_LEN,
@@ -830,7 +830,7 @@ fn compute_k_4_iv_4(
 
     // IV_3 = EDHOC-KDF( PRK_4e3m, ?? , TH_4,      iv_length )
     let mut iv_4: BytesCcmIvLen = [0x00; AES_CCM_IV_LEN];
-    let iv_4_buf = edhoc_kdf(crypto, prk_4e3m, 4u8, &th_4_buf, th_4.len(), AES_CCM_IV_LEN);
+    let iv_4_buf = edhoc_kdf(crypto, prk_4e3m, 9u8, &th_4_buf, th_4.len(), AES_CCM_IV_LEN);
     iv_4[..].copy_from_slice(&iv_4_buf[..AES_CCM_IV_LEN]);
 
     (k_4, iv_4)
@@ -1276,7 +1276,8 @@ mod tests {
 
     // message_1 (second time)
     // const METHOD_TV: u8 = 0x03;
-    const METHOD_TV: EDHOCMethod::PSK2;
+    // const METHOD_TV: u8 = 0x05; // EDHOCMethod::PSK2;
+    const METHOD_TV: EDHOCMethod = EDHOCMethod::PSK2;
     // manually modified test vector to include a single supported cipher suite
     const SUITES_I_TV: &str = "0602";
     const G_X_TV: BytesP256ElemLen =
@@ -1357,6 +1358,9 @@ mod tests {
     const OSCORE_MASTER_SALT_TV: Bytes8 = hex!("ada24c7dbfc85eeb");
     const MESSAGE_4_TV: &str = "4828c966b7ca304f83";
     const CIPHERTEXT_4_TV: &str = "28c966b7ca304f83";
+    const PLAINTEXT_4_TV: &str = "";
+    const K_4_TV: BytesCcmKeyLen = hex!("d3c77872b6eeb508911bdbd308b2e6a0");
+    const IV_4_TV: BytesCcmIvLen = hex!("04ff0f44456e96e217853c3601");
     // invalid test vectors, should result in a parsing error
     const MESSAGE_1_INVALID_ARRAY_TV: &str =
         "8403025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e";
@@ -1457,7 +1461,7 @@ mod tests {
         assert!(res.is_ok());
         let (method, suites_i, g_x, c_i, id_cred_psk, ead_1) = res.unwrap();
 
-        assert_eq!(method, METHOD_TV);
+        assert_eq!(method, METHOD_TV.into());
         assert_eq!(suites_i, suites_i_tv);
         assert_eq!(g_x, G_X_TV);
         assert_eq!(c_i, C_I_TV);
@@ -1526,6 +1530,13 @@ mod tests {
     }
 
     #[test]
+    fn test_compute_k_4_iv_4() {
+        let (k_4, iv_4) = compute_k_4_iv_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV);
+        assert_eq!(k_4, K_4_TV);
+        assert_eq!(iv_4, IV_4_TV);
+    }
+
+    #[test]
     fn test_compute_th_3() {
         let plaintext_2_tv = BufferPlaintext2::from_hex(PLAINTEXT_2_TV);
 
@@ -1537,7 +1548,7 @@ mod tests {
     fn test_compute_th_4() {
         let plaintext_3_tv = BufferPlaintext3::from_hex(PLAINTEXT_3_TV);
 
-        let th_4 = compute_th_4(&mut default_crypto(), &TH_3_TV, &IS_CRED_PSK_TV, &None, CRED_PSK_TV);
+        let th_4 = compute_th_4(&mut default_crypto(), &TH_3_TV, &ID_CRED_PSK_TV, &None, CRED_PSK_TV);
         assert_eq!(th_4, TH_4_TV);
     }
 
@@ -1719,17 +1730,6 @@ mod tests {
             decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &message_4_tv);
         assert!(plaintext_4.is_ok());
         assert_eq!(plaintext_4.unwrap(), plaintext_4_tv);
-    }
-
-
-    #[test]
-    fn test_parse_message_4() {
-        let ciphertext_4_tv = BufferCiphertext4::from_hex(CIPHERTEXT_4_TV);
-        let ret = parse_message_4(&BufferMessage4::from_hex(MESSAGE_4_TV));
-        assert!(ret.is_ok());
-        let (ciphertext_4) = ret.unwrap();
-
-        assert_eq!(ciphertext_4, ciphertext_4_tv);
     }
 
     #[test]

@@ -665,6 +665,7 @@ mod test {
 
     #[test]
     fn test_new_responder() {
+        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
         let _responder = EdhocResponder::new(
             default_crypto(),
             cred_r.clone(),
@@ -688,6 +689,7 @@ mod test {
     fn test_process_message_1() {
         let message_1_tv_first_time = EdhocMessageBuffer::from_hex(MESSAGE_1_TV_FIRST_TIME);
         let message_1_tv = EdhocMessageBuffer::from_hex(MESSAGE_1_TV);
+        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
         let responder = EdhocResponder::new(
             default_crypto(),
             cred_r.clone(),
@@ -700,6 +702,7 @@ mod test {
 
         // We need to create a new responder -- no message is supposed to be processed twice by a
         // responder or initiator
+        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
         let responder = EdhocResponder::new(
             default_crypto(),
             cred_r.clone(),
