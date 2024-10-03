@@ -380,7 +380,7 @@ pub struct ProcessingM2 {
 #[repr(C)]
 pub struct ProcessedM2 {
     pub prk_3e2m: BytesHashLen,
-    pub prk_4e3m: BytesHashLen,
+    // pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
 }
 
@@ -416,20 +416,20 @@ pub struct ProcessedM3 {
 #[derive(Debug)]
 pub struct WaitM4 {
     pub prk_3e2m: BytesHashLen,
-    pub prk_4e3m: BytesHashLen,
+    // pub prk_4e3m: BytesHashLen,
     pub cred_r: Credential,
     pub th_3: BytesHashLen,
-    pub th_4: BytesHashLen,
+    // pub th_4: BytesHashLen,
     pub id_cred: Option<IdCred>,
     pub ead_3: Option<EADItem>,
 }
 
 #[derive(Debug)]
 pub struct ProcessingM4 {
-    pub prk_3e2m: BytesHashLen,
+    // pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub cred_i: Credential,
-    pub th_3: BytesHashLen,
+    // pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
 }
 

@@ -17,7 +17,7 @@ nrf52840-hal = "0.16.0"  # Use the latest version available
 embedded-hal = "0.2.7"  # or whichever version you're using
 
 # lakers
-lakers = { package = "lakers", path = "../../lib", default-features = false }
+lakers = { package = "lakers", path = "../../lib", features = [ "defmt" ] }
 lakers-crypto = { path = "../../crypto", default-features = false }
 
 # misc

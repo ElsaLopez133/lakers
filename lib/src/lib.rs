@@ -511,7 +511,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM4<Crypto> {
         mut self,
         // valid_cred_r: Credential,
     ) -> Result<(EdhocInitiatorDone<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
-        trace!("Enter verify_message_2");
+        trace!("Enter verify_message_4");
         match i_verify_message_4(&self.state, &mut self.crypto) {
             Ok((state, prk_out)) => Ok((EdhocInitiatorDone {
                 state,

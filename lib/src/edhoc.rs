@@ -361,7 +361,7 @@ pub fn i_verify_message_2(
     valid_cred_r: Credential,
 ) -> Result<ProcessedM2, EDHOCError> {
     let prk_3e2m = match valid_cred_r.key {
-        CredentialKey::Symmetric(psk) => compute_prk_2e(crypto, &state.x, &state.g_y, &state.th_2),
+        CredentialKey::Symmetric(psk) => state.prk_2e,
         _ => panic!("Unusported key method"),
     };
 
@@ -372,16 +372,15 @@ pub fn i_verify_message_2(
         valid_cred_r.bytes.as_slice(),
     );
     // message 3 processing
-
-    let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
-    let prk_4e3m = match valid_cred_r.key {
-        CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &salt_4e3m, &psk),
-        _ => panic!("Unusported key method"),
-        };
+    // let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
+    // let prk_4e3m = match valid_cred_r.key {
+    //     CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &salt_4e3m, &psk),
+    //     _ => panic!("Unusported key method"),
+    //     };
 
     let state = ProcessedM2 {
         prk_3e2m: prk_3e2m,
-        prk_4e3m: prk_4e3m,
+        // prk_4e3m: prk_4e3m,
         th_3: th_3,
     };
 
@@ -425,14 +424,14 @@ pub fn i_prepare_message_3(
         .extend_from_slice(regular_message_3.as_slice())
         .unwrap();
 
-    let th_4 = compute_th_4(crypto, &state.th_3, &id_cred_i.bytes.as_slice(), &ead_3, &cred_i.bytes.as_slice());
+    // we use ead_3 so we compute it here
+    // let th_4 = compute_th_4(crypto, &state.th_3, &id_cred_i.bytes.as_slice(), &ead_3, &cred_i.bytes.as_slice());
     Ok((
         WaitM4 {
             prk_3e2m: state.prk_3e2m,
-            prk_4e3m: state.prk_4e3m,
             cred_r : cred_i,
             th_3: state.th_3,
-            th_4: th_4,
+            // th_4: th_4,
             ead_3: ead_3.clone(),
             id_cred: Some(id_cred_i),
         },
@@ -445,17 +444,23 @@ pub fn i_parse_message_4(
     crypto: &mut impl CryptoTrait,
     message_4: &BufferMessage4,
 ) -> Result<(ProcessingM4, Option<EADItem>), EDHOCError> {
-    let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_3, &message_4)?;
+
+    let th_4 = compute_th_4(crypto, &state.th_3, &state.id_cred.unwrap().bytes.as_slice(), &state.ead_3, &state.cred_r.bytes.as_slice());
+    let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
+    let prk_4e3m = match state.cred_r.key {
+        CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &salt_4e3m, &psk),
+        _ => panic!("Unusported key method"),
+        };
+
+    let plaintext_4 = decrypt_message_4(crypto, &prk_4e3m, &state.th_3, &message_4)?;
     let decoded_p4_res = decode_plaintext_4(&plaintext_4);
     let cred_i = state.cred_r.clone();
 
     if let Ok(ead_4) = decoded_p4_res {
         Ok((
             ProcessingM4 {
-                prk_3e2m: state.prk_3e2m,
-                prk_4e3m: state.prk_4e3m,
-                th_3: state.th_3,
-                th_4: state.th_4,
+                prk_4e3m: prk_4e3m,
+                th_4: th_4,
                 cred_i: cred_i,
             },
             ead_4,
