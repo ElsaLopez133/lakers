@@ -10,3 +10,9 @@ MEMORY
      RAM : ORIGIN = 0x20020000, LENGTH = 128K
   */
 }
+/* Define stack size */
+__stack_size = 0x1000; /* 4KB stack */
+
+/* Define stack boundaries */
+__stack_start__ = ORIGIN(RAM) + LENGTH(RAM);  /* End of RAM */
+__stack_end__ = __stack_start__ - __stack_size; /* Subtract stack size to get start */
