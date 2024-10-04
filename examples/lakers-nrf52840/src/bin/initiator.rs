@@ -38,39 +38,70 @@ bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
 });
 
+//  ADDITIONS TO MEMORY MEASUREMENT
+use core::sync::atomic::{AtomicUsize, Ordering};
+use cortex_m::interrupt;
+
+// static MAX_STACK_USAGE: AtomicUsize = AtomicUsize::new(0);
+// static HEAP_USAGE: AtomicUsize = AtomicUsize::new(0);
+
+
+// #[inline(never)]
+// fn update_max_stack_usage() {
+//     let current_sp = cortex_m::register::msp::read();
+//     let stack_top = 0x2003FFFF; // Top of RAM for nRF52840, adjust if different
+//     let used = (stack_top - current_sp) as usize;
+//     MAX_STACK_USAGE.fetch_max(used, Ordering::Relaxed);
+// }
+
+
 // Function to initialize stack memory with a known pattern
-fn initialize_stack_memory() {
+const STACK_MAGIC_NUMBER: u32 = 0xDEADDEAD;
+
+fn initialize_and_check_stack_memory() {
     unsafe {
-        // Set the known pattern to the entire stack region
-        // let start = STACK_START; // Platform-specific address
-        // let end = STACK_END; // Platform-specific address
-        let start = &__stack_end__ as *const _ as usize; // Use `__stack_end__` symbol
-        let end = &__stack_start__ as *const _ as usize; // Use `__stack_start__` symbol
-        info!("start: {:?}", start);
-        info!("end: {:?}", end);
-        info!("stack size: {:?}", end-start);
-        let mut addr = start;
-        while addr < end {
-            // Use `write_volatile` to avoid undefined behavior
-            // 0xDEADDEAD is a hexadecimal number commonly used as a "magic number" or "sentinel value".
-            (addr as *mut u32).write_volatile(0xDEADDEAD);
+        let current_sp: u32 = cortex_m::register::msp::read();
+        let stack_top: u32 = 0x2003FFFF; // Top of RAM for nRF52840, adjust if different
+
+        // Initialize stack
+        let mut addr: u32 = current_sp;
+        while addr < stack_top {
+            (addr as *mut u32).write_volatile(STACK_MAGIC_NUMBER);
             addr += 4;
         }
+
+        // Immediate check
+        addr = current_sp;
+        while addr < stack_top {
+            let value = (addr as *const u32).read_volatile();
+            if value != STACK_MAGIC_NUMBER {
+                info!("Mismatch at 0x{:08X}: expected 0x{:08X}, found 0x{:08X}", 
+                      addr, STACK_MAGIC_NUMBER, value);
+                break;
+            }
+            addr += 4;
+        }
+
+        info!("Stack initialization and check completed");
     }
 }
 
 // Function to measure the stack usage by looking at the remaining known pattern
 fn measure_stack_memory() -> usize {
     let mut used_stack = 0;
+    let mut count = 0;
     unsafe {
-        // let start = STACK_START; // Platform-specific address
-        // let end = STACK_END; // Platform-specific address
-        let start = &__stack_end__ as *const _ as usize; // Use `__stack_end__` symbol
-        let end = &__stack_start__ as *const _ as usize; // Use `__stack_start__` symbol
-        let mut addr = start;
-        while addr < end {
+        let current_sp = cortex_m::register::msp::read();
+        // info!("current_sp number address (measure): 0x{:08X}", current_sp);
+        let stack_top = 0x2003FFFF; // Top of RAM for nRF52840
+        let mut addr = current_sp;
+        while addr < stack_top {
             // Use `read_volatile` to ensure we're reading the memory directly
-            if (addr as *const u32).read_volatile() != 0xDEADDEAD {
+            if (addr as *const u32).read_volatile() != STACK_MAGIC_NUMBER {
+                if count <= 5{
+                    info!("addr value number address: 0x{:08X}", (addr as *const u32).read_volatile());
+                }
+                count += 1;
                 used_stack += 4;
             }
             addr += 4;
@@ -79,10 +110,36 @@ fn measure_stack_memory() -> usize {
     used_stack
 }
 
+// Function to measure the stack usage by looking at the remaining known pattern
+fn measure_stack_memory_max() -> usize {
+    unsafe {
+        let current_sp = cortex_m::register::msp::read();
+        info!("current_sp number address (measure): 0x{:08X}", current_sp);
+        info!("current_sp: {:?}", current_sp);
+        let stack_top = 0x2003FFFF; // Top of RAM for nRF52840
+        let mut addr = current_sp;
+        while addr < stack_top  {
+            // Use `read_volatile` to ensure we're reading the memory directly
+            if (addr as *const u32).read_volatile() == STACK_MAGIC_NUMBER {
+                // info!("current_sp number address (measure): 0x{:08X}", addr);
+                return addr as usize;
+            }
+            addr += 4;
+        }
+    }
+    // if we dont find the magic number, return another setinel value
+    0
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     // Step 1: Initialize the stack with a known pattern before doing anything else
-    initialize_stack_memory();
+    initialize_and_check_stack_memory();
+    //  update_max_stack_usage();
+    let used_stack = measure_stack_memory();
+    info!("Stack memory used: {} bytes", used_stack);
+    let max_stack = measure_stack_memory_max();
+    info!("Stack memory max: {} bytes", max_stack);
 
     // let peripherals = pac::Peripherals::take().unwrap();
     // let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
@@ -221,5 +278,13 @@ async fn main(spawner: Spawner) {
     // Step 3: Measure the stack usage after the function has completed
     let used_stack = measure_stack_memory();
     info!("Stack memory used: {} bytes", used_stack);
+    let max_stack = measure_stack_memory_max();
+    info!("Stack memory max: {} bytes", max_stack);
+    // interrupt::free(|_| {
+    //     let max_stack = MAX_STACK_USAGE.load(Ordering::Relaxed);
+    //     // let heap_usage = HEAP_USAGE.load(Ordering::Relaxed);
+    //     info!("Max stack usage: {} bytes", max_stack);
+    //     // info!("Current heap usage: {} bytes", heap_usage);
+    // });
 
 }
