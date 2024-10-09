@@ -38,108 +38,62 @@ bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
 });
 
-//  ADDITIONS TO MEMORY MEASUREMENT
-use core::sync::atomic::{AtomicUsize, Ordering};
+// ================================ paint the stack ===============================
+const STACK_MAGIC_NUMBER: u32 = 0xDEADDEAD;
+use core::arch::asm;
+use core::ptr::addr_of;
+use cortex_m::register::msp;
 use cortex_m::interrupt;
 
-// static MAX_STACK_USAGE: AtomicUsize = AtomicUsize::new(0);
-// static HEAP_USAGE: AtomicUsize = AtomicUsize::new(0);
-
-
-// #[inline(never)]
-// fn update_max_stack_usage() {
-//     let current_sp = cortex_m::register::msp::read();
-//     let stack_top = 0x2003FFFF; // Top of RAM for nRF52840, adjust if different
-//     let used = (stack_top - current_sp) as usize;
-//     MAX_STACK_USAGE.fetch_max(used, Ordering::Relaxed);
-// }
-
-
-// Function to initialize stack memory with a known pattern
-const STACK_MAGIC_NUMBER: u32 = 0xDEADDEAD;
-
-fn initialize_and_check_stack_memory() {
-    unsafe {
-        let current_sp: u32 = cortex_m::register::msp::read();
-        let stack_top: u32 = 0x2003FFFF; // Top of RAM for nRF52840, adjust if different
-
-        // Initialize stack
-        let mut addr: u32 = current_sp;
-        while addr < stack_top {
-            (addr as *mut u32).write_volatile(STACK_MAGIC_NUMBER);
-            addr += 4;
-        }
-
-        // Immediate check
-        addr = current_sp;
-        while addr < stack_top {
-            let value = (addr as *const u32).read_volatile();
-            if value != STACK_MAGIC_NUMBER {
-                info!("Mismatch at 0x{:08X}: expected 0x{:08X}, found 0x{:08X}", 
-                      addr, STACK_MAGIC_NUMBER, value);
-                break;
-            }
-            addr += 4;
-        }
-
-        info!("Stack initialization and check completed");
-    }
+extern "C" {
+    // marks the end of the stack, see .map file
+    static mut __euninit: u8;
 }
 
-// Function to measure the stack usage by looking at the remaining known pattern
-fn measure_stack_memory() -> usize {
-    let mut used_stack = 0;
-    let mut count = 0;
+// using asm because if I use cortex_m::register::msp::read(), it sometimes crashes
+fn get_stack_pointer() -> usize {
+    let stack_pointer: *const u8;
     unsafe {
-        let current_sp = cortex_m::register::msp::read();
-        // info!("current_sp number address (measure): 0x{:08X}", current_sp);
-        let stack_top = 0x2003FFFF; // Top of RAM for nRF52840
-        let mut addr = current_sp;
-        while addr < stack_top {
-            // Use `read_volatile` to ensure we're reading the memory directly
-            if (addr as *const u32).read_volatile() != STACK_MAGIC_NUMBER {
-                if count <= 5{
-                    info!("addr value number address: 0x{:08X}", (addr as *const u32).read_volatile());
-                }
-                count += 1;
-                used_stack += 4;
-            }
-            addr += 4;
-        }
+        asm!("mov {}, sp", out(reg) stack_pointer);
     }
-    used_stack
+    stack_pointer as usize
 }
 
-// Function to measure the stack usage by looking at the remaining known pattern
-fn measure_stack_memory_max() -> usize {
-    unsafe {
-        let current_sp = cortex_m::register::msp::read();
-        info!("current_sp number address (measure): 0x{:08X}", current_sp);
-        info!("current_sp: {:?}", current_sp);
-        let stack_top = 0x2003FFFF; // Top of RAM for nRF52840
-        let mut addr = current_sp;
-        while addr < stack_top  {
-            // Use `read_volatile` to ensure we're reading the memory directly
-            if (addr as *const u32).read_volatile() == STACK_MAGIC_NUMBER {
-                // info!("current_sp number address (measure): 0x{:08X}", addr);
-                return addr as usize;
-            }
-            addr += 4;
-        }
-    }
-    // if we dont find the magic number, return another setinel value
-    0
+fn get_stack_end() -> usize {
+    unsafe { addr_of!(__euninit) as *const u8 as usize }
 }
+
+fn paint_stack(pattern: u32) {
+    let stack_end = get_stack_end();
+    let stack_pointer = get_stack_pointer();
+    info!("PAINT_STACK stack end: {:#X}", stack_end);
+    info!("PAINT_STACK stack pointer is at: {:#X}", stack_pointer);
+    let mut addr = stack_pointer;
+    info!(
+        "PAINT_STACK will paint a total of {} bytes, from {:#X} to {:#X}",
+        (addr - stack_end),
+        addr,
+        stack_end
+    );
+    while addr > stack_end {
+        unsafe {
+            core::ptr::write_volatile(addr as *mut u32, pattern);
+        }
+        addr -= 4;
+    }
+    info!(
+        // do not remove the ==, it is used in the script to parse the output
+        "== PAINT_STACK painted a total of {} bytes, from {:#X} to {:#X} ==",
+        (stack_pointer - addr),
+        stack_pointer,
+        addr
+    );
+}
+// ================================================================================
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    // Step 1: Initialize the stack with a known pattern before doing anything else
-    initialize_and_check_stack_memory();
-    //  update_max_stack_usage();
-    let used_stack = measure_stack_memory();
-    info!("Stack memory used: {} bytes", used_stack);
-    let max_stack = measure_stack_memory_max();
-    info!("Stack memory max: {} bytes", max_stack);
+    paint_stack(STACK_MAGIC_NUMBER);
 
     // let peripherals = pac::Peripherals::take().unwrap();
     // let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
@@ -275,16 +229,4 @@ async fn main(spawner: Spawner) {
         }
         Err(_) => panic!("parsing error"),
     }
-    // Step 3: Measure the stack usage after the function has completed
-    let used_stack = measure_stack_memory();
-    info!("Stack memory used: {} bytes", used_stack);
-    let max_stack = measure_stack_memory_max();
-    info!("Stack memory max: {} bytes", max_stack);
-    // interrupt::free(|_| {
-    //     let max_stack = MAX_STACK_USAGE.load(Ordering::Relaxed);
-    //     // let heap_usage = HEAP_USAGE.load(Ordering::Relaxed);
-    //     info!("Max stack usage: {} bytes", max_stack);
-    //     // info!("Current heap usage: {} bytes", heap_usage);
-    // });
-
 }
