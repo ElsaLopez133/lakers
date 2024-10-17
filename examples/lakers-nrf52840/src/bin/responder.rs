@@ -36,8 +36,61 @@ bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
 });
 
+// ================================ paint the stack ===============================
+const STACK_MAGIC_NUMBER: u32 = 0xDEADDEAD;
+use core::arch::asm;
+use core::ptr::addr_of;
+use cortex_m::register::msp;
+
+extern "C" {
+    // marks the end of the stack, see .map file
+    static mut __euninit: u8;
+}
+
+// using asm because if I use cortex_m::register::msp::read(), it sometimes crashes
+fn get_stack_pointer() -> usize {
+    let stack_pointer: *const u8;
+    unsafe {
+        asm!("mov {}, sp", out(reg) stack_pointer);
+    }
+    stack_pointer as usize
+}
+
+fn get_stack_end() -> usize {
+    unsafe { addr_of!(__euninit) as *const u8 as usize }
+}
+
+fn paint_stack(pattern: u32) {
+    let stack_end = get_stack_end();
+    let stack_pointer = get_stack_pointer();
+    info!("PAINT_STACK stack end: {:#X}", stack_end);
+    info!("PAINT_STACK stack pointer is at: {:#X}", stack_pointer);
+    let mut addr = stack_pointer;
+    info!(
+        "PAINT_STACK will paint a total of {} bytes, from {:#X} to {:#X}",
+        (addr - stack_end),
+        addr,
+        stack_end
+    );
+    while addr > stack_end {
+        unsafe {
+            core::ptr::write_volatile(addr as *mut u32, pattern);
+        }
+        addr -= 4;
+    }
+    info!(
+        // do not remove the ==, it is used in the script to parse the output
+        "== PAINT_STACK painted a total of {} bytes, from {:#X} to {:#X} ==",
+        (stack_pointer - addr),
+        stack_pointer,
+        addr
+    );
+}
+// ================================================================================
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    // paint_stack(STACK_MAGIC_NUMBER);
     // let peripherals = pac::Peripherals::take().unwrap();
     // let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
     // let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low); // Using nrf52840_hal for GPIO
