@@ -35,18 +35,71 @@ bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
 });
 
+// ================================ paint the stack ===============================
+const STACK_MAGIC_NUMBER: u32 = 0xDEADDEAD;
+use core::arch::asm;
+use core::ptr::addr_of;
+use cortex_m::register::msp;
+
+extern "C" {
+    // marks the end of the stack, see .map file
+    static mut __euninit: u8;
+}
+
+// using asm because if I use cortex_m::register::msp::read(), it sometimes crashes
+fn get_stack_pointer() -> usize {
+    let stack_pointer: *const u8;
+    unsafe {
+        asm!("mov {}, sp", out(reg) stack_pointer);
+    }
+    stack_pointer as usize
+}
+
+fn get_stack_end() -> usize {
+    unsafe { addr_of!(__euninit) as *const u8 as usize }
+}
+
+fn paint_stack(pattern: u32) {
+    let stack_end = get_stack_end();
+    let stack_pointer = get_stack_pointer();
+    info!("PAINT_STACK stack end: {:#X}", stack_end);
+    info!("PAINT_STACK stack pointer is at: {:#X}", stack_pointer);
+    let mut addr = stack_pointer;
+    info!(
+        "PAINT_STACK will paint a total of {} bytes, from {:#X} to {:#X}",
+        (addr - stack_end),
+        addr,
+        stack_end
+    );
+    while addr > stack_end {
+        unsafe {
+            core::ptr::write_volatile(addr as *mut u32, pattern);
+        }
+        addr -= 4;
+    }
+    info!(
+        // do not remove the ==, it is used in the script to parse the output
+        "== PAINT_STACK painted a total of {} bytes, from {:#X} to {:#X} ==",
+        (stack_pointer - addr),
+        stack_pointer,
+        addr
+    );
+}
+// ================================================================================
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let peripherals = pac::Peripherals::take().unwrap();
-    let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
-    let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_14 = p0.p0_14.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_16 = p0.p0_16.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_11 = p0.p0_11.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_24 = p0.p0_24.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_15 = p0.p0_15.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_25 = p0.p0_25.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_19 = p0.p0_19.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // paint_stack(STACK_MAGIC_NUMBER);
+    // let peripherals = pac::Peripherals::take().unwrap();
+    // let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
+    // let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // let mut led_pin_p0_14 = p0.p0_14.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // let mut led_pin_p0_16 = p0.p0_16.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // let mut led_pin_p0_11 = p0.p0_11.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // let mut led_pin_p0_24 = p0.p0_24.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // let mut led_pin_p0_15 = p0.p0_15.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // let mut led_pin_p0_25 = p0.p0_25.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    // let mut led_pin_p0_19 = p0.p0_19.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
@@ -89,60 +142,66 @@ async fn main(spawner: Spawner) {
 
     // Send Message 1 over raw BLE and convert the response to byte
     info!("Prepare message_1");
-    led_pin_p0_26.set_high().unwrap();
+    // led_pin_p0_26.set_high().unwrap();
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     initiator.set_identity(None, cred_i);
 
-    led_pin_p0_14.set_high().unwrap();
+    // led_pin_p0_14.set_high().unwrap();
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
-    led_pin_p0_14.set_low().unwrap();
+    // led_pin_p0_14.set_low().unwrap();
 
     let pckt_1 = common::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
         .expect("Buffer not long enough");
     info!("Send message_1 and wait message_2");
     //led_pin_p0_15.set_high().unwrap();
-    let rcvd = common::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5), &mut led_pin_p0_15).await;
+    let rcvd = common::transmit_and_wait_response(
+        &mut radio, 
+        pckt_1, 
+        Some(0xf5), 
+        // &mut led_pin_p0_15
+    ).await;
     //led_pin_p0_15.set_low().unwrap(); 
-    led_pin_p0_26.set_low().unwrap();
+    // led_pin_p0_26.set_low().unwrap();
 
     match rcvd {
         Ok(pckt_2) => {
             info!("Received message_2");
-            led_pin_p0_26.set_high().unwrap();
+            // led_pin_p0_26.set_high().unwrap();
             let message_2: EdhocMessageBuffer =
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
 
-            led_pin_p0_16.set_high().unwrap();
+            // led_pin_p0_16.set_high().unwrap();
             let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
-            led_pin_p0_16.set_low().unwrap();
+            // led_pin_p0_16.set_low().unwrap();
 
             let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
 
-            led_pin_p0_11.set_high().unwrap();
+            // led_pin_p0_11.set_high().unwrap();
             let initiator = initiator
                 .verify_message_2(valid_cred_r)
                 .unwrap();
-            led_pin_p0_11.set_low().unwrap();
+            // led_pin_p0_11.set_low().unwrap();
 
-            led_pin_p0_26.set_low().unwrap();
+            // led_pin_p0_26.set_low().unwrap();
 
             info!("Prepare message_3");
-            led_pin_p0_26.set_high().unwrap();
+            // led_pin_p0_26.set_high().unwrap();
 
-            led_pin_p0_24.set_high().unwrap();
+            // led_pin_p0_24.set_high().unwrap();
             let (initiator, message_3, i_prk_out) = initiator
                 .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
-            led_pin_p0_24.set_low().unwrap();
+            // led_pin_p0_24.set_low().unwrap();
             info!("Send message_3");
             //led_pin_p0_25.set_high().unwrap();
             common::transmit_without_response(
                 &mut radio,
                 common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
                     .unwrap(),
-                &mut led_pin_p0_25)
+                // &mut led_pin_p0_25)
+            )
             .await;
             //led_pin_p0_25.set_low().unwrap();
-            led_pin_p0_26.set_low().unwrap();
+            // led_pin_p0_26.set_low().unwrap();
 
             info!("Handshake completed. prk_out = {:X}", i_prk_out);
         }
