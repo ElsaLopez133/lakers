@@ -22,6 +22,4 @@ cscope*
 *.log
 
 # plots
-color-map-gpi
-plots/
-old_results/
+results/
