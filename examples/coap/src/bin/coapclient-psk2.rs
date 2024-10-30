@@ -69,6 +69,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_4-----------\n");
     println!("message_4 len = {}", response.message.payload.len());
     let message_4 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
+    println!("message_4:{:?}", message_4);
+    println!("message_4 len = {}", response.message.payload.len());
 
     println!("Entering parse message 4");
     let (mut initiator, ead_4) = initiator.parse_message_4(&message_4)?;

@@ -70,6 +70,7 @@ fn main() {
                 println!("Found state with connection identifier {:?}", c_r_rcvd);
                 let message_3 =
                     EdhocMessageBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
+                println!("message_3 :{:?}", message_3);
                 let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3)
                 else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);
@@ -94,7 +95,7 @@ fn main() {
                         // Handle the success case
                         println!("Message 4 prepared successfully");
                         // Use responder, message_4, and prk_out as needed
-                        // send empty ack back
+                        println!("message_4 :{:?}", message_4);
                         response.message.payload = Vec::from(message_4.as_slice());
                         // response.message.payload = b"".to_vec();
 
