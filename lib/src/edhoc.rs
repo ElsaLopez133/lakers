@@ -159,7 +159,7 @@ pub fn r_parse_message_3(
                 &ciphertext_3a,
             );
     
-            let id_cred_psk = IdCred::from_full_value(&plaintext_3a.as_slice())?;
+            let id_cred_psk = IdCred::from_encoded_value(&plaintext_3a.as_slice())?;
     
             let plaintext_3b =
                 decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &ciphertext_3b)?;
@@ -398,21 +398,23 @@ pub fn i_prepare_message_3(
         CredentialTransfer::ByValue => cred_i.by_value()?,
         CredentialTransfer::ByReference => cred_i.by_kid()?,
     };
-
+    println!("id_cred_i: {:?}", id_cred_i);
     // compute ciphertext_3
     let plaintext_3 = encode_plaintext_3(None, None, &ead_3)?;
     let mut message_3: BufferMessage3 = BufferMessage3::new();
     // compute ciphertext_3a
     let plaintext_3a = id_cred_i;
     // Encode plaintext_3a as CBOR
-    let pt_3a = plaintext_3a.as_full_value();
+    let pt_3a = plaintext_3a.as_encoded_value();
+    println!("pt_3a: {:?}", pt_3a);
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
     ct_3a.fill_with_slice(pt_3a).unwrap();
+    println!("ct_3a: {:?}", ct_3a);
     let ciphertext_3a =
         encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
-
+    println!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a);
     //compute regular message_3
     let regular_message_3 =
         encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3);

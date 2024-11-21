@@ -7,7 +7,7 @@ use std::time::Duration;
 
 const ID_CRED: &[u8] = &hex!("a1044120");
 const CRED_PSK: &[u8] =
-    &hex!("A202686D79646F74626F7408A101A30104024132205050930FF462A77A3540CF546325DEA214");
+    &hex!("A202686D79646F74626F7408A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
 fn main() {
     env_logger::init();
@@ -24,6 +24,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("Client request: {}", url);
 
     let cred: Credential = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
+    println!("cred_psk: {:?}", cred);
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
