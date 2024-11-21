@@ -34,7 +34,6 @@ fn main() {
                     Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
-                    EDHOCMethod::PSK1,
                     cred_psk,
                 );
                 //println!("cred:{:?}", cred_psk);
@@ -53,6 +52,7 @@ fn main() {
                     let (responder, message_2) = responder
                         .prepare_message_2(CredentialTransfer::ByReference, Some(c_r), &ead_2)
                         .unwrap();
+                    println!("message_2 len: {:?}", message_2.len);
                     response.message.payload = Vec::from(message_2.as_slice());
                     // save edhoc connection
                     edhoc_connections.push((c_r, responder));
@@ -94,9 +94,9 @@ fn main() {
                 println!("PRK_out: {:02x?}", prk_out);
 
                 let mut _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
-                println!("OSCORE secret: {:02x?}", _oscore_secret);
+                // println!("OSCORE secret: {:02x?}", _oscore_secret);
                 let mut _oscore_salt = responder.edhoc_exporter(1u8, &[], 8); // label is 1
-                println!("OSCORE salt: {:02x?}", _oscore_salt);
+                // println!("OSCORE salt: {:02x?}", _oscore_salt);
 
                 // context of key update is a test vector from draft-ietf-lake-traces
                 let prk_out_new = responder.edhoc_key_update(&[
@@ -106,9 +106,9 @@ fn main() {
                 println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
                 _oscore_secret = responder.edhoc_exporter(0u8, &[], 16); // label is 0
-                println!("OSCORE secret after key update: {:02x?}", _oscore_secret);
+                // println!("OSCORE secret after key update: {:02x?}", _oscore_secret);
                 _oscore_salt = responder.edhoc_exporter(1u8, &[], 8); // label is 1
-                println!("OSCORE salt after key update: {:02x?}", _oscore_salt);
+                // println!("OSCORE salt after key update: {:02x?}", _oscore_salt);
             }
             response.set_status(ResponseType::Changed);
         } else {

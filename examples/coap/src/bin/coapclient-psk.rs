@@ -37,8 +37,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     initiator.set_identity(cred);
     //println!("cred:{:?}", cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
+    println!("message_1 len: {:?}", message_1.len);
     msg_1_buf.extend_from_slice(message_1.as_slice());
-    println!("message_1 len = {}", msg_1_buf.len());
+    // println!("message_1 len = {}", msg_1_buf.len());
 
     let response = CoAPClient::post_with_timeout(url, msg_1_buf, timeout).unwrap();
     if response.get_status() != &ResponseType::Changed {
@@ -56,9 +57,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_3-----------\n");
     let mut msg_3 = Vec::from(c_r.as_cbor());
     let (mut initiator, message_3, prk_out) =
-        initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
+        initiator.prepare_message_3(&None)?;
+    println!("message_3 len = {}", message_3.len);
     msg_3.extend_from_slice(message_3.as_slice());
-    println!("message_3 len = {}", msg_3.len());
 
     let _response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
     // we don't care about the response to message_3 for now
@@ -85,8 +86,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    println!("OSCORE secret after key update: {:02x?}", oscore_secret);
-    println!("OSCORE salt after key update: {:02x?}", oscore_salt);
+    // println!("OSCORE secret after key update: {:02x?}", oscore_secret);
+    // println!("OSCORE salt after key update: {:02x?}", oscore_salt);
 
     Ok(())
 }

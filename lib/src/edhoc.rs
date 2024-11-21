@@ -140,6 +140,7 @@ pub fn r_prepare_message_2(
     ct.fill_with_slice(ciphertext_2.as_slice()).unwrap(); // TODO(hax): same as just above.
 
     let message_2 = encode_message_2(&state.g_y, &ct);
+    println!("message_2 len: {:?}", message_2.len);
     Ok((
         WaitM3 {
             y: state.y,
@@ -259,7 +260,8 @@ pub fn i_prepare_message_1(
         } else {
             None
         };
-
+    println!("id_cred: {:?}", id_cred);
+    println!("c_i: {:?}", c_i);
     let message_1 = encode_message_1(
         state.method,
         &state.suites_i,
@@ -268,7 +270,6 @@ pub fn i_prepare_message_1(
         id_cred,
         ead_1,
     )?;
-
     let mut message_1_buf: BytesMaxBuffer = [0x00; MAX_BUFFER_LEN];
     message_1_buf[..message_1.len].copy_from_slice(message_1.as_slice());
 
@@ -399,7 +400,6 @@ pub fn i_prepare_message_3(
     message_3
         .fill_with_slice(regular_message_3.as_slice())
         .unwrap();
-
     let th_4 = compute_th_4(crypto, &state.th_3, &plaintext_3, cred_i.bytes.as_slice());
 
     let mut th_4_buf: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];

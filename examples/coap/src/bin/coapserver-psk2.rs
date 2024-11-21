@@ -34,8 +34,6 @@ fn main() {
                     Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
-                    EDHOCMethod::PSK2,
-                    None,
                     cred_psk,
                 );
                 //println!("cred:{:?}", cred_psk);
