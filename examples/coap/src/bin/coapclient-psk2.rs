@@ -37,8 +37,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     initiator.set_identity(cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
+    println!("message_1 len = {}", message_1.len);
     msg_1_buf.extend_from_slice(message_1.as_slice());
-    println!("message_1 len = {}", msg_1_buf.len());
+    
 
     let response = CoAPClient::post_with_timeout(url, msg_1_buf, timeout).unwrap();
     if response.get_status() != &ResponseType::Changed {
@@ -60,8 +61,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     //println!("initiator prepares message_3");
     let (mut initiator, message_3) =
         initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
+        println!("message_3 len = {}", message_3.len);
     msg_3.extend_from_slice(message_3.as_slice());
-    println!("message_3 len = {}", msg_3.len());
+    
 
     let response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
     if response.get_status() != &ResponseType::Changed {
