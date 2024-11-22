@@ -2,6 +2,12 @@ use crate::{credential_check_or_fetch, EdhocInitiatorDone};
 use lakers_shared::{Crypto as CryptoTrait, *};
 use core::{clone::Clone, panic};
 
+// -------------------------------------------------------------
+use nrf52840_hal::pac;
+use nrf52840_hal::prelude::*;
+// -------------------------------------------------------------
+
+
 pub fn edhoc_exporter(
     state: &Completed,
     crypto: &mut impl CryptoTrait,
@@ -286,7 +292,14 @@ pub fn i_prepare_message_1(
     c_i: ConnId,
     ead_1: &Option<EADItem>, // FIXME: make it a list of EADItem
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
+    let peripherals = pac::Peripherals::take().unwrap();
+    let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
+    let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_8 = p0.p0_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_7 = p0.p0_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
+    led_pin_p0_7.set_high();
+    led_pin_p0_26.set_high();
     let message_1 = encode_message_1(
         state.method,
         &state.suites_i,
@@ -294,13 +307,18 @@ pub fn i_prepare_message_1(
         c_i,
         ead_1,
     )?;
+    led_pin_p0_26.set_low();
 
+    led_pin_p0_26.set_high();
     let mut message_1_buf: BytesMaxBuffer = [0x00; MAX_BUFFER_LEN];
     message_1_buf[..message_1.len].copy_from_slice(message_1.as_slice());
+    led_pin_p0_26.set_low();
 
     // hash message_1 here to avoid saving the whole message in the state
+    led_pin_p0_26.set_high();
     let h_message_1 = crypto.sha256_digest(&message_1_buf, message_1.len);
-
+    led_pin_p0_26.set_low();
+    led_pin_p0_7.set_low();
     Ok((
         WaitM2 {
             x: state.x,
@@ -398,7 +416,7 @@ pub fn i_prepare_message_3(
         CredentialTransfer::ByValue => cred_i.by_value()?,
         CredentialTransfer::ByReference => cred_i.by_kid()?,
     };
-    println!("id_cred_i: {:?}", id_cred_i);
+    // println!("id_cred_i: {:?}", id_cred_i);
     // compute ciphertext_3
     let plaintext_3 = encode_plaintext_3(None, None, &ead_3)?;
     let mut message_3: BufferMessage3 = BufferMessage3::new();
@@ -406,15 +424,15 @@ pub fn i_prepare_message_3(
     let plaintext_3a = id_cred_i;
     // Encode plaintext_3a as CBOR
     let pt_3a = plaintext_3a.as_encoded_value();
-    println!("pt_3a: {:?}", pt_3a);
+    // println!("pt_3a: {:?}", pt_3a);
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
     ct_3a.fill_with_slice(pt_3a).unwrap();
-    println!("ct_3a: {:?}", ct_3a);
+    // println!("ct_3a: {:?}", ct_3a);
     let ciphertext_3a =
         encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
-    println!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a);
+    // println!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a);
     //compute regular message_3
     let regular_message_3 =
         encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3);
