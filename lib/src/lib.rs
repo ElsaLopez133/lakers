@@ -13,7 +13,7 @@
 //! respectively, through which the EDHOC key material can be obtained.
 //!
 //! [EDHOC]: https://datatracker.ietf.org/doc/html/rfc9528
-// #![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::trace;
 pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
@@ -533,8 +533,6 @@ mod test {
     fn test_new_responder() {
         let _responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
     }
@@ -558,8 +556,6 @@ mod test {
         let message_1_tv = EdhocMessageBuffer::from_hex(MESSAGE_1_TV);
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
 
@@ -572,8 +568,6 @@ mod test {
         // responder or initiator
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
 
@@ -602,8 +596,6 @@ mod test {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
             cred_r.clone(),
         ); // has to select an identity before learning who is I
 
@@ -627,7 +619,6 @@ mod test {
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
                 cred_i.clone(),
             )
             .unwrap(); // exposing own identity only after validating cred_r
@@ -635,7 +626,7 @@ mod test {
 
         // if needed: prepare ead_3
         let (mut initiator, message_3, i_prk_out) = initiator
-            .prepare_message_3(CredentialTransfer::ByReference, &None)
+            .prepare_message_3(&None)
             .unwrap();
         // ---- end initiator handling
 

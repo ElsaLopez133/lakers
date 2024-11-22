@@ -140,7 +140,7 @@ pub fn r_prepare_message_2(
     ct.fill_with_slice(ciphertext_2.as_slice()).unwrap(); // TODO(hax): same as just above.
 
     let message_2 = encode_message_2(&state.g_y, &ct);
-    println!("message_2 len: {:?}", message_2.len);
+    // println!("message_2 len: {:?}", message_2.len);
     Ok((
         WaitM3 {
             y: state.y,
@@ -260,8 +260,8 @@ pub fn i_prepare_message_1(
         } else {
             None
         };
-    println!("id_cred: {:?}", id_cred);
-    println!("c_i: {:?}", c_i);
+    // println!("id_cred: {:?}", id_cred);
+    // println!("c_i: {:?}", c_i);
     let message_1 = encode_message_1(
         state.method,
         &state.suites_i,
@@ -1355,9 +1355,9 @@ mod tests {
         let plaintext_2_tv = BufferPlaintext2::from_hex(PLAINTEXT_2_TV);
         let plaintext_2 = encode_plaintext_2(
             C_R_TV,
-            IdCred::from_full_value(&ID_CRED_R_TV[..])
+            Some(IdCred::from_full_value(&ID_CRED_R_TV[..])
                 .unwrap()
-                .as_encoded_value(),
+                .as_encoded_value()),
             &MAC_2_TV,
             &None::<EADItem>,
         )
@@ -1439,10 +1439,10 @@ mod tests {
     fn test_encode_plaintext_3() {
         let plaintext_3_tv = BufferPlaintext3::from_hex(PLAINTEXT_3_TV);
         let plaintext_3 = encode_plaintext_3(
-            IdCred::from_full_value(&ID_CRED_I_TV[..])
+            Some(IdCred::from_full_value(&ID_CRED_I_TV[..])
                 .unwrap()
-                .as_encoded_value(),
-            &MAC_3_TV,
+                .as_encoded_value()),
+            Some(&MAC_3_TV),
             &None::<EADItem>,
         )
         .unwrap();
