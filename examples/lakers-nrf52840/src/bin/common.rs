@@ -1,5 +1,6 @@
 use embassy_nrf::radio::ble::Radio;
 use embassy_time::TimeoutError;
+use embassy_time::{Duration, Timer};
 use hexlit::hex;
 // use nrf52840_hal::pac;
 // use nrf52840_hal::prelude::*;
@@ -145,37 +146,78 @@ impl From<embassy_nrf::radio::Error> for PacketError {
 //     }
 // }
 
+// pub async fn receive_and_filter<P>(
+//     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
+//     header: Option<u8>,
+//     mut led_pin: Option<&mut P>,
+// ) -> Result<Packet, PacketError>
+//     where 
+//         P: OutputPin, <P as nrf52840_hal::prelude::OutputPin>::Error: core::fmt::Debug
+// {
+//     let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
+//     loop {
+//         if let Some(pin) = &mut led_pin {
+//             pin.set_high().unwrap();
+//         }
+//         radio.receive(&mut buffer).await?;
+//         if let Some(pin) = &mut led_pin {
+//             pin.set_low().unwrap();
+//         }
+//         if let Ok(pckt) = <&[u8] as TryInto<Packet>>::try_into(&(buffer[..])) {
+//             if let Some(header) = header {
+//                 if pckt.pdu[0] == header {
+//                     return Ok(pckt);
+//                 } else {
+//                     continue;
+//                 }
+//             } else {
+//                 // header is None
+//                 return Ok(pckt);
+//             }
+//         } else {
+//             continue;
+//         }
+//     }
+// }
+
 pub async fn receive_and_filter<P>(
     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
     header: Option<u8>,
     mut led_pin: Option<&mut P>,
+    timeout: Duration,
 ) -> Result<Packet, PacketError>
-    where 
-        P: OutputPin, <P as nrf52840_hal::prelude::OutputPin>::Error: core::fmt::Debug
+where 
+    P: OutputPin, <P as nrf52840_hal::prelude::OutputPin>::Error: core::fmt::Debug
 {
     let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
-    loop {
-        if let Some(pin) = &mut led_pin {
-            pin.set_high().unwrap();
-        }
-        radio.receive(&mut buffer).await?;
-        if let Some(pin) = &mut led_pin {
-            pin.set_low().unwrap();
-        }
-        if let Ok(pckt) = <&[u8] as TryInto<Packet>>::try_into(&(buffer[..])) {
-            if let Some(header) = header {
-                if pckt.pdu[0] == header {
-                    return Ok(pckt);
+    
+    match embassy_time::with_timeout(timeout, async {
+        loop {
+            if let Some(pin) = &mut led_pin {
+                pin.set_high().unwrap();
+            }
+            radio.receive(&mut buffer).await?;
+            if let Some(pin) = &mut led_pin {
+                pin.set_low().unwrap();
+            }
+            if let Ok(pckt) = <&[u8] as TryInto<Packet>>::try_into(&(buffer[..])) {
+                if let Some(header) = header {
+                    if pckt.pdu[0] == header {
+                        return Ok(pckt);
+                    } else {
+                        continue;
+                    }
                 } else {
-                    continue;
+                    // header is None
+                    return Ok(pckt);
                 }
             } else {
-                // header is None
-                return Ok(pckt);
+                continue;
             }
-        } else {
-            continue;
         }
+    }).await {
+        Ok(result) => result,
+        Err(_) => Err(PacketError::TimeoutError),
     }
 }
 
@@ -215,7 +257,7 @@ pub async fn transmit_and_wait_response<P>(
     }
     // led_pin.set_low().unwrap();
 
-    let resp = receive_and_filter::<P>(radio, filter, None).await?;
+    let resp = receive_and_filter::<P>(radio, filter, None,Duration::from_secs(5)).await?;
 
     Ok(resp)
 }

@@ -88,7 +88,8 @@ async fn main(spawner: Spawner) {
         // let pckt = common::receive_and_filter(&mut radio, Some(0xf5), Some(&mut led_pin_p0_25)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
         let pckt = common::receive_and_filter(&mut radio,
             Some(0xf5),
-            Some(&mut led_pin_p1_14)
+            Some(&mut led_pin_p1_14),
+            Duration::from_secs(10)
         ) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
             .unwrap();
@@ -173,7 +174,7 @@ async fn main(spawner: Spawner) {
                             continue;
                         };
                         led_pin_p1_08.set_low();
-                        
+
                         led_pin_p0_26.set_low();
                         info!("Handshake completed. prk_out: {:X}", prk_out);
 
