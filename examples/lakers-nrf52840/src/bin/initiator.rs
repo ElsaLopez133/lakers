@@ -82,7 +82,7 @@ async fn main(spawner: Spawner) {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
     let start = Instant::now();
-    for iteration in 0..10 {
+    for iteration in 0..50 {
         info!("iteration {}", iteration);
         // info!("Prepare message_1");
         led_pin_p0_26.set_high();
@@ -174,8 +174,8 @@ async fn main(spawner: Spawner) {
         }
     }
     let duration = start.elapsed();
-    info!("start time: {:?} and elapsed time: {:?}", start, duration);
-    info!("duration of one handshake: {:?}", duration/10);
-    info!("duration of one handshake in ms: {:?}", duration.as_millis()/10);
+    info!("start time: {:?} and elapsed time: {:?}", start, duration.as_millis());
+    // info!("duration of one handshake: {:?}", duration/100);
+    info!("duration of one handshake in ms: {:?}", duration.as_millis()/50);
     
 }
