@@ -73,14 +73,14 @@ async fn main(spawner: Spawner) {
     radio.set_crc_init(ADV_CRC_INIT);
     radio.set_crc_poly(CRC_POLY);
 
-    // Memory buffer for mbedtls
-    #[cfg(feature = "crypto-psa")]
-    let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    #[cfg(feature = "crypto-psa")]
-    unsafe {
-        mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    }
-
+    // // Memory buffer for mbedtls
+    // #[cfg(feature = "crypto-psa")]
+    // let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
+    // #[cfg(feature = "crypto-psa")]
+    // unsafe {
+    //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
+    // }
+    
     loop {
         let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
         let mut c_r: Option<ConnId> = None;
@@ -94,7 +94,7 @@ async fn main(spawner: Spawner) {
         ) 
             .await
             .unwrap();
-        info!("Received message_1");
+        // info!("Received message_1");
         led_pin_p0_26.set_high().unwrap();
 
         led_pin_p1_07.set_high();
@@ -118,7 +118,7 @@ async fn main(spawner: Spawner) {
             //     &mut lakers_crypto::default_crypto(),
             // ));
             let ead_2 = None;
-            info!("Prepare message_2");
+            // info!("Prepare message_2");
             led_pin_p0_26.set_high();
             led_pin_p1_06.set_high();
             let (responder, message_2) = responder
@@ -127,7 +127,7 @@ async fn main(spawner: Spawner) {
             led_pin_p1_06.set_low();
             led_pin_p0_26.set_low();
             // prepend 0xf5 also to message_2 in order to allow the Initiator filter out from other BLE packets
-            info!("Send message_2 and wait message_3");
+            // info!("Send message_2 and wait message_3");
             let message_3 = common::transmit_and_wait_response(
                 &mut radio,
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
@@ -138,7 +138,7 @@ async fn main(spawner: Spawner) {
             
             match message_3 {
                 Ok(message_3) => {
-                    info!("Received message_3");
+                    // info!("Received message_3");
                     led_pin_p0_26.set_high();
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
                     
@@ -172,14 +172,14 @@ async fn main(spawner: Spawner) {
                         led_pin_p1_08.set_low();
                         led_pin_p0_26.set_low();
                         
-                        info!("Prepare message_4");
+                        // info!("Prepare message_4");
                         led_pin_p0_26.set_high();
                         
                         led_pin_p1_04.set_high();
                         let (responder, message_4, r_prk_out) = responder.prepare_message_4(CredentialTransfer::ByReference, &None).unwrap();
                         led_pin_p1_04.set_low();
 
-                        info!("Send message_4");
+                        // info!("Send message_4");
                         common::transmit_without_response(
                             &mut radio,
                             common::Packet::new_from_slice(message_4.as_slice(),Some(c_r.unwrap().as_slice()[0]))

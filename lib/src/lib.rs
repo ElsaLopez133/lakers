@@ -144,7 +144,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         mut crypto: Crypto,
         cred_r: Credential,
     ) -> Self {
-        trace!("Initializing EdhocResponder");
+        // trace!("Initializing EdhocResponder");
         let (y, g_y) = crypto.p256_generate_key_pair();
 
         // let r = match method {
@@ -167,7 +167,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         mut self,
         message_1: &BufferMessage1,
     ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, Option<EADItem>), EDHOCError> {
-        trace!("Enter process_message_1");
+        // trace!("Enter process_message_1");
         //println!("Responder processes message_1");
         let (state, c_i, ead_1) = r_process_message_1(&self.state, &mut self.crypto, message_1)?;
 
@@ -190,7 +190,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
         c_r: Option<ConnId>,
         ead_2: &Option<EADItem>,
     ) -> Result<(EdhocResponderWaitM3<Crypto>, BufferMessage2), EDHOCError> {
-        trace!("Enter prepare_message_2");
+        // trace!("Enter prepare_message_2");
         let c_r = match c_r {
             Some(c_r) => c_r,
             None => generate_connection_identifier_cbor(&mut self.crypto),
@@ -228,7 +228,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
         ),
         EDHOCError,
     > {
-        trace!("Enter parse_message_3");
+        // trace!("Enter parse_message_3");
         match r_parse_message_3(&mut self.state, &mut self.crypto, message_3) {
             Ok((state, id_cred_i, ead_3)) => Ok((
                 EdhocResponderProcessingM3 {
@@ -248,7 +248,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
         mut self,
         cred_i: Credential,
     ) -> Result<EdhocResponderProcessedM3<Crypto>, EDHOCError> {
-        trace!("Enter verify_message_3");
+        // trace!("Enter verify_message_3");
         match r_verify_message_3(&mut self.state, &mut self.crypto, cred_i) {
             Ok(state) => Ok(
                 EdhocResponderProcessedM3 {
@@ -271,7 +271,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
         BufferMessage4, 
         [u8; SHA256_DIGEST_LEN]
     ), EDHOCError> {
-        trace!("Enter prepare_message_4");
+        // trace!("Enter prepare_message_4");
         match r_prepare_message_4(
             &self.state,
             &mut self.crypto,
@@ -326,7 +326,7 @@ impl<Crypto: CryptoTrait> EdhocResponderDone<Crypto> {
 
 impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     pub fn new(mut crypto: Crypto, method: EDHOCMethod, selected_suite: EDHOCSuite) -> Self {
-        trace!("Initializing EdhocInitiator");
+        // trace!("Initializing EdhocInitiator");
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
 
@@ -353,7 +353,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         c_i: Option<ConnId>,
         ead_1: &Option<EADItem>,
     ) -> Result<(EdhocInitiatorWaitM2<Crypto>, EdhocMessageBuffer), EDHOCError> {
-        trace!("Enter prepare_message_1");
+        // trace!("Enter prepare_message_1");
         let c_i = match c_i {
             Some(c_i) => c_i,
             None => generate_connection_identifier_cbor(&mut self.crypto),
@@ -393,7 +393,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
         ),
         EDHOCError,
     > {
-        trace!("Enter parse_message_2");
+        // trace!("Enter parse_message_2");
         match i_parse_message_2(&self.state, &mut self.crypto, message_2) {
             Ok((state, c_r, id_cred_r, ead_2)) => Ok((
                 EdhocInitiatorProcessingM2 {
@@ -423,7 +423,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         mut self,
         valid_cred_r: Credential,
     ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
-        trace!("Enter verify_message_2");
+        // trace!("Enter verify_message_2");
         match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {
                 state,
@@ -448,7 +448,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
         ),
         EDHOCError,
     > {
-        trace!("Enter prepare_message_3");
+        // trace!("Enter prepare_message_3");
         let Some(cred_i) = self.cred_i else {
             return Err(EDHOCError::MissingIdentity);
         };
@@ -483,7 +483,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
         ),
         EDHOCError,
     > {
-        trace!("Enter parse_message_4");
+        // trace!("Enter parse_message_4");
         match i_parse_message_4(&mut self.state, &mut self.crypto, message_4) {
             Ok((state, ead_4)) => Ok ((
                 EdhocInitiatorProcessingM4 {
@@ -511,7 +511,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM4<Crypto> {
         mut self,
         // valid_cred_r: Credential,
     ) -> Result<(EdhocInitiatorDone<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
-        trace!("Enter verify_message_4");
+        // trace!("Enter verify_message_4");
         match i_verify_message_4(&self.state, &mut self.crypto) {
             Ok((state, prk_out)) => Ok((EdhocInitiatorDone {
                 state,
@@ -583,7 +583,7 @@ pub fn credential_check_or_fetch(
     cred_expected: Option<Credential>,
     id_cred_received: IdCred,
 ) -> Result<Credential, EDHOCError> {
-    trace!("Enter credential_check_or_fetch");
+    // trace!("Enter credential_check_or_fetch");
     // Processing of auth credentials according to draft-tiloca-lake-implem-cons
     // Comments tagged with a number refer to steps in Section 4.3.1. of draft-tiloca-lake-implem-cons
     if let Some(cred_expected) = cred_expected {
