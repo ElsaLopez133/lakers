@@ -13,6 +13,7 @@ use nrf52840_hal::pac;
 use nrf52840_hal::prelude::*;
 //use nrf52840_hal::gpio::{Level, Output, OutputDrive, Pin};
 use embassy_time::{Duration, Timer};
+use embassy_time::Instant;
 
 use lakers::*;
 
@@ -72,78 +73,92 @@ async fn main(spawner: Spawner) {
 
     info!("init_handshake");
 
-    // Memory buffer for mbedtls
-    #[cfg(feature = "crypto-psa")]
-    let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    #[cfg(feature = "crypto-psa")]
-    unsafe {
-        mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    }
-    info!("Prepare message_1");
-    led_pin_p0_26.set_high();
-    let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-    let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-    //info!("cred_r:{:?}", cred_r.bytes.content);
-    
-    let mut initiator = EdhocInitiator::new(
-        lakers_crypto::default_crypto(),
-        EDHOCMethod::PSK2,
-        EDHOCSuite::CipherSuite2,
-    );
+    // // Memory buffer for mbedtls
+    // #[cfg(feature = "crypto-psa")]
+    // let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
+    // #[cfg(feature = "crypto-psa")]
+    // unsafe {
+    //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
+    // }
+    let start = Instant::now();
+    for iteration in 0..100 {
+        info!("iteration {}", iteration);
 
-    // Send Message 1 over raw BLE and convert the response to byte
-    let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
-    initiator.set_identity(None, cred_i);
+        // info!("Prepare message_1");
+        led_pin_p0_26.set_high();
+        let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+        let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+        //info!("cred_r:{:?}", cred_r.bytes.content);
+        
+        let mut initiator = EdhocInitiator::new(
+            lakers_crypto::default_crypto(),
+            EDHOCMethod::PSK2,
+            EDHOCSuite::CipherSuite2,
+        );
 
-    led_pin_p0_6.set_high();
-    let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
-    led_pin_p0_6.set_low();
+        // Send Message 1 over raw BLE and convert the response to byte
+        // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+        let c_i = ConnId::from_int_raw(10);
+        initiator.set_identity(None, cred_i);
 
-    let pckt_1 = common::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
-        .expect("Buffer not long enough");
-    info!("Send message_1 and wait message_2");
-    led_pin_p0_26.set_low();
-    let rcvd = common::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5), &mut led_pin_p1_07).await;
+        led_pin_p0_6.set_high();
+        let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
+        led_pin_p0_6.set_low();
 
-    match rcvd {
-        Ok(pckt_2) => {
-            info!("Received message_2");
-            led_pin_p0_26.set_high();
-            let message_2: EdhocMessageBuffer =
-                pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
+        let pckt_1 = common::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
+            .expect("Buffer not long enough");
+        // info!("Send message_1 and wait message_2");
+        led_pin_p0_26.set_low();
+        let rcvd = common::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5), &mut led_pin_p1_07).await;
 
-            led_pin_p0_5.set_high();
-            let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
-            led_pin_p0_5.set_low();
+        match rcvd {
+            Ok(pckt_2) => {
+                // info!("Received message_2");
+                led_pin_p0_26.set_high();
+                let message_2: EdhocMessageBuffer =
+                    pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
 
-            let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
+                led_pin_p0_5.set_high();
+                let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
+                led_pin_p0_5.set_low();
 
-            led_pin_p0_8.set_high();
-            let initiator = initiator
-                .verify_message_2(valid_cred_r)
-                .unwrap();
-            led_pin_p0_8.set_low();
+                let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
 
-            led_pin_p0_26.set_low();
+                led_pin_p0_8.set_high();
+                let initiator = initiator
+                    .verify_message_2(valid_cred_r)
+                    .unwrap();
+                led_pin_p0_8.set_low();
 
-            info!("Prepare message_3");
-            led_pin_p0_26.set_high();
+                led_pin_p0_26.set_low();
 
-            led_pin_p0_7.set_high();
-            let (initiator, message_3, i_prk_out) = initiator
-                .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
-            led_pin_p0_7.set_low();
-            info!("Send message_3");
-            led_pin_p0_26.set_low();
-            common::transmit_without_response(
-                &mut radio,
-                common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
-                    .unwrap(),
-                &mut led_pin_p1_08)
-            .await;
-            
-            info!("Handshake completed. prk_out = {:X}", i_prk_out);
+                // info!("Prepare message_3");
+                led_pin_p0_26.set_high();
+
+                led_pin_p0_7.set_high();
+                let (initiator, message_3, i_prk_out) = initiator
+                    .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
+                led_pin_p0_7.set_low();
+                // info!("Send message_3");
+                led_pin_p0_26.set_low();
+                common::transmit_without_response(
+                    &mut radio,
+                    common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
+                        .unwrap(),
+                    &mut led_pin_p1_08)
+                .await;
+                
+                info!("Handshake completed. prk_out = {:X}", i_prk_out);
+            }
+            // Err(_) => panic!("parsing error"),
+            // Added to measure time. Otherwise revert to up.
+            Err(_) => {
+                info!("Hanshake failed. Continue to next iteration. Parsing error");
+                continue;
+            }
         }
-        Err(_) => panic!("parsing error"),
     }
+    let duration = start.elapsed();
+    info!("start time: {:?} and elapsed time in ms: {:?}", start, duration.as_millis());
+    info!("duration of one handshake in ms: {:?}", duration.as_millis()/100);
 }
