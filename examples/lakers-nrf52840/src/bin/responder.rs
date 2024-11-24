@@ -93,7 +93,7 @@ async fn main(spawner: Spawner) {
         ) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
             .unwrap();
-        info!("Received message_1");
+        // info!("Received message_1");
         led_pin_p0_26.set_high(); 
 
         led_pin_p1_07.set_high();
@@ -117,7 +117,7 @@ async fn main(spawner: Spawner) {
             //     &mut lakers_crypto::default_crypto(),
             // ));
             c_r = Some(ConnId::from_int_raw(5));
-            info!("Prepare message_2");
+            // info!("Prepare message_2");
             led_pin_p0_26.set_high();
             led_pin_p1_06.set_high();
             let (responder, message_2) = responder
@@ -125,7 +125,7 @@ async fn main(spawner: Spawner) {
                 .unwrap();
             led_pin_p1_06.set_low();
             
-            info!("Send message_2 and wait message_3");
+            // info!("Send message_2 and wait message_3");
             let message_3 = common::transmit_and_wait_response(
                 &mut radio,
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
@@ -137,7 +137,7 @@ async fn main(spawner: Spawner) {
             
             match message_3 {
                 Ok(message_3) => {
-                    info!("Received message_3");
+                    // info!("Received message_3");
                     led_pin_p0_26.set_high();
 
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
@@ -185,7 +185,11 @@ async fn main(spawner: Spawner) {
                     }
                 }
                 Err(PacketError::TimeoutError) => info!("Timeout while waiting for message_3!"),
-                Err(_) => panic!("Unexpected error"),
+                // Err(_) => panic!("Unexpected error"),
+                Err(_) => {
+                    info!("Unexpected error");
+                    continue; 
+                }
             }
         }
     }

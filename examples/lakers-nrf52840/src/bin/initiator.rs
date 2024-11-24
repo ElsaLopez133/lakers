@@ -14,6 +14,7 @@ use nrf52840_hal::pac;
 use nrf52840_hal::prelude::*;
 use nrf52840_hal::gpio::{Level, Output, Pin};
 use embassy_time::{Duration, Timer};
+use embassy_time::Instant;
 
 use lakers::*;
 
@@ -80,10 +81,10 @@ async fn main(spawner: Spawner) {
     // unsafe {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
-
-    for iteration in 0..5 {
+    let start = Instant::now();
+    for iteration in 0..10 {
         info!("iteration {}", iteration);
-        info!("Prepare message_1");
+        // info!("Prepare message_1");
         led_pin_p0_26.set_high();
         led_pin_p1_07.set_high();
         let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
@@ -114,7 +115,7 @@ async fn main(spawner: Spawner) {
 
         let pckt_1 = common::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
             .expect("Buffer not long enough");
-        info!("Send message_1 and wait message_2");
+        // info!("Send message_1 and wait message_2");
         led_pin_p0_26.set_low();
 
         let rcvd = common::transmit_and_wait_response(
@@ -126,7 +127,7 @@ async fn main(spawner: Spawner) {
 
         match rcvd {
             Ok(pckt_2) => {
-                info!("Received message_2");
+                // info!("Received message_2");
                 led_pin_p0_26.set_high();
                 let message_2: EdhocMessageBuffer =
                     pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
@@ -145,14 +146,14 @@ async fn main(spawner: Spawner) {
 
                 led_pin_p0_26.set_low();
 
-                info!("Prepare message_3");
+                // info!("Prepare message_3");
                 led_pin_p0_26.set_high();
 
                 led_pin_p1_08.set_high();
                 let (initiator, message_3, i_prk_out) = initiator
                     .prepare_message_3(&None).unwrap();
                 led_pin_p1_08.set_low();
-                info!("Send message_3");
+                // info!("Send message_3");
 
                 common::transmit_without_response(
                     &mut radio,
@@ -172,5 +173,9 @@ async fn main(spawner: Spawner) {
             }
         }
     }
+    let duration = start.elapsed();
+    info!("start time: {:?} and elapsed time: {:?}", start, duration);
+    info!("duration of one handshake: {:?}", duration/10);
+    info!("duration of one handshake in ms: {:?}", duration.as_millis()/10);
     
 }
