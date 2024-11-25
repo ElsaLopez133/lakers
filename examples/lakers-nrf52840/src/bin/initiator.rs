@@ -66,14 +66,14 @@ async fn main(spawner: Spawner) {
     //let mut led = Output::new(embassy_peripherals.P0_13, Level::Low, OutputDrive::Standard);
     //led.set_high();
 
-    radio.set_mode(Mode::BLE_1MBIT);
-    radio.set_tx_power(TxPower::_0D_BM);
-    radio.set_frequency(common::FREQ);
+    // radio.set_mode(Mode::BLE_1MBIT);
+    // radio.set_tx_power(TxPower::_0D_BM);
+    // radio.set_frequency(common::FREQ);
 
-    radio.set_access_address(common::ADV_ADDRESS);
-    radio.set_header_expansion(false);
-    radio.set_crc_init(common::ADV_CRC_INIT);
-    radio.set_crc_poly(common::CRC_POLY);
+    // radio.set_access_address(common::ADV_ADDRESS);
+    // radio.set_header_expansion(false);
+    // radio.set_crc_init(common::ADV_CRC_INIT);
+    // radio.set_crc_poly(common::CRC_POLY);
 
     info!("init_handshake");
 
@@ -85,10 +85,19 @@ async fn main(spawner: Spawner) {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
     let start = Instant::now();
-    for iteration in 0..100 {
+    for iteration in 0..500 {
         info!("iteration {}", iteration);
 
-        // info!("Prepare message_1");
+        radio.set_mode(Mode::BLE_1MBIT);
+        radio.set_tx_power(TxPower::_0D_BM);
+        radio.set_frequency(common::FREQ);
+    
+        radio.set_access_address(common::ADV_ADDRESS);
+        radio.set_header_expansion(false);
+        radio.set_crc_init(common::ADV_CRC_INIT);
+        radio.set_crc_poly(common::CRC_POLY);
+
+        info!("Prepare message_1");
         led_pin_p0_26.set_high();
         led_pin_p1_04.set_high();
         led_pin_p1_07.set_high();
@@ -121,19 +130,33 @@ async fn main(spawner: Spawner) {
 
         let pckt_1 = common::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
             .expect("Buffer not long enough");
-        // info!("Send message_1 and wait message_2");
+        info!("Send message_1 and wait message_2");
         led_pin_p0_26.set_low();
         let rcvd = common::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5), &mut led_pin_p1_10).await;
 
         match rcvd {
             Ok(pckt_2) => {
-                // info!("Received message_2");
+                info!("Received message_2");
                 led_pin_p0_26.set_high();
-                let message_2: EdhocMessageBuffer =
-                    pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
+                // let message_2: EdhocMessageBuffer =
+                //     pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
+                let Ok(message_2) = 
+                    pckt_2.pdu[1..pckt_2.len].try_into() 
+                else {
+                    info!("Wrong length for EDHOC message_2");
+                    radio.disable();
+                    continue;
+                };
 
                 led_pin_p1_06.set_high();
-                let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
+                let Ok((initiator, c_r, id_cred_r, ead_2)) = 
+                    initiator.parse_message_2(&message_2)
+                else {
+                    info!("EDHOC error at parse_message_2");
+                    radio.disable();
+                    continue;
+                };
+                // let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
                 led_pin_p1_06.set_low();
                 
                 led_pin_p1_06.set_high();
@@ -141,21 +164,28 @@ async fn main(spawner: Spawner) {
                 led_pin_p1_06.set_low();
 
                 led_pin_p1_06.set_high();
-                let initiator = initiator
-                    .verify_message_2(valid_cred_r)
-                    .unwrap();
+                let Ok(initiator) = 
+                    initiator.verify_message_2(valid_cred_r)
+                else {
+                    info!("EDHOC error at verify_message_2");
+                    radio.disable();
+                    continue;
+                };
+                // let initiator = initiator
+                //     .verify_message_2(valid_cred_r)
+                //     .unwrap();
                 led_pin_p1_06.set_low();
 
                 led_pin_p0_26.set_low();
 
-                // info!("Prepare message_3");
+                info!("Prepare message_3");
                 led_pin_p0_26.set_high();
 
                 led_pin_p1_08.set_high();
                 let (initiator, message_3, i_prk_out) = initiator
                     .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
                 led_pin_p1_08.set_low();
-                // info!("Send message_3");
+                info!("Send message_3");
                 led_pin_p0_26.set_low();
                 common::transmit_without_response(
                     &mut radio,
@@ -171,6 +201,9 @@ async fn main(spawner: Spawner) {
             // Added to measure time. Otherwise revert to up.
             Err(_) => {
                 info!("Hanshake failed. Continue to next iteration. Parsing error");
+                Timer::after(Duration::from_secs(2)).await; 
+                radio.disable();
+                led_pin_p1_04.set_low();
                 continue;
             }
         }

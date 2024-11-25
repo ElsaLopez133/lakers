@@ -59,14 +59,14 @@ async fn main(spawner: Spawner) {
     info!("Starting BLE radio");
     let mut radio = Radio::new(peripherals.RADIO, Irqs);
 
-    radio.set_mode(Mode::BLE_1MBIT);
-    radio.set_tx_power(TxPower::_0D_BM);
-    radio.set_frequency(FREQ);
+    // radio.set_mode(Mode::BLE_1MBIT);
+    // radio.set_tx_power(TxPower::_0D_BM);
+    // radio.set_frequency(FREQ);
 
-    radio.set_access_address(ADV_ADDRESS);
-    radio.set_header_expansion(false);
-    radio.set_crc_init(ADV_CRC_INIT);
-    radio.set_crc_poly(CRC_POLY);
+    // radio.set_access_address(ADV_ADDRESS);
+    // radio.set_header_expansion(false);
+    // radio.set_crc_init(ADV_CRC_INIT);
+    // radio.set_crc_poly(CRC_POLY);
 
     // // Memory buffer for mbedtls
     // #[cfg(feature = "crypto-psa")]
@@ -76,7 +76,16 @@ async fn main(spawner: Spawner) {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
 
-    loop {
+    loop {    
+        radio.set_mode(Mode::BLE_1MBIT);
+        radio.set_tx_power(TxPower::_0D_BM);
+        radio.set_frequency(FREQ);
+    
+        radio.set_access_address(ADV_ADDRESS);
+        radio.set_header_expansion(false);
+        radio.set_crc_init(ADV_CRC_INIT);
+        radio.set_crc_poly(CRC_POLY);
+
         let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
         let mut c_r: Option<ConnId> = None;
 
@@ -84,13 +93,20 @@ async fn main(spawner: Spawner) {
         let pckt = common::receive_and_filter(&mut radio, Some(0xf5), Some(&mut led_pin_p1_07)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
             .unwrap();
-        // info!("Received message_1");
+        info!("Received message_1");
         led_pin_p0_26.set_high();
 
         let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
         let responder = EdhocResponder::new(lakers_crypto::default_crypto(), EDHOCMethod::PSK2, None, cred_r);
 
-        let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
+        // let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
+        let Ok(message_1) = 
+            pckt.pdu[1..pckt.len].try_into() 
+        else {
+            info!("Wrong length for EDHOC message_1");
+            radio.disable();
+            continue;
+        };
 
         led_pin_p0_6.set_high();
         let result = responder.process_message_1(&message_1);
@@ -102,7 +118,7 @@ async fn main(spawner: Spawner) {
             //     &mut lakers_crypto::default_crypto(),
             // ));
             let c_r = Some(ConnId::from_int_raw(5));
-            // info!("Prepare message_2");
+            info!("Prepare message_2");
             led_pin_p0_26.set_high();
             led_pin_p0_5.set_high();
             let (responder, message_2) = responder
@@ -112,7 +128,7 @@ async fn main(spawner: Spawner) {
             
             // prepend 0xf5 also to message_2 in order to allow the Initiator filter out from other BLE packets
             
-            // info!("Send message_2 and wait message_3");
+            info!("Send message_2 and wait message_3");
             let message_3 = common::transmit_and_wait_response(
                 &mut radio,
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
@@ -124,7 +140,7 @@ async fn main(spawner: Spawner) {
             
             match message_3 {
                 Ok(message_3) => {
-                    // info!("Received message_3");
+                    info!("Received message_3");
                     led_pin_p0_26.set_high();
 
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
@@ -140,6 +156,7 @@ async fn main(spawner: Spawner) {
                             info!("EDHOC error at parse_message_3");
                             // We don't get another chance, it's popped and can't be used any further
                             // anyway legally
+                            radio.disable();
                             continue;
                         };
                         led_pin_p0_8.set_low();
@@ -152,6 +169,7 @@ async fn main(spawner: Spawner) {
                         let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i)
                         else {
                             info!("EDHOC error at verify_message_3");
+                            radio.disable();
                             continue;
                         };
                         led_pin_p0_7.set_low();
@@ -161,10 +179,15 @@ async fn main(spawner: Spawner) {
                         unwrap!(spawner.spawn(example_application_task(prk_out)));
                     } else {
                         info!("Another packet interrupted the handshake.");
+                        radio.disable();
                         continue;
                     }
                 }
-                Err(PacketError::TimeoutError) => info!("Timeout while waiting for message_3!"),
+                Err(PacketError::TimeoutError) => {
+                    info!("Timeout while waiting for message_3!");
+                    radio.disable();
+                    continue;
+                }
                 Err(_) => panic!("Unexpected error"),
             }
         }
