@@ -19,6 +19,7 @@ embedded-hal = "0.2.7"  # or whichever version you're using
 # lakers
 lakers = { package = "lakers", path = "../../lib", features = [ "defmt" ] }
 lakers-crypto = { path = "../../crypto", default-features = false }
+lakers-crypto-cryptocell310 = { path = "../../crypto/lakers-crypto-cryptocell310-sys", default-features = false }
 
 # misc
 hexlit = "0.5.3"

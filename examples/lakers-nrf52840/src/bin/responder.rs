@@ -16,6 +16,7 @@ use nrf52840_hal::gpio::{Level, Output, Pin};
 use embassy_time::{Duration, Timer};
 
 use lakers::*;
+use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
 
 use core::ffi::c_char;
 use core::result;
@@ -63,7 +64,9 @@ async fn main(spawner: Spawner) {
 
     info!("Starting BLE radio");
     let mut radio = Radio::new(peripherals.RADIO, Irqs);
-
+    unsafe {
+        edhoc_rs_crypto_init();
+    }
     // radio.set_mode(Mode::BLE_1MBIT);
     // radio.set_tx_power(TxPower::_0D_BM);
     // radio.set_frequency(FREQ);
