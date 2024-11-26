@@ -55,6 +55,7 @@ async fn main(spawner: Spawner) {
     let mut led_pin_p1_05 = p1.p1_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     let mut led_pin_p1_04 = p1.p1_04.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     let mut led_pin_p1_10 = p1.p1_10.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_14 = p1.p1_14.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
@@ -63,14 +64,14 @@ async fn main(spawner: Spawner) {
     info!("Starting BLE radio");
     let mut radio: Radio<'_, _> = Radio::new(embassy_peripherals.RADIO, Irqs).into();
 
-    radio.set_mode(Mode::BLE_1MBIT);
-    radio.set_tx_power(TxPower::_0D_BM);
-    radio.set_frequency(common::FREQ);
+    // radio.set_mode(Mode::BLE_1MBIT);
+    // radio.set_tx_power(TxPower::_0D_BM);
+    // radio.set_frequency(common::FREQ);
 
-    radio.set_access_address(common::ADV_ADDRESS);
-    radio.set_header_expansion(false);
-    radio.set_crc_init(common::ADV_CRC_INIT);
-    radio.set_crc_poly(common::CRC_POLY);
+    // radio.set_access_address(common::ADV_ADDRESS);
+    // radio.set_header_expansion(false);
+    // radio.set_crc_init(common::ADV_CRC_INIT);
+    // radio.set_crc_poly(common::CRC_POLY);
 
     info!("init_handshake");
 
@@ -81,11 +82,22 @@ async fn main(spawner: Spawner) {
     // unsafe {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
-    let start = Instant::now();
-    for iteration in 0..50 {
+    // let start = Instant::now();
+    for iteration in 0..500 {
         info!("iteration {}", iteration);
+
+        radio.set_mode(Mode::BLE_1MBIT);
+        radio.set_tx_power(TxPower::_0D_BM);
+        radio.set_frequency(common::FREQ);
+    
+        radio.set_access_address(common::ADV_ADDRESS);
+        radio.set_header_expansion(false);
+        radio.set_crc_init(common::ADV_CRC_INIT);
+        radio.set_crc_poly(common::CRC_POLY);
+
         // info!("Prepare message_1");
         led_pin_p0_26.set_high();
+        led_pin_p1_04.set_high();
         led_pin_p1_07.set_high();
         let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
         let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
@@ -122,26 +134,47 @@ async fn main(spawner: Spawner) {
             &mut radio, 
             pckt_1, 
             Some(0xf5), 
-            Some(&mut led_pin_p1_10)
+            &mut led_pin_p1_14
         ).await;
 
         match rcvd {
             Ok(pckt_2) => {
                 // info!("Received message_2");
                 led_pin_p0_26.set_high();
-                let message_2: EdhocMessageBuffer =
-                    pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
+                // let message_2: EdhocMessageBuffer =
+                //     pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
+                let Ok(message_2) = 
+                    pckt_2.pdu[1..pckt_2.len].try_into() 
+                else {
+                    info!("Wrong length for EDHOC message_2");
+                    radio.disable();
+                    continue;
+                };
 
                 led_pin_p1_06.set_high();
-                let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
+                // let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
+                let Ok((initiator, c_r, id_cred_r, ead_2)) = 
+                    initiator.parse_message_2(&message_2)
+                else {
+                    info!("EDHOC error at parse_message_2");
+                    radio.disable();
+                    continue;
+                };
                 led_pin_p1_06.set_low();
 
                 let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
 
                 led_pin_p1_06.set_high();
-                let initiator = initiator
-                    .verify_message_2(valid_cred_r)
-                    .unwrap();
+                // let initiator = initiator
+                //     .verify_message_2(valid_cred_r)
+                //     .unwrap();
+                let Ok(initiator) = 
+                    initiator.verify_message_2(valid_cred_r)
+                else {
+                    info!("EDHOC error at verify_message_2");
+                    radio.disable();
+                    continue;
+                };
                 led_pin_p1_06.set_low();
 
                 led_pin_p0_26.set_low();
@@ -160,22 +193,26 @@ async fn main(spawner: Spawner) {
                     common::Packet::new_from_slice(message_3.as_slice(),
                     Some(c_r.as_slice()[0]))
                         .unwrap(),
-                    Some(&mut led_pin_p1_10),
+                    Some(&mut led_pin_p1_14),
                 ).await;
                 led_pin_p0_26.set_low();
 
                 info!("Handshake completed. prk_out = {:X}", i_prk_out);
+                led_pin_p1_04.set_low();
+                Timer::after(Duration::from_secs(1)).await;
             }
             // Err(_) => panic!("parsing error"),
+            // Added to measure time. Otherwise revert to up.
             Err(_) => {
-                info!("Handshake failed, continuing to next iteration");
-                continue;  // Skip to next iteration if handshake fails
+                info!("Hanshake failed. Continue to next iteration. Parsing error");
+                Timer::after(Duration::from_secs(2)).await; 
+                radio.disable();
+                led_pin_p1_04.set_low();
+                continue;
             }
         }
     }
-    let duration = start.elapsed();
-    info!("start time: {:?} and elapsed time: {:?}", start, duration.as_millis());
-    // info!("duration of one handshake: {:?}", duration/100);
-    info!("duration of one handshake in ms: {:?}", duration.as_millis()/50);
-    
+    // let duration = start.elapsed();
+    // info!("start time: {:?} and elapsed time: {:?}", start, duration.as_millis());
+    // info!("duration of one handshake in ms: {:?}", duration.as_millis()/50);
 }

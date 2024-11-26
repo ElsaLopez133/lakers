@@ -63,14 +63,14 @@ async fn main(spawner: Spawner) {
     info!("Starting BLE radio");
     let mut radio = Radio::new(peripherals.RADIO, Irqs);
 
-    radio.set_mode(Mode::BLE_1MBIT);
-    radio.set_tx_power(TxPower::_0D_BM);
-    radio.set_frequency(FREQ);
+    // radio.set_mode(Mode::BLE_1MBIT);
+    // radio.set_tx_power(TxPower::_0D_BM);
+    // radio.set_frequency(FREQ);
 
-    radio.set_access_address(ADV_ADDRESS);
-    radio.set_header_expansion(false);
-    radio.set_crc_init(ADV_CRC_INIT);
-    radio.set_crc_poly(CRC_POLY);
+    // radio.set_access_address(ADV_ADDRESS);
+    // radio.set_header_expansion(false);
+    // radio.set_crc_init(ADV_CRC_INIT);
+    // radio.set_crc_poly(CRC_POLY);
 
     // // Memory buffer for mbedtls
     // #[cfg(feature = "crypto-psa")]
@@ -81,6 +81,16 @@ async fn main(spawner: Spawner) {
     // }
 
     loop {
+        
+        radio.set_mode(Mode::BLE_1MBIT);
+        radio.set_tx_power(TxPower::_0D_BM);
+        radio.set_frequency(FREQ);
+
+        radio.set_access_address(ADV_ADDRESS);
+        radio.set_header_expansion(false);
+        radio.set_crc_init(ADV_CRC_INIT);
+        radio.set_crc_poly(CRC_POLY);
+
         let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
         let mut c_r: Option<ConnId> = None;
 
@@ -88,8 +98,7 @@ async fn main(spawner: Spawner) {
         // let pckt = common::receive_and_filter(&mut radio, Some(0xf5), Some(&mut led_pin_p0_25)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
         let pckt = common::receive_and_filter(&mut radio,
             Some(0xf5),
-            Some(&mut led_pin_p1_14),
-            Duration::from_secs(10)
+            Some(&mut led_pin_p1_14)
         ) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
             .unwrap();
@@ -104,7 +113,14 @@ async fn main(spawner: Spawner) {
         let responder = EdhocResponder::new(lakers_crypto::default_crypto(), cred_r);
         led_pin_p1_07.set_low();
 
-        let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
+        // let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
+        let Ok(message_1) = 
+            pckt.pdu[1..pckt.len].try_into() 
+        else {
+            info!("Wrong length for EDHOC message_1");
+            radio.disable();
+            continue;
+        };
 
         led_pin_p1_07.set_high();
         let result = responder.process_message_1(&message_1);
@@ -130,7 +146,7 @@ async fn main(spawner: Spawner) {
                 &mut radio,
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
                 Some(c_r.unwrap().as_slice()[0]),
-                Some(&mut led_pin_p1_10),
+                &mut led_pin_p1_14,
             )
             .await;
             led_pin_p0_26.set_low();
@@ -144,13 +160,22 @@ async fn main(spawner: Spawner) {
 
                     if rcvd_c_r == c_r.unwrap() {
                         led_pin_p1_08.set_high();
-                        let message_3: EdhocMessageBuffer = message_3.pdu[1..message_3.len]
-                            .try_into()
-                            .expect("wrong length");
+                        // let message_3: EdhocMessageBuffer = message_3.pdu[1..message_3.len]
+                        //     .try_into()
+                        //     .expect("wrong length");
+                        let Ok(message_3) = 
+                            message_3.pdu[1..message_3.len].try_into()
+                        else {
+                            info!("Wrong length for EDHOC message_3");
+                            radio.disable();
+                            continue;
+                        };
+                        
                         let Ok((responder, id_cred_i, _ead_3)) =
                             responder.parse_message_3(&message_3)
                         else {
                             info!("EDHOC error at parse_message_3");
+                            radio.disable();
                             // We don't get another chance, it's popped and can't be used any further
                             // anyway legally
                             continue;
@@ -171,23 +196,38 @@ async fn main(spawner: Spawner) {
                         let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i)
                         else {
                             info!("EDHOC error at verify_message_3");
+                            radio.disable();
                             continue;
                         };
                         led_pin_p1_08.set_low();
 
                         led_pin_p0_26.set_low();
                         info!("Handshake completed. prk_out: {:X}", prk_out);
+                        //  change the state of the pin
+                        // led_pin_p1_04.toggle();
+                         // Manually toggle the LED state (switch between high and low)
+                         if led_pin_p1_10.is_set_high().unwrap() {
+                            led_pin_p1_10.set_low().unwrap();  // Turn the LED off
+                        } else {
+                            led_pin_p1_10.set_high().unwrap();  // Turn the LED on
+                        }
 
-                        unwrap!(spawner.spawn(example_application_task(prk_out)));
+                        // unwrap!(spawner.spawn(example_application_task(prk_out)));
                     } else {
                         info!("Another packet interrupted the handshake.");
+                        radio.disable();
                         continue;
                     }
                 }
-                Err(PacketError::TimeoutError) => info!("Timeout while waiting for message_3!"),
+                Err(PacketError::TimeoutError) => {
+                    info!("Timeout while waiting for message_3!");
+                    radio.disable();
+                    continue;
+                }
                 // Err(_) => panic!("Unexpected error"),
                 Err(_) => {
                     info!("Unexpected error");
+                    radio.disable();
                     continue; 
                 }
             }
