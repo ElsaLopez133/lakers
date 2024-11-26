@@ -84,7 +84,7 @@ async fn main(spawner: Spawner) {
     // unsafe {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
-    let start = Instant::now();
+    // let start = Instant::now();
     for iteration in 0..500 {
         info!("iteration {}", iteration);
 
@@ -208,8 +208,8 @@ async fn main(spawner: Spawner) {
             }
         }
     }
-    let duration = start.elapsed();
-    info!("start time: {:?} and elapsed time in ms: {:?}", start, duration.as_millis());
-    info!("duration of one handshake in ms: {:?}", duration.as_millis()/100);
+    // let duration = start.elapsed();
+    // info!("start time: {:?} and elapsed time in ms: {:?}", start, duration.as_millis());
+    // info!("duration of one handshake in ms: {:?}", duration.as_millis()/100);
 }
 
