@@ -216,7 +216,7 @@ pub async fn transmit_and_wait_response<P>(
         let ret = radio.transmit(packet.as_bytes()).await;
         match ret {
             Ok(ret) => {
-                let resp = receive_and_filter::<P>(radio, filter, None).with_timeout(Duration::from_secs(5)).await?;
+                let resp = receive_and_filter::<P>(radio, filter, None).with_timeout(Duration::from_secs(3)).await?;
                  return resp;
             }
             Err(err) => {

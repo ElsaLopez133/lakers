@@ -161,9 +161,14 @@ async fn main(spawner: Spawner) {
                     if rcvd_c_r == c_r.unwrap() {
 
                         led_pin_p1_08.set_high();
-                        let message_3: EdhocMessageBuffer = message_3.pdu[1..message_3.len]
-                        .try_into()
-                        .expect("wrong length");
+                        // let message_3: EdhocMessageBuffer = message_3.pdu[1..message_3.len].try_into().expect("wrong length");
+                        let Ok(message_3) =
+                            message_3.pdu[1..message_3.len].try_into()
+                        else {
+                            info!("Wrong length for EDHOC message_1");
+                            radio.disable();
+                            continue;
+                        };
                         let Ok((responder, id_cred_i, _ead_3)) =
                             responder.parse_message_3(&message_3)
                         else {

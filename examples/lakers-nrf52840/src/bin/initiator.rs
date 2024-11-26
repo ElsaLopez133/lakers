@@ -204,7 +204,7 @@ async fn main(spawner: Spawner) {
                         led_pin_p0_26.set_high();
                         // let message_4: EdhocMessageBuffer = pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
                         let Ok(message_4) = 
-                            pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length")
+                            pckt_4.pdu[1..pckt_4.len].try_into()
                         else {
                             info!("Wrong length for EDHOC message_4");
                             radio.disable();
