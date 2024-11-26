@@ -196,6 +196,7 @@ async fn main(spawner: Spawner) {
                 
                 info!("Handshake completed. prk_out = {:X}", i_prk_out);
                 led_pin_p1_04.set_low();
+                Timer::after(Duration::from_secs(1)).await;
             }
             // Err(_) => panic!("parsing error"),
             // Added to measure time. Otherwise revert to up.

@@ -51,6 +51,7 @@ async fn main(spawner: Spawner) {
     let mut led_pin_p1_07 = p1.p1_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     let mut led_pin_p1_08 = p1.p1_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     let mut led_pin_p1_06 = p1.p1_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_04 = p1.p1_04.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
@@ -175,7 +176,14 @@ async fn main(spawner: Spawner) {
                         led_pin_p0_7.set_low();
                         led_pin_p0_26.set_low();
                         info!("Handshake completed. prk_out: {:X}", prk_out);
-
+                        //  change the state of the pin
+                        // led_pin_p1_04.toggle();
+                         // Manually toggle the LED state (switch between high and low)
+                        if led_pin_p1_04.is_set_high().unwrap() {
+                            led_pin_p1_04.set_low().unwrap();  // Turn the LED off
+                        } else {
+                            led_pin_p1_04.set_high().unwrap();  // Turn the LED on
+                        }
                         unwrap!(spawner.spawn(example_application_task(prk_out)));
                     } else {
                         info!("Another packet interrupted the handshake.");
