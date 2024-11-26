@@ -17,6 +17,7 @@ use embassy_time::{Duration, Timer};
 use embassy_time::Instant;
 
 use lakers::*;
+use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
 
 extern crate alloc;
 
@@ -63,7 +64,9 @@ async fn main(spawner: Spawner) {
 
     info!("Starting BLE radio");
     let mut radio: Radio<'_, _> = Radio::new(embassy_peripherals.RADIO, Irqs).into();
-
+    unsafe {
+        edhoc_rs_crypto_init();
+    }
     // radio.set_mode(Mode::BLE_1MBIT);
     // radio.set_tx_power(TxPower::_0D_BM);
     // radio.set_frequency(common::FREQ);
@@ -205,7 +208,7 @@ async fn main(spawner: Spawner) {
             // Added to measure time. Otherwise revert to up.
             Err(_) => {
                 info!("Hanshake failed. Continue to next iteration. Parsing error");
-                Timer::after(Duration::from_secs(2)).await; 
+                Timer::after(Duration::from_secs(1)).await; 
                 radio.disable();
                 led_pin_p1_04.set_low();
                 continue;

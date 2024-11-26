@@ -16,6 +16,7 @@ use nrf52840_hal::gpio::{Level, Output, Pin};
 use embassy_time::{Duration, Timer};
 
 use lakers::*;
+use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
 
 use core::ffi::c_char;
 
@@ -62,7 +63,9 @@ async fn main(spawner: Spawner) {
 
     info!("Starting BLE radio");
     let mut radio = Radio::new(peripherals.RADIO, Irqs);
-
+    unsafe {
+        edhoc_rs_crypto_init();
+    }
     // radio.set_mode(Mode::BLE_1MBIT);
     // radio.set_tx_power(TxPower::_0D_BM);
     // radio.set_frequency(FREQ);
@@ -206,10 +209,10 @@ async fn main(spawner: Spawner) {
                         //  change the state of the pin
                         // led_pin_p1_04.toggle();
                          // Manually toggle the LED state (switch between high and low)
-                         if led_pin_p1_10.is_set_high().unwrap() {
-                            led_pin_p1_10.set_low().unwrap();  // Turn the LED off
+                         if led_pin_p1_04.is_set_high().unwrap() {
+                            led_pin_p1_04.set_low().unwrap();  // Turn the LED off
                         } else {
-                            led_pin_p1_10.set_high().unwrap();  // Turn the LED on
+                            led_pin_p1_04.set_high().unwrap();  // Turn the LED on
                         }
 
                         // unwrap!(spawner.spawn(example_application_task(prk_out)));
