@@ -55,6 +55,7 @@ async fn main(spawner: Spawner) {
     let mut led_pin_p1_05 = p1.p1_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     let mut led_pin_p1_04 = p1.p1_04.into_push_pull_output(nrf52840_hal::gpio::Level::Low); // used for the whole message
     let mut led_pin_p1_10 = p1.p1_10.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_14 = p1.p1_14.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
 
     let mut config = embassy_nrf::config::Config::default();
@@ -88,7 +89,7 @@ async fn main(spawner: Spawner) {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
     // let start = Instant::now();
-    for iteration in 0..500 {
+    for iteration in 0..1 {
         info!("iteration {}", iteration);
 
         radio.set_mode(Mode::BLE_1MBIT);
@@ -194,7 +195,7 @@ async fn main(spawner: Spawner) {
                     &mut radio,
                     common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
                         .unwrap(),
-                    &mut led_pin_p1_10)
+                    &mut led_pin_p1_14)
                 .await;
                 
                 info!("Handshake completed. prk_out = {:X}", i_prk_out);
