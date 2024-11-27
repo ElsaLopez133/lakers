@@ -16,6 +16,7 @@ use {defmt_rtt as _, panic_probe as _};
 // use embassy_time::{Duration, Timer};
 
 use lakers::*;
+use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
 
 use core::ffi::c_char;
 
@@ -38,19 +39,6 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    // let peripherals = pac::Peripherals::take().unwrap();
-    // let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
-    // let p1 = nrf52840_hal::gpio::p1::Parts::new(peripherals.P1);
-
-    // let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_8 = p0.p0_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_7 = p0.p0_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_6 = p0.p0_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_5 = p0.p0_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-
-    // let mut led_pin_p1_07 = p1.p1_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p1_08 = p1.p1_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p1_06 = p1.p1_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low); // Not used
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
@@ -58,7 +46,9 @@ async fn main(spawner: Spawner) {
 
     info!("Starting BLE radio");
     let mut radio = Radio::new(peripherals.RADIO, Irqs);
-
+    unsafe {
+        edhoc_rs_crypto_init();
+    }
     radio.set_mode(Mode::BLE_1MBIT);
     radio.set_tx_power(TxPower::_0D_BM);
     radio.set_frequency(FREQ);
@@ -67,14 +57,6 @@ async fn main(spawner: Spawner) {
     radio.set_header_expansion(false);
     radio.set_crc_init(ADV_CRC_INIT);
     radio.set_crc_poly(CRC_POLY);
-
-    // Memory buffer for mbedtls
-    // #[cfg(feature = "crypto-psa")]
-    // let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    // #[cfg(feature = "crypto-psa")]
-    // unsafe {
-    //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    // }
 
     loop {
         let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];

@@ -16,6 +16,7 @@ use {defmt_rtt as _, panic_probe as _};
 // use embassy_time::{Duration, Timer};
 
 use lakers::*;
+use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
 
 extern crate alloc;
 
@@ -38,19 +39,6 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    // let peripherals = pac::Peripherals::take().unwrap();
-    // let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
-    // let p1 = nrf52840_hal::gpio::p1::Parts::new(peripherals.P1);
-
-    // let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_8 = p0.p0_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_7 = p0.p0_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_6 = p0.p0_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p0_5 = p0.p0_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-
-    // let mut led_pin_p1_07 = p1.p1_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p1_08 = p1.p1_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    // let mut led_pin_p1_06 = p1.p1_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low); // Not used
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
@@ -58,7 +46,9 @@ async fn main(spawner: Spawner) {
 
     info!("Starting BLE radio");
     let mut radio: Radio<'_, _> = Radio::new(embassy_peripherals.RADIO, Irqs).into();
-
+    unsafe {
+        edhoc_rs_crypto_init();
+    }
     //let mut led = Output::new(embassy_peripherals.P0_13, Level::Low, OutputDrive::Standard);
     //led.set_high();
 
@@ -73,13 +63,6 @@ async fn main(spawner: Spawner) {
 
     info!("init_handshake");
 
-    // Memory buffer for mbedtls
-    // #[cfg(feature = "crypto-psa")]
-    // let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    // #[cfg(feature = "crypto-psa")]
-    // unsafe {
-    //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    // }
     info!("Prepare message_1");
     // led_pin_p0_26.set_high();
     let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
