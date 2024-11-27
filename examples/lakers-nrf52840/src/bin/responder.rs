@@ -102,7 +102,7 @@ async fn main(spawner: Spawner) {
         let pckt = common::receive_and_filter(
             &mut radio, 
             Some(0xf5), 
-            Some(&mut led_pin_p1_14)
+            Some(&mut led_pin_p1_05)
         ) 
             .await
             .unwrap();
@@ -151,7 +151,7 @@ async fn main(spawner: Spawner) {
                 &mut radio,
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
                 Some(c_r.unwrap().as_slice()[0]),
-                &mut led_pin_p1_10,
+                &mut led_pin_p1_14,
             )
             .await;
             
