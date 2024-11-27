@@ -86,7 +86,7 @@ async fn main(spawner: Spawner) {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
     // let start = Instant::now();
-    for iteration in 0..500 {
+    for iteration in 0..1 {
         info!("iteration {}", iteration);
 
         radio.set_mode(Mode::BLE_1MBIT);
@@ -137,7 +137,7 @@ async fn main(spawner: Spawner) {
             &mut radio, 
             pckt_1, 
             Some(0xf5), 
-            &mut led_pin_p1_14
+            &mut led_pin_p1_10
         ).await;
 
         match rcvd {

@@ -101,7 +101,7 @@ async fn main(spawner: Spawner) {
         // let pckt = common::receive_and_filter(&mut radio, Some(0xf5), Some(&mut led_pin_p0_25)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
         let pckt = common::receive_and_filter(&mut radio,
             Some(0xf5),
-            Some(&mut led_pin_p1_14)
+            Some(&mut led_pin_p1_10)
         ) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
             .unwrap();
@@ -145,6 +145,7 @@ async fn main(spawner: Spawner) {
             led_pin_p1_06.set_low();
             
             // info!("Send message_2 and wait message_3");
+            led_pin_p0_26.set_low();
             let message_3 = common::transmit_and_wait_response(
                 &mut radio,
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
@@ -152,7 +153,7 @@ async fn main(spawner: Spawner) {
                 &mut led_pin_p1_14,
             )
             .await;
-            led_pin_p0_26.set_low();
+            
             
             match message_3 {
                 Ok(message_3) => {
