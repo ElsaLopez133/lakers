@@ -16,6 +16,7 @@ use {defmt_rtt as _, panic_probe as _};
 // use embassy_time::{Duration, Timer};
 
 use lakers::*;
+use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
 
 extern crate alloc;
 
@@ -58,6 +59,9 @@ async fn main(spawner: Spawner) {
 
     info!("Starting BLE radio");
     let mut radio: Radio<'_, _> = Radio::new(embassy_peripherals.RADIO, Irqs).into();
+    unsafe {
+        edhoc_rs_crypto_init();
+    }
 
     //let mut led = Output::new(embassy_peripherals.P0_13, Level::Low, OutputDrive::Standard);
     //led.set_high();
