@@ -14,6 +14,7 @@ use {defmt_rtt as _, panic_probe as _};
 // use embassy_time::{Duration, Timer};
 
 use lakers::*;
+use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
 
 extern crate alloc;
 
@@ -96,7 +97,9 @@ async fn main(spawner: Spawner) {
 
     info!("Starting BLE radio");
     let mut radio: Radio<'_, _> = Radio::new(embassy_peripherals.RADIO, Irqs).into();
-
+    unsafe {
+        edhoc_rs_crypto_init();
+    }
     radio.set_mode(Mode::BLE_1MBIT);
     radio.set_tx_power(TxPower::_0D_BM);
     radio.set_frequency(common::FREQ);
@@ -107,14 +110,6 @@ async fn main(spawner: Spawner) {
     radio.set_crc_poly(common::CRC_POLY);
 
     info!("init_handshake");
-
-    // Memory buffer for mbedtls
-    // #[cfg(feature = "crypto-psa")]
-    // let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    // #[cfg(feature = "crypto-psa")]
-    // unsafe {
-    //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    // }
 
     let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
     let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
