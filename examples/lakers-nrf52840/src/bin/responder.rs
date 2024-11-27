@@ -93,7 +93,7 @@ fn paint_stack(pattern: u32) {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    // paint_stack(STACK_MAGIC_NUMBER);
+    paint_stack(STACK_MAGIC_NUMBER);
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
