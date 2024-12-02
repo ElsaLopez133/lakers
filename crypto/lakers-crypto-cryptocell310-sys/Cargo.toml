@@ -11,6 +11,8 @@ readme.workspace = true
 
 [dependencies]
 lakers-shared.workspace = true
+num-bigint = "0.4"
+num-traits = "0.2"  # Optional but needed for some num-bigint functionality
 
 [build-dependencies]
 bindgen = "0.69.1"
