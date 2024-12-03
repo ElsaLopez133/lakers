@@ -167,6 +167,12 @@ async fn main(spawner: Spawner) {
                 let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
                 led_pin_p1_06.set_low();
 
+                // compute SoK. We need to store g^r. this is in cred_r
+                ephemeral_public_key_resp = [u08; P256_ELEM_LEN];
+                ephemeral_public_key_resp.copy_from_slice(valid_cred_r.bytes);
+                //  What are the message w_I and hash h_I??
+                // let sok = initiator.compute_sok(I.try_into(), ephemeral_public_key_resp, w_I, h_I);
+
                 led_pin_p1_06.set_high();
                 let Ok(initiator) = 
                     initiator.verify_message_2(valid_cred_r)
