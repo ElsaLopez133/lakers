@@ -37,41 +37,42 @@ pub fn prepare_suites_i(
 /// platform's mutex, or to refactor the main initiator and responder objects into a form where the
 /// cryptography implementation can be taken out and stored separately.
 pub trait Crypto: core::fmt::Debug {
-    fn scalar_mult(
-        &mut self,
-        x: &BytesP256ElemLen, 
-        c: &BytesP256ElemLen,
-        n: &[u8; 32]
-    ) -> BytesP256ElemLen;
-    fn verify_sok_equation(
-        &mut self,
-        g_r: &BytesP256ElemLen,
-        z: &[u8; P256_ELEM_LEN],
-        hash: &BytesHashLen, 
-        c: &BytesP256ElemLen
-    ) -> bool;
-    fn expon(
-        &mut self,
-        point: &BytesP256ElemLen, // The curve point
-        scalar: &BytesP256ElemLen, // The scalar
-    ) -> BytesP256ElemLen;
-    fn compute_z(
-        &mut self, 
-        r: [u8; P256_ELEM_LEN], 
-        private_key: &BytesP256ElemLen, 
-        c: &BytesP256ElemLen
-    ) -> [u8; P256_ELEM_LEN];
-    fn compute_g_to_the_r(&mut self, r: &[u8; P256_ELEM_LEN]) -> [u8; P256_ELEM_LEN];
-    fn sok_log(&mut self,
-        private_key: &BytesP256ElemLen,
-        message: &mut [u8],
-        hash: &BytesHashLen
-    ) -> (BytesP256ElemLen, BytesP256ElemLen);
-    fn vok_log(&mut self,
-        hash: &BytesHashLen,
-        proof: &(BytesP256ElemLen, BytesP256ElemLen),
-        message: &mut [u8]
-    ) -> bool;
+    // fn scalar_mult_mod(
+    //     &mut self,
+    //     a: &BytesP256ElemLen, 
+    //     b: &BytesP256ElemLen
+    // ) -> BytesP256ElemLen;
+    // fn scalar_add_mod(
+    //     &mut self,
+    //     a: &BytesP256ElemLen, 
+    //     b: &BytesP256ElemLen
+    // ) -> BytesP256ElemLen;
+    // fn expon(
+    //     &mut self,
+    //     point: &BytesP256ElemLen, // The curve point
+    //     scalar: &BytesP256ElemLen, // The scalar
+    // ) -> BytesP256ElemLen;
+    // fn compute_g_to(&mut self, scalar: &[u8; P256_ELEM_LEN]) -> [u8; P256_ELEM_LEN];
+    // fn sok_log(&mut self,
+    //     ephemeral_private_key: &BytesP256ElemLen, 
+    //     static_private_key: &BytesP256ElemLen, 
+    //     ephemeral_public_key: &BytesP256ElemLen,
+    //     static_public_key: &BytesP256ElemLen,
+    //     message: &mut [u8],
+    //     hash: &BytesHashLen
+    // ) -> (BytesP256ElemLen, BytesP256ElemLen, BytesP256ElemLen);
+    // fn vok_log(&mut self,
+    //     hash: &BytesHashLen,
+    //     proof: &(BytesP256ElemLen, BytesP256ElemLen, BytesP256ElemLen),
+    //     message: &mut [u8]
+    // ) -> bool;
+        // fn verify_sok_equation(
+    //     &mut self,
+    //     g_r: &BytesP256ElemLen,
+    //     z: &[u8; P256_ELEM_LEN],
+    //     hash: &BytesHashLen, 
+    //     c: &BytesP256ElemLen
+    // ) -> bool;
     /// Returns the list of cryptographic suites supported by the backend implementation.
     fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
         EdhocBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])

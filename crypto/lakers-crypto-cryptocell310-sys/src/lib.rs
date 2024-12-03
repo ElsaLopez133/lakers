@@ -58,195 +58,286 @@ pub unsafe fn edhoc_rs_crypto_init() {
 pub struct Crypto;
 
 impl CryptoTrait for Crypto {
-    fn sok_log(
-        &mut self,
-        private_key: &BytesP256ElemLen,
-        message: &mut [u8],
-        hash: &BytesHashLen
-    ) -> (BytesP256ElemLen, BytesP256ElemLen) {
-        // generate a radnom number
-        let temp_r = self.get_random_byte();
-        let r =  [0u8; P256_ELEM_LEN];
-        r.copy_from_slice(&[temp_r]);
-        // compute R = g^r
-        let g_r = self.compute_g_to_the_r(&r);
-        // compute the challenge
-        let mut input_c = Vec::new();
-        input_c.extend_from_slice(&R);
-        input_c.extend_from_slice(&hash);
-        input_c.extend_from_slice(&message);
-        let c = self.sha256_digest(&input_c, input_c.len());
-        // Compute z = r + x * c
-        let z = self.compute_z(r, private_key, &c);
-        // retunr the proof
-        (g_r, z)
+    // fn sok_log(
+    //     &mut self,
+    //     ephemeral_private_key: &BytesP256ElemLen, // x
+    //     static_private_key: &BytesP256ElemLen, // i
+    //     ephemeral_public_key: &BytesP256ElemLen, // Y = g^y
+    //     static_public_key: &BytesP256ElemLen, // R = g^r
+    //     message: &mut [u8], // w_I
+    //     hash: &BytesHashLen // h_I
+    // ) -> (BytesP256ElemLen, BytesP256ElemLen, BytesP256ElemLen) {
+    //     // generate a radnom number
+    //     let mut w =  [0u8; P256_ELEM_LEN];
+    //     w.copy_from_slice(&[self.get_random_byte()]);
 
-    }
+    //     let mut q =  [0u8; P256_ELEM_LEN];
+    //     q.copy_from_slice(&[self.get_random_byte()]);
 
-    fn vok_log(
-        &mut self, 
-        hash: &BytesHashLen, 
-        proof: &(BytesP256ElemLen, BytesP256ElemLen),
-        message: &mut [u8]
-    ) -> bool {
-        // Extract R and z from the proof
-        let (R, z) = proof;
-        // Compute c = H(R, h, m)
-        let mut input_c = Vec::new();
-        input_c.extend_from_slice(&R);
-        input_c.extend_from_slice(&hash);
-        input_c.extend_from_slice(&message);
-        let c = self.sha256_digest(&input_c, input_c.len());
-        // Verify if g^z == R * h^c
-        self.verify_sok_equation(R, z, hash, &c)
-    }
+    //     // compute I_1 = g^w
+    //     let I_1 = self.compute_g_to(&w);
 
-    fn verify_sok_equation(
-        &mut self,
-        g_r: &BytesP256ElemLen,
-        z: &[u8; P256_ELEM_LEN],
-        hash: &BytesHashLen, 
-        c: &BytesP256ElemLen
-    ) -> bool {
-        // maybe there is a way of retreiving instead of doing it by hand
-        let g_x = [0x6B, 0x17, 0xD1, 0xF2, 0xE1, 0x2C, 0x42, 0x47,
-        0xF8, 0xBC, 0xE6, 0xE5, 0x63, 0xA4, 0x40, 0xF2,
-        0x77, 0x03, 0x7D, 0x81, 0x2D, 0xEB, 0x33, 0xA0,
-        0xF4, 0xA1, 0x39, 0x45, 0xD8, 0x98, 0xC2, 0x96];
-        //  in its compressed form
-        let mut g = [0u8; P256_ELEM_LEN + 1];
-        g[0] = 0x02;
-        g[1..].copy_from_slice(&g_x);
+    //     // Compute I_2 = (hg^y)^w
+    //     let point_I_2 = self.scalar_mult_mod(hash, ephemeral_public_key);
+    //     let I_2 = self.expon(&point_I_2, &w);
 
-        // compute g^z
-        let g_to_the_z = self.expon(&g, z);
+    //     //  Compute I_3 = (hg^r)^w) where R is the public DH key of Responder
+    //     let point_I_3 = self.scalar_mult_mod(hash, static_public_key);
+    //     let I_3 = self.expon(&point_I_3, &w);
 
-        //  compute h^c
-        let h_to_the_c = self.expon(hash, c);
+    //     //  compute I_4
+    //     let I_4 = self.compute_g_to(&q);
 
-        //  crypto cell addition???
-        let g_r_plus_h_to_the_c = self.add_point(g_r, h_to_the_c);
+    //     //  compute I_5 = (hg^y)^q)
+    //     let point_I_5 = self.scalar_mult_mod(hash, ephemeral_public_key);
+    //     let I_5 = self.expon(&point_I_5, &q);
 
-        // return comparison of g_r_plus_h_to_the_c == g_to_the_z
+    //     // compute the challenge \alpha_I
+    //     let mut input_c = [0u8; MAX_BUFFER_LEN]; //[0u8; MAX_MESSAGE_SIZE_LEN];
+    //     let mut offset = 0;
+    //     input_c[offset..offset + I_1.len()].copy_from_slice(I_1.as_slice());
+    //     offset += I_1.len();
+    //     input_c[offset..offset + I_2.len()].copy_from_slice(I_2.as_slice());
+    //     offset += I_2.len();
+    //     input_c[offset..offset + I_3.len()].copy_from_slice(I_3.as_slice());
+    //     offset += I_3.len();
+    //     input_c[offset..offset + I_4.len()].copy_from_slice(I_4.as_slice());
+    //     offset += I_4.len();
+    //     input_c[offset..offset + I_5.len()].copy_from_slice(I_5.as_slice());
+    //     offset += I_5.len();
+    //     input_c[offset..offset + message.len()].copy_from_slice(message);
+    //     offset += message.len();
+    //     let alpha_I = self.sha256_digest(&input_c, offset);
 
-    }
+    //     // Compute \beta_I = w + alpha_I * x
+    //     let sum_beta_I = self.scalar_mult_mod(&alpha_I, ephemeral_private_key);
+    //     let beta_I = self.scalar_add_mod(&w, &sum_beta_I);
 
-    fn scalar_mult(
-        &mut self,
-        x: &BytesP256ElemLen, 
-        c: &BytesP256ElemLen,
-        n: &[u8; 32]
-    ) -> BytesP256ElemLen {
-        let x_big =  BigUint::from_bytes_be(x);
-        let c_big = BigUint::from_bytes_be(c);
-        let n_big = BigUint::from_bytes_be(n);
+    //     //  compute \gamma_I = q + alpha_I * i
+    //     let sum_gamma_I = self.scalar_mult_mod(&alpha_I, static_private_key);
+    //     let gamma_I = self.scalar_add_mod(&q, &sum_gamma_I);
 
-        let big_uint = (x_big * c_big) % n_big;
+    //     // return the proof
+    //     (alpha_I, beta_I, gamma_I)
 
-        let mut bytes = big_uint.to_bytes_be();
-        while bytes.len() < P256_ELEM_LEN {
-            bytes.insert(0, 0);  // Insert leading zeros
-        }
+    // }
 
-        let mut result = [0u8; P256_ELEM_LEN];
-        result.copy_from_slice(&bytes[bytes.len() - P256_ELEM_LEN..]);
+    // fn scalar_mult_mod(
+    //     &mut self,
+    //     a: &BytesP256ElemLen, 
+    //     b: &BytesP256ElemLen
+    // ) -> BytesP256ElemLen {
+    //     let a_big =  BigUint::from_bytes_be(a);
+    //     let b_big = BigUint::from_bytes_be(b);
+    //     let p256_order: [u8; 32] = [
+    //         0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    //         0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51]
+    //     let p256_order_big = BigUint::from_bytes_be(p256_order.as_slice());
 
-        result
-    }
+    //     let product_big = (a_big * b_big) % p256_order_big;
 
-    fn expon(
-        &mut self,
-        point: &BytesP256ElemLen, // The curve point
-        scalar: &BytesP256ElemLen, // The scalar
-    ) -> BytesP256ElemLen {
-        let mut result = [0u8; P256_ELEM_LEN];
-        let domain = unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
+    //     let mut bytes = product_big.to_bytes_be();
+    //     while bytes.len() < P256_ELEM_LEN {
+    //         bytes.insert(0, 0);  // Insert leading zeros
+    //     }
 
-        unsafe {
-            let mut public_key = CRYS_ECPKI_UserPublKey_t::default(); // Create public key structure
-            let mut private_key = CRYS_ECPKI_UserPrivKey_t::default(); // Create private key structure
-            let mut tmp_data = CRYS_ECDH_TempData_t::default(); // Temporary data buffer
-            let mut output_len: u32 = result.len() as u32;
-            let mut point_copy = *point;
+    //     let mut product = [0u8; P256_ELEM_LEN];
+    //     product.copy_from_slice(&bytes[bytes.len() - P256_ELEM_LEN..]);
 
-            // Build the public key from the given point
-            _DX_ECPKI_BuildPublKey(
-                domain,
-                point_copy.as_mut_ptr(),
-                point.len() as u32,
-                EC_PublKeyCheckMode_t_CheckPointersAndSizesOnly,
-                &mut public_key,
-                core::ptr::null_mut(),
-            );
+    //     product
+    // }
+
+    // fn scalar_add_mod(
+    //     &mut self,
+    //     a: &BytesP256ElemLen, 
+    //     b: &BytesP256ElemLen
+    // ) -> BytesP256ElemLen {
+    //     let a_big =  BigUint::from_bytes_be(a);
+    //     let b_big = BigUint::from_bytes_be(b);
+    //     let p256_order: [u8; 32] = [
+    //         0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    //         0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51]
+    //     let p256_order_big = BigUint::from_bytes_be(p256_order.as_slice());
+
+    //     let sum_big = (a_big + b_big) % p256_order_big;
+
+    //     let mut bytes = sum_big.to_bytes_be();
+    //     while bytes.len() < P256_ELEM_LEN {
+    //         bytes.insert(0, 0);  // Insert leading zeros
+    //     }
+
+    //     let mut sum = [0u8; P256_ELEM_LEN];
+    //     sum.copy_from_slice(&bytes[bytes.len() - P256_ELEM_LEN..]);
+
+    //     sum
+    // }
+
+    // fn expon(
+    //     &mut self,
+    //     point: &BytesP256ElemLen, // The curve point
+    //     scalar: &BytesP256ElemLen, // The scalar
+    // ) -> BytesP256ElemLen {
+    //     let mut result = [0u8; P256_ELEM_LEN];
+    //     let domain = unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
+
+    //     unsafe {
+    //         let mut public_key = CRYS_ECPKI_UserPublKey_t::default(); // Create public key structure
+    //         let mut private_key = CRYS_ECPKI_UserPrivKey_t::default(); // Create private key structure
+    //         let mut tmp_data = CRYS_ECDH_TempData_t::default(); // Temporary data buffer
+    //         let mut output_len: u32 = result.len() as u32;
+
+    //         // Build the public key from the given point
+    //         // FIXME. SHould it be in compressed form? If so:
+    //         // let mut point_compressed = [0x0u8; P256_ELEM_LEN + 1];
+    //         // point_compressed[0] = 0x02;
+    //         // point_compressed[1..].copy_from_slice(&point[..]);
+    //         _DX_ECPKI_BuildPublKey(
+    //             domain,
+    //             point.clone().as_mut_ptr(),
+    //             point.len() as u32,
+    //             EC_PublKeyCheckMode_t_CheckPointersAndSizesOnly,
+    //             &mut public_key,
+    //             core::ptr::null_mut(),
+    //         );
     
-            // Build the private key from the scalar
-            CRYS_ECPKI_BuildPrivKey(
-                domain,
-                scalar.as_ptr(),
-                scalar.len() as u32,
-                &mut private_key,
-            );
+    //         // Build the private key from the scalar
+    //         CRYS_ECPKI_BuildPrivKey(
+    //             domain,
+    //             scalar.as_ptr(),
+    //             scalar.len() as u32,
+    //             &mut private_key,
+    //         );
     
-            // Perform scalar multiplication using the ECDH function
-            let res = CRYS_ECDH_SVDP_DH(
-                &mut public_key,
-                &mut private_key,
-                result.as_mut_ptr(),
-                &mut output_len,
-                &mut tmp_data,
-            );
+    //         // Perform scalar multiplication using the ECDH function
+    //         let res = CRYS_ECDH_SVDP_DH(
+    //             &mut public_key,
+    //             &mut private_key,
+    //             result.as_mut_ptr(),
+    //             &mut output_len,
+    //             &mut tmp_data,
+    //         );
     
-            if res != CRYS_OK {
-                panic!("multiplication failed: {:?}", res);
-            }
-        }
+    //         if res != CRYS_OK {
+    //             panic!("multiplication failed: {:?}", res);
+    //         }
+    //     }
     
-        result
-    }
+    //     result
+    // }
 
-    fn compute_z(
-        &mut self, 
-        r: [u8; P256_ELEM_LEN], 
-        private_key: &BytesP256ElemLen, 
-        c: &BytesP256ElemLen
-    ) -> [u8; P256_ELEM_LEN] {
-        // compute x * c. Scalar multiplication
-        let p256_order: [u8; 32] = [
-        0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51]
-        
-        let private_key_times_c = self.scalar_mult(private_key,c,&p256_order);
-        
-        // compute z = r + (x * c)
-        let mut z = [0u8; P256_ELEM_LEN];
-        //  this is not correct. it has to be EC point addition. or not? 
-        // FIXME
-        for i in 0..P256_ELEM_LEN {
-            z[i] = r[i] + private_key_times_c[i];
-        }
-        z
-    }
 
-    fn compute_g_to_the_r(&mut self, r: &[u8; P256_ELEM_LEN]) -> [u8; P256_ELEM_LEN] {
-        // The base point G for the P-256 curve is defined by the curve parameters.
-        let domain = unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
-        // let mut result = [0u8; P256_ELEM_LEN];
+    // fn compute_g_to(&mut self, scalar: &[u8; P256_ELEM_LEN]) -> [u8; P256_ELEM_LEN] {
+    //     // maybe there is a way of retreiving instead of doing it by hand
+    //     let g_x = [0x6B, 0x17, 0xD1, 0xF2, 0xE1, 0x2C, 0x42, 0x47,
+    //     0xF8, 0xBC, 0xE6, 0xE5, 0x63, 0xA4, 0x40, 0xF2,
+    //     0x77, 0x03, 0x7D, 0x81, 0x2D, 0xEB, 0x33, 0xA0,
+    //     0xF4, 0xA1, 0x39, 0x45, 0xD8, 0x98, 0xC2, 0x96];
 
-        // maybe there is a way of retreiving instead of doing it by hand
-        let g_x = [0x6B, 0x17, 0xD1, 0xF2, 0xE1, 0x2C, 0x42, 0x47,
-        0xF8, 0xBC, 0xE6, 0xE5, 0x63, 0xA4, 0x40, 0xF2,
-        0x77, 0x03, 0x7D, 0x81, 0x2D, 0xEB, 0x33, 0xA0,
-        0xF4, 0xA1, 0x39, 0x45, 0xD8, 0x98, 0xC2, 0x96];
+    //     //  in its compressed form
+    //     let mut g = [0u8; P256_ELEM_LEN + 1];
+    //     g[0] = 0x02;
+    //     g[1..].copy_from_slice(&g_x);
 
-        //  in its compressed form
-        let mut g = [0u8; P256_ELEM_LEN + 1];
-        g[0] = 0x02;
-        g[1..].copy_from_slice(&g_x);
+    //     let mut result = [0u8; P256_ELEM_LEN];
+    //     let domain = unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
 
-        let result = self.expon(&g, r);
+    //     unsafe {
+    //         let mut public_key = CRYS_ECPKI_UserPublKey_t::default(); // Create public key structure
+    //         let mut private_key = CRYS_ECPKI_UserPrivKey_t::default(); // Create private key structure
+    //         let mut tmp_data = CRYS_ECDH_TempData_t::default(); // Temporary data buffer
+    //         let mut output_len: u32 = result.len() as u32;
 
-        result
-    }
+    //         // Build the public key from the given point
+    //         _DX_ECPKI_BuildPublKey(
+    //             domain,
+    //             g.as_mut_ptr(),
+    //             g.len() as u32,
+    //             EC_PublKeyCheckMode_t_CheckPointersAndSizesOnly,
+    //             &mut public_key,
+    //             core::ptr::null_mut(),
+    //         );
+    
+    //         // Build the private key from the scalar
+    //         CRYS_ECPKI_BuildPrivKey(
+    //             domain,
+    //             scalar.as_ptr(),
+    //             scalar.len() as u32,
+    //             &mut private_key,
+    //         );
+    
+    //         // Perform scalar multiplication using the ECDH function
+    //         let res = CRYS_ECDH_SVDP_DH(
+    //             &mut public_key,
+    //             &mut private_key,
+    //             result.as_mut_ptr(),
+    //             &mut output_len,
+    //             &mut tmp_data,
+    //         );
+    
+    //         if res != CRYS_OK {
+    //             panic!("multiplication failed: {:?}", res);
+    //         }
+    //     }
+    
+    //     result
+    // }
+
+    // fn vok_log(
+    //     &mut self, 
+    //     ephemeral_public_key_I: &BytesP256ElemLen, // X = g^x
+    //     ephemeral_public_key_R: &BytesP256ElemLen, // Y = g^y
+    //     static_public_key: &BytesP256ElemLen, // R = g^r
+    //     hash: &BytesHashLen, 
+    //     proof: &(BytesP256ElemLen, BytesP256ElemLen, BytesP256ElemLen),
+    //     message: &mut [u8]
+    // ) -> bool {
+    //     // Extract R and z from the proof
+    //     let (alpha_I, beta_I,gamma_I ) = proof;
+
+    //     // Compute c = H(R, h, m)
+    //     let mut input_c = [0u8; MAX_BUFFER_LEN]; //[0u8; MAX_MESSAGE_SIZE_LEN];
+    //     let mut offset = 0;
+    //     input_c[offset..offset + alpha_I.len()].copy_from_slice(alpha_I.as_slice());
+    //     offset += alpha_I.len();
+    //     input_c[offset..offset + hash.len()].copy_from_slice(hash);
+    //     offset += hash.len();
+    //     input_c[offset..offset + message.len()].copy_from_slice(message);
+    //     offset += message.len();
+    //     let c = self.sha256_digest(&input_c, offset);
+
+    //     // Verify if g^z == R * h^c
+    //     self.verify_sok_equation(g_r, z, hash, &c)
+    // }
+
+    // fn verify_sok_equation(
+    //     &mut self,
+    //     g_r: &BytesP256ElemLen,
+    //     z: &[u8; P256_ELEM_LEN],
+    //     hash: &BytesHashLen, 
+    //     c: &BytesP256ElemLen
+    // ) -> bool {
+    //     // maybe there is a way of retreiving instead of doing it by hand
+    //     let g_x = [0x6B, 0x17, 0xD1, 0xF2, 0xE1, 0x2C, 0x42, 0x47,
+    //     0xF8, 0xBC, 0xE6, 0xE5, 0x63, 0xA4, 0x40, 0xF2,
+    //     0x77, 0x03, 0x7D, 0x81, 0x2D, 0xEB, 0x33, 0xA0,
+    //     0xF4, 0xA1, 0x39, 0x45, 0xD8, 0x98, 0xC2, 0x96];
+    //     //  in its compressed form
+    //     let mut g = [0u8; P256_ELEM_LEN + 1];
+    //     g[0] = 0x02;
+    //     g[1..].copy_from_slice(&g_x);
+
+    //     // compute g^z
+    //     let g_to_the_z = self.compute_g_to(&z);
+
+    //     //  compute h^c
+    //     let h_to_the_c = self.expon(hash, c);
+
+    //     //  crypto cell addition???
+    //     let g_r_plus_h_to_the_c = self.add_point(g_r, h_to_the_c);
+
+    //     // return comparison of g_r_plus_h_to_the_c == g_to_the_z
+
+    // }
 
     fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
         let mut buffer: [u32; 64 / 4] = [0x00; 64 / 4];

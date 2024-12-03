@@ -384,6 +384,10 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
             Err(error) => Err(error),
         }
     }
+
+    pub fn compute_sok(&mut self, i: &BytesP256ElemLen, g_r: &BytesP256ElemLen, w_i: &mut [u8] , h_i: &BytesHashLen) -> (BytesP256ElemLen, BytesP256ElemLen, BytesP256ElemLen) {
+        self.crypto.sok_log(&self.state.x, i, &self.state.g_y, g_r, w_i, h_i)
+    }
 }
 
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
