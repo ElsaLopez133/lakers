@@ -2,7 +2,7 @@
 #![no_main]
 
 use core::result;
-
+use core::cmp::Ordering;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug::{self, EXIT_SUCCESS};
 use defmt::info;
@@ -12,30 +12,6 @@ use panic_semihosting as _;
 pub use nrf52840_pac as pac;
 use nrf52840_pac::{cc_pka::{self, opcode::Opcode, pka_sram_wclear}, ficr::info}; 
 
-// #[no_mangle]
-// #[link_section = ".data"]
-
-// const A: [u32; 66] = [
-//         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12345678,
-//         0x00, 0x00];
-
-// const B: [u32; 66] = [
-//         0x00, 0x0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-//         0x00, 0x0];
 
 // Example constants for positions
 const TAG_POS: u8 = 0;         // tag of the operand
@@ -52,72 +28,114 @@ const OPCODE_POS: u8 = 27;     // Operation code position (Bits 27:31)
 // registers must be at least the size of the largest operand plus an extra 64 bits 
 // for internal PKA calculations. 
 // These extra 64 bits must be initialized to zero. 
-const OPERAND_SIZE_BITS: usize = 2 * 4 * 8;
+const OPERAND_SIZE_BITS: usize = 8 * 4 * 8;
+const OPERAND_SIZE_WORDS: usize = OPERAND_SIZE_BITS/8/4;
 const OPERAND_MEMORY_OFFSET: u32 = (OPERAND_SIZE_BITS as u32)/8/4 + 2;
 const VIRTUAL_MEMORY_SIZE_BITS: usize = 64 * 4 * 8; // 64-bit word size
 const VIRTUAL_MEMORY_OFFSET: u32 = (VIRTUAL_MEMORY_SIZE_BITS as u32)/8/4 + 2;
 
 // Define example values for N and Np 
-// const N: [u32; 8] = [0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF];
-// const NP: [u32; 8] = [0x00000000, 0xFFFFFFFD, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF];
-// const N: [u32; 8] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03];
-// const NP: [u32; 8] = [0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAB];
-// const N: [u32; 8] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05];
-// const NP: [u32; 8] = [0xCCCCCCCC, 0xCCCCCCCC, 0xCCCCCCCC, 0xCCCCCCCC, 0xCCCCCCCC, 0xCCCCCCCC, 0xCCCCCCCC, 0xCCCCCCCD];
-// const N: [u32; 2] = [0x00, 0x13];
-// const NP: [u32; 2] = [0x86BCA1AF, 0x286BCA1B];
-const N: [u32; 2] = [0x00, 0x15];
-const NP: [u32; 2] = [0xCF3CF3CF, 0x3CF3CF3D];
-// const N: [u32; 1] = [0x13];
-// const NP: [u32; 1] = [0x286BCA1B];
-// const N: [u32; 1] = [0xB];
-// const NP: [u32; 1] = [0xBA2E8BA3];
+// 1D examples
+// const N: [u32; 1] = [0x15];
+// const NP: [u32; 1] = [0xC30C30C3];
+
 // Example values for a and b
-// const A: [u32; 8] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05];
-const A: [u32; 2] = [0x00, 0x15];
+// 1D examples
 // const A: [u32; 1] = [0x02];
-// const A: [u32; 8] = [0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF];
-
-// const B: [u32; 8] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02];
-const B: [u32; 2] = [0x00, 0x04];
 // const B: [u32; 1] = [0x07];
-// const B: [u32; 8] = [0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF];
 
 
-static BASE_POINT_G_X_COMPRESSED: [u8; 33] = [
-    0x02, // Sign byte indicating positive y-coordinate
-    0x6B, 0x17, 0xD1, 0xF2, 0xE1, 0xA2, 0xC4, 0x2F,
-    0xF8, 0xBC, 0xBC, 0xED, 0x5C, 0x2D, 0x6B, 0x13,
-    0x03, 0xAE, 0xB1, 0xA5, 0xC4, 0xA7, 0xBF, 0xC1,
-    0x31, 0x6B, 0x1A, 0x6B, 0x2C, 0x80, 0xF2, 0x0F
-];
-static BASE_POINT_G_X: [u8; 32] = [
-    0x6B, 0x17, 0xD1, 0xF2, 0xE1, 0xA2, 0xC4, 0x2F,
-    0xF8, 0xBC, 0xBC, 0xED, 0x5C, 0x2D, 0x6B, 0x13,
-    0x03, 0xAE, 0xB1, 0xA5, 0xC4, 0xA7, 0xBF, 0xC1,
-    0x31, 0x6B, 0x1A, 0x6B, 0x2C, 0x80, 0xF2, 0x0F
+// // P-256 curve parameters
+// const N: [u32; 8] = [
+//     0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000,
+//     0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+// ];
+
+// const NP: [u32; 8] = [
+//     0xFFFFFFFF, 0x00000002, 0x00000000, 0x00000000, 
+//     0x00000001, 0x00000000, 0x00000000, 0x00000001
+// ];
+
+// const B: [u32; 8] = [
+//     0x27D2604B, 0x3BCE3C3E, 0xCC53B0F6, 0x651D06B0,
+//     0x769886BC, 0xB3EBBD55, 0xAA3A93E7, 0x5AC635D8
+// ];
+
+// const A: [u32; 8] = [
+//     0xFFFFFFFC, 0x00000001, 0x00000000, 0x00000000,
+//     0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+// ];
+// const P_PLUS_1_DIV_4: [u32; 8] = [
+//     0x3FFFFFFF, 0x40000000, 0x40000000, 0x40000000,
+//     0x40000000, 0x3FFFFFFF, 0xFFFFFFFF, 0x3FFFFFFF
+// ];
+
+// const EXP: [u32; 8] = [
+//     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03
+// ];
+// // test vectors: http://point-at-infinity.org/ecc/nisttv
+// // k = 1
+// // x = 6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296
+// // y = 4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5
+// static POINT_X: [u32; 8] = [
+//     0x6B17D1F2, 0xE12C4247, 0xF8BCE6E5, 0x63A440F2,
+//     0x77037D81, 0x2DEB33A0, 0xF4A13945, 0xD898C296,
+// ];
+
+// static POINT_Y: [u32; 8] = [
+//     0x4FE342E2, 0xFE1A7F9B, 0x8EE7EB4A, 0x7C0F9E16,
+//     0x2BCE3357, 0x6B315ECE, 0xCBB64068, 0x37BF51F5
+// ];
+
+//  Easier tests
+const N: [u32; 8] = [
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000015
 ];
 
-static BASE_POINT_G_Y: [u8; 32] = [
-    0x4F, 0xE3, 0x42, 0xE2, 0xFE, 0x1A, 0x7F, 0x9B, 
-    0x8E, 0xE7, 0xEB, 0x4A, 0x7C, 0x0F, 0x9E, 0x16, 
-    0x2B, 0xCE, 0x33, 0x57, 0x6B, 0x31, 0x5E, 0xCE, 
-    0xCB, 0xB6, 0x40, 0x68, 0x37, 0xBF, 0x51,0xF5
+const LONG_N: [u32; 16] = [
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000015
 ];
 
-static POINT_5_G_COMPRESSED: [u8; 33] = [
-    0x02, // Sign byte indicating positive y-coordinate
-    0x7B, 0x94, 0x44, 0x3F, 0x16, 0x9D, 0x16, 0x8D,
-    0x23, 0xA9, 0xE1, 0xA2, 0xF9, 0xA7, 0xE2, 0x9C,
-    0xC6, 0xDB, 0x72, 0x0D, 0x0E, 0x07, 0x8F, 0xF2,
-    0x0A, 0x1E, 0x5F, 0x98, 0xFB, 0x02, 0xC9, 0xA7
+const NP: [u32; 8] = [
+    0xC30C30C3, 0xC30C30C3, 0xC30C30C3, 0xC30C30C3, 
+    0xC30C30C3, 0xC30C30C3, 0xC30C30C3, 0xC30C30C3
 ];
-static POINT_5_G: [u8; 32] = [
-    0x7B, 0x94, 0x44, 0x3F, 0x16, 0x9D, 0x16, 0x8D,
-    0x23, 0xA9, 0xE1, 0xA2, 0xF9, 0xA7, 0xE2, 0x9C,
-    0xC6, 0xDB, 0x72, 0x0D, 0x0E, 0x07, 0x8F, 0xF2,
-    0x0A, 0x1E, 0x5F, 0x98, 0xFB, 0x02, 0xC9, 0xA7
+
+const B: [u32; 8] = [
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000010
 ];
+
+const A: [u32; 8] = [
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000010
+];
+const P_PLUS_1_DIV_4: [u32; 8] = [
+    0x3FFFFFFF, 0x40000000, 0x40000000, 0x40000000,
+    0x40000000, 0x3FFFFFFF, 0xFFFFFFFF, 0x3FFFFFFF
+];
+
+const EXP: [u32; 8] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3
+];
+// test vectors: http://point-at-infinity.org/ecc/nisttv
+// k = 1
+// x = 6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296
+// y = 4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5
+static POINT_X: [u32; 8] = [
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000100,
+];
+
+static POINT_Y: [u32; 8] = [
+    0x4FE342E2, 0xFE1A7F9B, 0x8EE7EB4A, 0x7C0F9E16,
+    0x2BCE3357, 0x6B315ECE, 0xCBB64068, 0x37BF51F5
+];
+
 
 #[entry]
 fn main() -> ! {
@@ -138,146 +156,57 @@ fn main() -> ! {
 
     // Example for 2048-bit operand configurations
     cc_pka.pka_l(1).write(|w| unsafe { w.bits(OPERAND_SIZE_BITS as u32) }); 
+    cc_pka.pka_l(0).write(|w| unsafe { w.bits(2 * OPERAND_SIZE_BITS as u32) }); 
 
     // Configure memory map
-    cc_pka.memory_map(0).write(|w| unsafe { w.bits(0x0) }); // R0
-    cc_pka.memory_map(1).write(|w| unsafe { w.bits(VIRTUAL_MEMORY_OFFSET) }); // R1
-    cc_pka.memory_map(4).write(|w| unsafe { w.bits(2 * VIRTUAL_MEMORY_OFFSET) }); // R4
-    cc_pka.memory_map(5).write(|w| unsafe { w.bits(3 * VIRTUAL_MEMORY_OFFSET) }); // R5
-    cc_pka.memory_map(6).write(|w| unsafe { w.bits(4 * VIRTUAL_MEMORY_OFFSET) }); // R6
-    cc_pka.memory_map(30).write(|w| unsafe { w.bits(5 * VIRTUAL_MEMORY_OFFSET) }); // T0
-    cc_pka.memory_map(31).write(|w| unsafe { w.bits(6 * VIRTUAL_MEMORY_OFFSET) }); // T1    
+    configure_memory_map(&cc_pka); 
 
-    // Load N (R0) and Np (R1) into PKA SRAM
-    // Memory is loaded in reverse order
-    cc_pka.pka_sram_waddr().write(|w| unsafe { w.bits(cc_pka.memory_map(0).read().bits()) });
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        let reverse_index = OPERAND_SIZE_BITS/8/4 - 1 - i;
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(N[reverse_index]) });
-    }
-    //  Extra 64 bits (2 words) must be intialized to zero
-    for i in 0..2 {
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(0x00) });
-    }
-    cc_pka.pka_sram_waddr().write(|w| unsafe { w.bits(cc_pka.memory_map(1).read().bits()) });
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        let reverse_index = OPERAND_SIZE_BITS/8/4 - 1 - i;
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(NP[i]) });
-    }
-    //  Extra 64 bits (2 words) must be intialized to zero
-    for i in 0..2 {
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(0x00) });
-    }
-    cc_pka.pka_sram_waddr().write(|w| unsafe { w.bits(cc_pka.memory_map(4).read().bits()) });
-    // FIXME add bound check on A
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        let reverse_index = OPERAND_SIZE_BITS/8/4 - 1 - i;
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(A[reverse_index])}); 
-    }
-    //  Extra 64 bits (2 words) must be intialized to zero
-    for i in 0..2 {
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(0x00) });
-    }
-    cc_pka.pka_sram_waddr().write(|w| unsafe { w.bits(cc_pka.memory_map(5).read().bits()) });
-    // cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(B[0])}); 
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        let reverse_index = OPERAND_SIZE_BITS/8/4 - 1 - i;
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(B[reverse_index])}); 
-    }
-    //  Extra 64 bits (2 words) must be intialized to zero
-    for i in 0..2 {
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(0x00) });
-    }
-    cc_pka.pka_sram_waddr().write(|w| unsafe { w.bits(cc_pka.memory_map(6).read().bits()) });
-    // cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(B[0])}); 
-    for i in 0..OPERAND_SIZE_BITS/8/4 + 2 {
-        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(0x00)}); 
-    }
+    // Load curve parameters into PKA SRAM
+    load_parameters(&cc_pka);
+
     // Verify data is well written
     cc_pka.pka_sram_wclear();
-    cc_pka.pka_sram_raddr().write(|w| unsafe { w.bits(cc_pka.memory_map(0).read().bits()) });
-    let mut verif_n = [0u32; OPERAND_SIZE_BITS/8/4];
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        verif_n[i] = cc_pka.pka_sram_rdata().read().bits();
-    }
-    info!("Verification of N: {:#X} = {:?}", verif_n, verif_n);
-    
-    cc_pka.pka_sram_raddr().write(|w| unsafe { w.bits(cc_pka.memory_map(4).read().bits()) });
-    let mut verif_a = [0u32; OPERAND_SIZE_BITS/8/4];
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        verif_a[i] = cc_pka.pka_sram_rdata().read().bits();
-    }
-    info!("Verification of A: {:#X} = {:?}", verif_a, verif_a);
-    
-    cc_pka.pka_sram_raddr().write(|w| unsafe { w.bits(cc_pka.memory_map(5).read().bits()) });
-    let mut verif_b = [0u32; OPERAND_SIZE_BITS/8/4];
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        verif_b[i] = cc_pka.pka_sram_rdata().read().bits();
-    }
-    info!("Verification of B: {:#X} = {:?}", verif_b, verif_b);
-    
-    cc_pka.pka_sram_raddr().write(|w| unsafe { w.bits(cc_pka.memory_map(6).read().bits()) });
-    let mut verif_r6 = [0u32; OPERAND_SIZE_BITS/8/4];
-    for i in 0..OPERAND_SIZE_BITS/8/4 {
-        verif_r6[i] = cc_pka.pka_sram_rdata().read().bits();
-    }
-    info!("Verification of R6: {:#X} = {:?}", verif_r6, verif_r6);
+    read_word_array(&cc_pka, 0);
+    read_word_array(&cc_pka, 1);
+    read_word_array(&cc_pka, 4);
+    read_word_array(&cc_pka, 5);
+    read_word_array(&cc_pka, 6);
 
-    // Execute the operation you want
-    //  5 << 12 bitwise left shift operation. Means shift the binary representation of 5 12 positions to the left
-    //  0101 --> 0101 0000 0000 0000
-    cc_pka.opcode().write(|w| unsafe {
-        w.bits(
-            (6 << REG_R_POS as u32)       // Result register (R6)
-                | (5 << REG_B_POS as u32) // Operand B register (R5)
-                | (4 << REG_A_POS as u32) // Operand A register (R4)
-                | (1 << LEN_POS as u32) 
-                | ((Opcode::ModMul as u32) << OPCODE_POS as u32)
-        )
-    });
+    // Execute the operation
+    // Calculate y = sqrt(x³ + ax + b mod p)
+    // 1. Calculate x³ mod p
+    info!("Calculate x^3");
+    execute_operation(&cc_pka, cc_pka::opcode::Opcode::ModExp, 5, 4, 5, 1);
+    read_word_array(&cc_pka, 5);
+    // 2. Calculate ax mod p
+    info!("Calculate ax");
+    execute_operation(&cc_pka, cc_pka::opcode::Opcode::ModMul, 4, 4, 2, 1);
+    read_word_array(&cc_pka, 4);  
+    // 3. Add terms and b
+    info!("Calculate x^3 + ax + b");
+    execute_operation(&cc_pka, cc_pka::opcode::Opcode::ModAddInc, 5, 5, 4, 1);
+    execute_operation(&cc_pka, cc_pka::opcode::Opcode::ModAddInc, 6, 5, 3, 1);
+    // 4. Calculate sqrt
+    // info!("Calculate sqrt");
+    // calculate_sqrt(&cc_pka);
 
-    // Wait for the operation to complete
-    while cc_pka.pka_done().read().bits() == 0 {}
     // Read status
     let status_bits = cc_pka.pka_status().read().bits();
     // info!("PKA status: {:#021b}", status_bits);
     // info!("A (ALU_MSB_4BITS):    {:04b}", (status_bits >> 0) & 0xF); // 0xF is 1111, so the mask keeps the 4 bits
     // info!("B (ALU_LSB_4BITS):    {:04b}", (status_bits >> 4) & 0xF);
-    info!("C (ALU_SIGN_OUT):     {:01b}", (status_bits >> 8) & 0x1);
-    info!("D (ALU_CARRY):        {:01b}", (status_bits >> 9) & 0x1);
-    info!("E (ALU_CARRY_MOD):    {:01b}", (status_bits >> 10) & 0x1);
+    // info!("C (ALU_SIGN_OUT):     {:01b}", (status_bits >> 8) & 0x1);
+    // info!("D (ALU_CARRY):        {:01b}", (status_bits >> 9) & 0x1);
+    // info!("E (ALU_CARRY_MOD):    {:01b}", (status_bits >> 10) & 0x1);
     // info!("F (ALU_SUB_IS_ZERO):  {:01b}", (status_bits >> 11) & 0x1);
     // info!("G (ALU_OUT_ZERO):     {:01b}", (status_bits >> 12) & 0x1);
-    info!("H (ALU_MODOVRFLW):    {:01b}", (status_bits >> 13) & 0x1);
+    // info!("H (ALU_MODOVRFLW):    {:01b}", (status_bits >> 13) & 0x1);
     // info!("I (DIV_BY_ZERO):      {:01b}", (status_bits >> 14) & 0x1);
     // info!("J (MODINV_OF_ZERO):   {:01b}", (status_bits >> 15) & 0x1);
     // info!("K (OPCODE):           {:05b}", (status_bits >> 16) & 0xFFFF);
 
-    // //  Perform an extra reduction
-    // cc_pka.opcode().write(|w| unsafe {
-    //     w.bits(
-    //         (6 << REG_R_POS as u32)        // Result register (R6)
-    //             | (5 << REG_B_POS as u32) // Operand B register (R5)
-    //             | (4 << REG_A_POS as u32) // Operand A register (R4)
-    //             | (1 << LEN_POS as u32) 
-    //             | ((Opcode::ModMul as u32) << OPCODE_POS as u32)
-    //     )
-    // });
-
-    // // Wait for the operation to complete
-    // while cc_pka.pka_done().read().bits() == 0 {}
-
     cc_pka.pka_sram_wclear();
-    // Read and log the result
-    let mut result = [0u32; OPERAND_SIZE_BITS/8/4 + 2];
-    cc_pka.pka_sram_raddr().write(|w| unsafe { w.bits(cc_pka.memory_map(6).read().bits()) });
-    // let result = cc_pka.pka_sram_rdata().read().bits();
-    for i in 0..result.len() {
-        result[i] = cc_pka.pka_sram_rdata().read().bits(); 
-    } 
-
-    info!("Result: {:#X}", result);
-    info!("Result: {:?}", result);
+    read_word_array(&cc_pka, 6);
 
     // exit via semihosting call
     debug::exit(EXIT_SUCCESS);
@@ -285,50 +214,187 @@ fn main() -> ! {
 }
 
 
-/// Struct representing the PKA_STATUS register
-#[derive(Debug)]
-struct PkaStatus {
-    bits: u32,
+fn configure_memory_map(cc_pka: &pac::CcPka) {
+    cc_pka.pka_l(1).write(|w| unsafe { w.bits(OPERAND_SIZE_BITS as u32) });
+    // Map virtual registers
+    // R0: modulus (N)
+    // R1: Np
+    // R2: a parameter
+    // R3: b parameter
+    // R4: operand A
+    // R5: operand B
+    // R6: result
+    // T0: register 30
+    // T1: register 31
+    for i in 0..8 {
+        cc_pka.memory_map(i).write(|w| unsafe { 
+            w.bits(i as u32 * VIRTUAL_MEMORY_OFFSET) 
+        });
+    }
+    cc_pka.memory_map(30).write(|w| unsafe { 
+            w.bits(7 as u32 * VIRTUAL_MEMORY_OFFSET) 
+        });
+    cc_pka.memory_map(31).write(|w| unsafe { 
+        w.bits(8 as u32 * VIRTUAL_MEMORY_OFFSET) 
+    });
 }
 
-impl PkaStatus {
-    /// Create a new instance from the raw register value
-    fn new(bits: u32) -> Self {
-        PkaStatus { bits }
-    }
+fn load_parameters(cc_pka: &pac::CcPka) {
+    load_word_array(cc_pka, 0, &N);
+    load_word_array(cc_pka, 1, &[0u32; 2 * OPERAND_SIZE_WORDS]);
+    load_word_array(cc_pka, 2, &A);
+    load_word_array(cc_pka, 3, &B);
+    
+    // Load operand X into R4
+    load_word_array(cc_pka, 4, &POINT_X);
+    
+    // Load operand EXP into R5
+    load_word_array(cc_pka, 5, &EXP);
 
-    /// Most significant 4 bits of the operand after a shift operation
-    fn alu_msb_4bits(&self) -> u8 {
-        (self.bits & 0b1111) as u8
-    }
+    // Initialize result R6 to zero
+    load_word_array(cc_pka, 6, &[0u32; 2 * OPERAND_SIZE_WORDS]);
+    load_word_array(cc_pka, 7, &[0u32; 2 * OPERAND_SIZE_WORDS]);
+    load_word_array(cc_pka, 8, &LONG_N);
+}
 
-    /// Least significant 4 bits of the operand after a shift operation
-    fn alu_lsb_4bits(&self) -> u8 {
-        ((self.bits >> 4) & 0b1111) as u8
+fn load_word_array(cc_pka: &pac::CcPka, reg: usize, data: &[u32]) {
+    cc_pka.pka_sram_waddr().write(|w| unsafe { 
+        w.bits(cc_pka.memory_map(reg).read().bits()) 
+    });
+    
+    // Load data in reverse order
+    for i in 0..data.len() {
+        let reverse_index = data.len() - 1 - i;
+        cc_pka.pka_sram_wdata().write(|w| unsafe { 
+            w.bits(data[reverse_index]) 
+        });
     }
-
-    /// MSB sign of the last operation
-    fn alu_sign_out(&self) -> bool {
-        (self.bits & (1 << 8)) != 0
-    }
-
-    /// Carry of the last ALU operation
-    fn alu_carry(&self) -> bool {
-        (self.bits & (1 << 9)) != 0
-    }
-
-    /// Modular overflow flag
-    fn alu_mod_overflow(&self) -> bool {
-        (self.bits & (1 << 13)) != 0
-    }
-
-    /// Division by zero flag
-    fn div_by_zero(&self) -> bool {
-        (self.bits & (1 << 14)) != 0
-    }
-
-    /// Modular inverse of zero flag
-    fn modinv_of_zero(&self) -> bool {
-        (self.bits & (1 << 15)) != 0
+    // Add padding zeros
+    for _ in 0..2 {
+        cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(0x00) });
     }
 }
+
+fn read_word_array(cc_pka: &pac::CcPka, reg: usize) {
+    cc_pka.pka_sram_raddr().write(|w| unsafe { 
+        w.bits(cc_pka.memory_map(reg).read().bits()) 
+    });
+    let mut verif = [0u32; OPERAND_SIZE_WORDS];
+    for i in 0..OPERAND_SIZE_WORDS {
+        verif[7-i] = cc_pka.pka_sram_rdata().read().bits();
+    }
+    info!("Verification of R{:?}: {:#X}", reg, verif);
+}
+
+fn read_word_array_long(cc_pka: &pac::CcPka, reg: usize) {
+    cc_pka.pka_sram_raddr().write(|w| unsafe { 
+        w.bits(cc_pka.memory_map(reg).read().bits()) 
+    });
+    let mut verif = [0u32; 2 * OPERAND_SIZE_WORDS];
+    for i in 0..2 * OPERAND_SIZE_WORDS {
+        verif[15-i] = cc_pka.pka_sram_rdata().read().bits();
+    }
+    info!("Verification of R{:?}: {:#X}", reg, verif);
+}
+
+fn execute_operation(cc_pka: &pac::CcPka, opcode: cc_pka::opcode::Opcode, 
+    result_reg: u8, operand_a_reg: u8, operand_b_reg: u8, operand_size_idx: u32) {
+    cc_pka.opcode().write(|w| unsafe {
+    w.bits(
+    ((result_reg as u32) << REG_R_POS)
+    | ((operand_b_reg as u32) << REG_B_POS)
+    | ((operand_a_reg as u32) << REG_A_POS)
+    | (operand_size_idx << LEN_POS)
+    | ((opcode as u32) << OPCODE_POS)
+    )
+    });
+
+    while cc_pka.pka_done().read().bits() == 0 {}
+
+    // // We check if the result is correctly reduced. Otherwise, we apply reduction
+    // cc_pka.pka_sram_raddr().write(|w| unsafe { 
+    //     w.bits(cc_pka.memory_map(result_reg as usize).read().bits()) 
+    // });
+    // let mut result = [0u32; OPERAND_SIZE_WORDS];
+    // for i in 0..OPERAND_SIZE_WORDS {
+    //     result[7-i] = cc_pka.pka_sram_rdata().read().bits();
+    // }
+    // // Compare with N
+    // if let Some(Ordering::Greater) = compare_arrays(&result, &N) {
+    //     // Result > N, perform modular reduction
+    //     execute_operation(cc_pka, cc_pka::opcode::Opcode::Reduction, 
+    //         result_reg, result_reg, 0);
+    // }
+}
+
+fn compare_arrays(a: &[u32; 8], b: &[u32]) -> Option<Ordering> {
+    for i in 0..8 {
+        match a[i].cmp(&b[i]) {
+            Ordering::Equal => continue,
+            other => return Some(other),
+        }
+    }
+    Some(Ordering::Equal)
+}
+
+
+// Koblitz, N A Course In Number Theory And Cryptography (2Ed , Gtm 114, Springer,1994)(600Dpi)(L)(T)(123S) Mtc.djvu
+//  page 30. Square roots mod p
+fn calculate_sqrt(cc_pka: &pac::CcPka) -> Result<(), &'static str> {
+    // Since p ≡ 3 (mod 4) for P-256, we can compute sqrt(a) = a^((p+1)/4) mod p
+    // Load (p+1)/4 exponent into R7
+    load_word_array(cc_pka, 7, &P_PLUS_1_DIV_4);
+    
+    // We need to perform modular exponentiation: R6 = R6^((p+1)/4) mod R0
+    execute_operation(
+        cc_pka, 
+        cc_pka::opcode::Opcode::ModExp,
+        6,  // Result register (R6)
+        6,  // Base register (R6, containing x³ + ax + b)
+        7,   // Exponent register (R7, containing (p+1)/4)
+        1
+    );
+    
+    // Read status to check for errors
+    let status_bits = cc_pka.pka_status().read().bits();
+    if ((status_bits >> 14) & 0x1) != 0 {
+        return Err("Division by zero error");
+    } else if ((status_bits >> 15) & 0x1) != 0 {
+        return Err("Modular inverse of zero error");
+    } else if ((status_bits >> 13) & 0x1) != 0 {
+        return Err("Modular overflow error");
+    }
+    // R6 contains one square root
+    // The other square root is p - R6
+    // R7 = -R6 mod p (which is the same as p - R6)
+    execute_operation(
+        cc_pka,
+        cc_pka::opcode::Opcode::ModSubDecNeg,
+        7,  // Result register (R7)
+        0,  // First operand (R0, containing p)
+        6,   // Second operand (R6, containing the first root)
+        1
+    );
+
+    Ok(())
+}
+
+fn read_y_coordinate(cc_pka: &pac::CcPka, positive_root: bool) -> [u32; 8] {
+    let mut result = [0u32; 8];
+    let reg = if positive_root { 6 } else { 7 };
+    
+    cc_pka.pka_sram_raddr().write(|w| unsafe {
+        w.bits(cc_pka.memory_map(reg).read().bits())
+    });
+    
+    // Read the result (in reverse order)
+    for i in 0..8 {
+        let word = cc_pka.pka_sram_rdata().read().bits();
+        result[7 - i] = word;
+    }
+    
+    result
+}
+
+
+ 
