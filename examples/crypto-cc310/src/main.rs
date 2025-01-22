@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use core::result;
+use core::{ptr, result};
 use core::cmp::Ordering;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug::{self, EXIT_SUCCESS};
@@ -29,7 +29,7 @@ const OPCODE_POS: u8 = 27;     // Operation code position (Bits 27:31)
 // for internal PKA calculations. 
 // These extra 64 bits must be initialized to zero. 
 const MAX_OPERAND_SIZE_BITS: usize = 62 * 4 * 8;
-const OPERAND_SIZE_BITS: usize = 8 * 4 * 8;
+const OPERAND_SIZE_BITS: usize = 2 * 4 * 8;
 const NP_OPERAND_SIZE_BITS: usize = 11 * 4 * 8;
 const OPERAND_SIZE_WORDS: usize = OPERAND_SIZE_BITS/8/4;
 const MAX_OPERAND_SIZE_WORDS: usize = MAX_OPERAND_SIZE_BITS/8/4;
@@ -40,50 +40,45 @@ const VIRTUAL_MEMORY_OFFSET: u32 = (VIRTUAL_MEMORY_SIZE_BITS as u32)/8/4;
 
 // Define example values for N and Np 
 // 1D examples
-// const N: [u32; 1] = [0x15];
-// const NP: [u32; 1] = [0xC30C30C3];
+const N: [u32; 2] = [0x80000000, 0x0000001d];
+const NP: [u32; 2] = [0x000000FF, 0xFFFFFFFF];
+const A: [u32; 2] = [0x80000000, 0x0000001c];
+const B: [u32; 2] = [0x00, 0x06];
+const P_PLUS_1_DIV_4: [u32; 1] = [0x00];
 
-// Example values for a and b
-// 1D examples
-// const A: [u32; 1] = [0x02];
-// const B: [u32; 1] = [0x07];
-
-
-// // P-256 curve parameters
-// const N: [u32; 8] = [
-//     0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000,
-//     0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
-// ];
-
-// const NP: [u32; 8] = [
-//     0xFFFFFFFF, 0x00000002, 0x00000000, 0x00000000, 
-//     0x00000001, 0x00000000, 0x00000000, 0x00000001
-// ];
-
-// const B: [u32; 8] = [
-//     0x27D2604B, 0x3BCE3C3E, 0xCC53B0F6, 0x651D06B0,
-//     0x769886BC, 0xB3EBBD55, 0xAA3A93E7, 0x5AC635D8
-// ];
-
-// const A: [u32; 8] = [
-//     0xFFFFFFFC, 0x00000001, 0x00000000, 0x00000000,
-//     0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
-// ];
-// const P_PLUS_1_DIV_4: [u32; 8] = [
-//     0x3FFFFFFF, 0x40000000, 0x40000000, 0x40000000,
-//     0x40000000, 0x3FFFFFFF, 0xFFFFFFFF, 0x3FFFFFFF
-// ];
-
-// const EXP: [u32; 8] = [
-//     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03
-// ];
+// //  Easier tests
 // // test vectors: http://point-at-infinity.org/ecc/nisttv
 // // k = 1
 // // x = 6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296
 // // y = 4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5
+// const N: [u32; 8] = [
+//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
+//     0x00000000, 0x00000000, 0x00000000, 0x00000015
+// ];
+
+// const NP: [u32; 8] = [
+//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
+//     0x00000008, 0x00000000, 0x00000000, 0x00000000
+// ];
+
+// const B: [u32; 8] = [
+//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
+//     0x00000000, 0x00000000, 0x00000000, 0x00000010
+// ];
+
+// const A: [u32; 8] = [
+//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
+//     0x00000000, 0x00000000, 0x00000000, 0x00000000
+// ];
+
+// const EXP: [u32; 8] = [
+//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
+//     0x00000000, 0x00000000, 0x00000000, 0x00000009
+// ];
+
 // static POINT_X: [u32; 8] = [
-//     0x6B17D1F2, 0xE12C4247, 0xF8BCE6E5, 0x63A440F2,
-//     0x77037D81, 0x2DEB33A0, 0xF4A13945, 0xD898C296,
+//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
+//     0x00000000, 0x00000000, 0x00000000, 0x00000005,
 // ];
 
 // static POINT_Y: [u32; 8] = [
@@ -91,49 +86,6 @@ const VIRTUAL_MEMORY_OFFSET: u32 = (VIRTUAL_MEMORY_SIZE_BITS as u32)/8/4;
 //     0x2BCE3357, 0x6B315ECE, 0xCBB64068, 0x37BF51F5
 // ];
 
-//  Easier tests
-const N: [u32; 8] = [
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x000000B
-];
-
-const NP: [u32; 8] = [
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000008, 0x00000000, 0x00000000, 0x00000000
-];
-
-const B: [u32; 8] = [
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000010
-];
-
-const A: [u32; 8] = [
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000
-];
-
-const P_PLUS_1_DIV_4: [u32; 8] = [
-    0x3FFFFFFF, 0x40000000, 0x40000000, 0x40000000,
-    0x40000000, 0x3FFFFFFF, 0xFFFFFFFF, 0x3FFFFFFF
-];
-
-const EXP: [u32; 8] = [
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000009
-];
-// test vectors: http://point-at-infinity.org/ecc/nisttv
-// k = 1
-// x = 6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296
-// y = 4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5
-static POINT_X: [u32; 8] = [
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000005,
-];
-
-static POINT_Y: [u32; 8] = [
-    0x4FE342E2, 0xFE1A7F9B, 0x8EE7EB4A, 0x7C0F9E16,
-    0x2BCE3357, 0x6B315ECE, 0xCBB64068, 0x37BF51F5
-];
 
 
 #[entry]
@@ -166,34 +118,28 @@ fn main() -> ! {
     clear_pka_registers(&cc_pka);
 
     // Load N
-    load_word_array(&cc_pka, 0, &N);
+    load_word_array(&cc_pka, 0, &N);   
     
     // Calculate Np
     // calculate_np(&cc_pka);
-    // load_word_array(&cc_pka, 1, &NP);
+    load_word_array(&cc_pka, 1, &NP);
 
     // Load Curve Parameters
     // load_word_array(&cc_pka, 2, &A);
     // load_word_array(&cc_pka, 3, &B);
 
     // Load data to compute operations
-    load_word_array(&cc_pka, 4, &POINT_X);
-    load_word_array(&cc_pka, 5, &EXP);
+    load_word_array(&cc_pka, 4, &A);
+    load_word_array(&cc_pka, 5, &B);
 
     // Verify data is well written
     cc_pka.pka_sram_wclear();
     let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
     read_word_array(&cc_pka, 0, &mut buffer);
-    // read_word_array(&cc_pka, 1, &mut buffer);
-    // read_word_array(&cc_pka, 2);
-    // read_word_array(&cc_pka, 3);
+    read_word_array(&cc_pka, 1, &mut buffer);
     read_word_array(&cc_pka, 4, &mut buffer);
     read_word_array(&cc_pka, 5, &mut buffer);
     // read_word_array(&cc_pka, 6, &mut buffer);
-
-    // calcluate y-coordinate
-    // let point_y = calculate_y_coordinate(&cc_pka, 7);
-    // info!("point_y: {:#X}", point_y);
 
     // example operation 4 * 5  = 6
     // clear_pka_register(&cc_pka, 6);
@@ -406,17 +352,18 @@ fn calculate_np(cc_pka: &pac::CcPka) -> () {
 
     // https://github.com/ARM-software/cryptocell-312-runtime/blob/update-cc110-bu-00000-r1p4/codesafe/src/crypto_api/pki/common/pka.c#L580
     // line 580
-    let a: usize = 64; // The size of the PKA engine word in bits.
+    let a: usize = 32; // The size of the PKA engine word in bits.
     let x: usize = 8; // The maximal count of extra bits in PKA operations.
 
     let total_bits = OPERAND_SIZE_BITS + a + x - 1;
+    // let total_bits = OPERAND_SIZE_BITS/4;
 
     // Create big number representing 2^(N+A+X-1)    
     let word_index = total_bits / 32;
     let bit_index = total_bits % 32;
     let mut numerator = [0u32; MAX_OPERAND_SIZE_WORDS];
     numerator[MAX_OPERAND_SIZE_WORDS - 1 - word_index] = 1 << bit_index;
-    // info!("numerator: {:#X}", numerator);
+    info!("numerator: {:#X}", numerator);
 
     // Load data in reverse order into a temp register
     load_word_array(&cc_pka, 8, &numerator);
