@@ -85,7 +85,7 @@ async fn main(spawner: Spawner) {
     //     mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     // }
     let start = Instant::now();
-    for iteration in 0..50 {
+    for iteration in 0..1 {
         info!("iteration {}", iteration);
         // info!("Prepare message_1");
         led_pin_p0_26.set_high();

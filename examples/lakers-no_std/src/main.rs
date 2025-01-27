@@ -109,9 +109,7 @@ fn main() -> ! {
         );
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
-            cred_r.clone(),
+            cred_r,
         );
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &None).unwrap();
@@ -121,24 +119,29 @@ fn main() -> ! {
             .prepare_message_2(CredentialTransfer::ByReference, None, &None)
             .unwrap();
 
-        let (mut initiator, _c_r, id_cred_r, _ead_2) =
+        let (initiator, _c_r, id_cred_r, _ead_2) =
             initiator.parse_message_2(&message_2).unwrap();
-        let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
-        initiator
-            .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
-                cred_i.clone(),
-            )
-            .unwrap(); // exposing own identity only after validating cred_r
+        let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
+        // initiator
+        //     .set_identity(
+        //         I.try_into().expect("Wrong length of initiator private key"),
+        //         cred_i.clone(),
+        //     )
+        //     .unwrap(); // exposing own identity only after validating cred_r
         let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
 
-        let (mut initiator, message_3, i_prk_out) = initiator
-            .prepare_message_3(CredentialTransfer::ByReference, &None)
-            .unwrap();
+        let (initiator, message_3) = initiator
+            .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
 
         let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
-        let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-        let (mut responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+        let valid_cred_i =
+                            credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
+        let responder = responder.verify_message_3(valid_cred_i).unwrap();
+
+        let (mut responder, message_4, r_prk_out) = responder.prepare_message_4(CredentialTransfer::ByReference, &None).unwrap();
+
+        let (initiator, ead_4) = initiator.parse_message_4(&message_4).unwrap();
+        let (mut initiator, i_prk_out) = initiator.verify_message_4().unwrap();
 
         // check that prk_out is equal at initiator and responder side
         assert_eq!(i_prk_out, r_prk_out);

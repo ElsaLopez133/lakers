@@ -1,6 +1,7 @@
 use crate::{credential_check_or_fetch, EdhocInitiatorDone};
 use lakers_shared::{Crypto as CryptoTrait, *};
 use core::{clone::Clone, panic};
+use defmt::info;
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -402,30 +403,34 @@ pub fn i_prepare_message_3(
     // compute ciphertext_3
     let plaintext_3 = encode_plaintext_3(None, None, &ead_3)?;
     let mut message_3: BufferMessage3 = BufferMessage3::new();
+    info!("plaintext_3: {:?}", plaintext_3.content);
     // compute ciphertext_3a
     let plaintext_3a = id_cred_i;
     // Encode plaintext_3a as CBOR
     let pt_3a = plaintext_3a.as_encoded_value();
+    info!("pt_3a: {:?}", pt_3a);
     // println!("pt_3a: {:?}", pt_3a);
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
     ct_3a.fill_with_slice(pt_3a).unwrap();
     // println!("ct_3a: {:?}", ct_3a);
     let ciphertext_3a =
         encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
+    info!("ciphertext_3a: {:?}", ciphertext_3a.content);
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
     // println!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a);
+    info!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a.content);
     //compute regular message_3
     let regular_message_3 =
         encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3);
-
+    info!("regular_message_3: {:?}", regular_message_3.content);
     message_3
         .extend_from_slice(encoded_ciphertext_3a.as_slice())
         .unwrap();
     message_3
         .extend_from_slice(regular_message_3.as_slice())
         .unwrap();
-
+    info!("message_3: {:?}", message_3.content);
     // we use ead_3 so we compute it here
     // let th_4 = compute_th_4(crypto, &state.th_3, &id_cred_i.bytes.as_slice(), &ead_3, &cred_i.bytes.as_slice());
     Ok((
@@ -757,6 +762,7 @@ fn encode_plaintext_4(
 fn encode_ciphertext_3a(ciphertext: EdhocMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
     let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
     // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
+    info!("ciphertext.len: {:?}", ciphertext.len);
     ciphertext_3a.content[0] = CBOR_MAJOR_BYTE_STRING | (ciphertext.len as u8);
     ciphertext_3a.content[1..][..ciphertext.len].copy_from_slice(ciphertext.as_slice());
     ciphertext_3a.len = 1 + ciphertext.len;
@@ -1151,7 +1157,7 @@ fn encrypt_decrypt_ciphertext_3a(
     let mut th_3_context: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
     th_3_context[..th_3.len()].copy_from_slice(&th_3[..]);
 
-    // KEYSTREAM_2 = EDHOC-KDF( PRK_2e,   0, TH_2,      plaintext_length )
+    // KEYSTREAM_3 = EDHOC-KDF( PRK_3e2m,   0, TH_3,      plaintext_3a_length )
     let keystream_3 = edhoc_kdf(
         crypto,
         prk_3e2m,
