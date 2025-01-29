@@ -81,12 +81,14 @@ if __name__ == "__main__":
     # N_parts = [0x00000000, 0x00000000, 0x00000000, 0x00000000,
     #            0x00000000, 0x00000000, 0x00000000, 0x00000015]
     # Example of N prime of 64 bits: 9223372036854775837
-    N_parts = [0x80000000, 0x0000001d]
+    # N_parts = [0x80000000, 0x0000001d]
+    N_parts = [0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000,
+                0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF]
 
     # Count the significant bits used in the array
-    operand_size_bits = 64
+    operand_size_bits = 32 * 8
     # operand_size_bits = sum(len(hex(part).lstrip('0x')) * 4 for part in N_parts)
 
-    print("N_bits: ",operand_size_bits)  # Should give 8 bits
+    print("N_bits: ",operand_size_bits)
 
     NP_parts = calculate_np(operand_size_bits, N_parts)

@@ -29,7 +29,7 @@ const OPCODE_POS: u8 = 27;     // Operation code position (Bits 27:31)
 // for internal PKA calculations. 
 // These extra 64 bits must be initialized to zero. 
 const MAX_OPERAND_SIZE_BITS: usize = 62 * 4 * 8;
-const OPERAND_SIZE_BITS: usize = 2 * 4 * 8;
+const OPERAND_SIZE_BITS: usize = 8 * 4 * 8;
 const NP_OPERAND_SIZE_BITS: usize = 11 * 4 * 8;
 const OPERAND_SIZE_WORDS: usize = OPERAND_SIZE_BITS/8/4;
 const MAX_OPERAND_SIZE_WORDS: usize = MAX_OPERAND_SIZE_BITS/8/4;
@@ -38,53 +38,62 @@ const OPERAND_MEMORY_OFFSET: u32 = (OPERAND_SIZE_BITS as u32)/8/4 + 2;
 const VIRTUAL_MEMORY_SIZE_BITS: usize = 64 * 4 * 8; // 64-bit word size
 const VIRTUAL_MEMORY_OFFSET: u32 = (VIRTUAL_MEMORY_SIZE_BITS as u32)/8/4;
 
-// Define example values for N and Np 
-// 1D examples
-const N: [u32; 2] = [0x80000000, 0x0000001d];
-const NP: [u32; 2] = [0x000000FF, 0xFFFFFFFF];
-const A: [u32; 2] = [0x80000000, 0x0000001c];
-const B: [u32; 2] = [0x00, 0x06];
-const P_PLUS_1_DIV_4: [u32; 1] = [0x00];
+// // Define example values for N and Np
+// const N: [u32; 2] = [0x80000000, 0x0000001d];
+// const NP: [u32; 2] = [0x000000FF, 0xFFFFFFFF];
+// const A: [u32; 2] = [0x80000000, 0x0000001c];
+// const B: [u32; 2] = [0x00, 0x10];
+// const P_PLUS_1_DIV_4: [u32; 1] = [0x00];
 
-// //  Easier tests
-// // test vectors: http://point-at-infinity.org/ecc/nisttv
-// // k = 1
-// // x = 6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296
-// // y = 4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5
-// const N: [u32; 8] = [
-//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
-//     0x00000000, 0x00000000, 0x00000000, 0x00000015
-// ];
+// P-256 curve parameters
+const N: [u32; 8] = [
+    0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000,
+    0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+];
 
-// const NP: [u32; 8] = [
-//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
-//     0x00000008, 0x00000000, 0x00000000, 0x00000000
-// ];
+const NP: [u32; 8] = [
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000080, 0x0000007F
+];
 
-// const B: [u32; 8] = [
-//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
-//     0x00000000, 0x00000000, 0x00000000, 0x00000010
-// ];
+const B: [u32; 8] = [
+    0x27D2604B, 0x3BCE3C3E, 0xCC53B0F6, 0x651D06B0,
+    0x769886BC, 0xB3EBBD55, 0xAA3A93E7, 0x5AC635D8
+];
 
-// const A: [u32; 8] = [
-//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
-//     0x00000000, 0x00000000, 0x00000000, 0x00000000
-// ];
+const A: [u32; 8] = [
+    0xFFFFFFFC, 0x00000001, 0x00000000, 0x00000000,
+    0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+];
+const P_PLUS_1_DIV_4: [u32; 8] = [
+    0x3FFFFFFF, 0x40000000, 0x40000000, 0x40000000,
+    0x40000000, 0x3FFFFFFF, 0xFFFFFFFF, 0x3FFFFFFF
+];
+const EXP: [u32; 8] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03
+];
+// test vectors: http://point-at-infinity.org/ecc/nisttv
+// k = 1
+// x = 6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296
+// y = 4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5
+const TEST_A: [u32; 8] = [
+    0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000, 
+    0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE
+];
 
-// const EXP: [u32; 8] = [
-//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
-//     0x00000000, 0x00000000, 0x00000000, 0x00000009
-// ];
+const TEST_B: [u32; 8] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10
+];
 
-// static POINT_X: [u32; 8] = [
-//     0x00000000, 0x00000000, 0x00000000, 0x00000000,
-//     0x00000000, 0x00000000, 0x00000000, 0x00000005,
-// ];
+static POINT_X: [u32; 8] = [
+    0x6B17D1F2, 0xE12C4247, 0xF8BCE6E5, 0x63A440F2,
+    0x77037D81, 0x2DEB33A0, 0xF4A13945, 0xD898C296,
+];
 
-// static POINT_Y: [u32; 8] = [
-//     0x4FE342E2, 0xFE1A7F9B, 0x8EE7EB4A, 0x7C0F9E16,
-//     0x2BCE3357, 0x6B315ECE, 0xCBB64068, 0x37BF51F5
-// ];
+static POINT_Y: [u32; 8] = [
+    0x4FE342E2, 0xFE1A7F9B, 0x8EE7EB4A, 0x7C0F9E16,
+    0x2BCE3357, 0x6B315ECE, 0xCBB64068, 0x37BF51F5
+];
 
 
 
@@ -121,16 +130,17 @@ fn main() -> ! {
     load_word_array(&cc_pka, 0, &N);   
     
     // Calculate Np
+    // We calculate it using the python script and then direclty load it into the register
     // calculate_np(&cc_pka);
     load_word_array(&cc_pka, 1, &NP);
 
     // Load Curve Parameters
-    // load_word_array(&cc_pka, 2, &A);
-    // load_word_array(&cc_pka, 3, &B);
+    load_word_array(&cc_pka, 2, &A);
+    load_word_array(&cc_pka, 3, &B);
 
     // Load data to compute operations
-    load_word_array(&cc_pka, 4, &A);
-    load_word_array(&cc_pka, 5, &B);
+    load_word_array(&cc_pka, 4, &TEST_A);
+    load_word_array(&cc_pka, 5, &TEST_B);
 
     // Verify data is well written
     cc_pka.pka_sram_wclear();
@@ -147,6 +157,10 @@ fn main() -> ! {
     // cc_pka.pka_sram_wclear();
     let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
     read_word_array(&cc_pka, 6, &mut buffer);
+    
+    // // We enforce an additional reduction
+    // execute_operation(&cc_pka, cc_pka::opcode::Opcode::Reduction, 6, 6, 0, 0, 0, 1);
+
 
     // exit via semihosting call
     debug::exit(EXIT_SUCCESS);
@@ -307,33 +321,21 @@ fn execute_operation(cc_pka: &pac::CcPka, opcode: cc_pka::opcode::Opcode,
     // info!("J (MODINV_OF_ZERO):   {:01b}", (status_bits >> 15) & 0x1);
     // info!("K (OPCODE):           {:05b}", (status_bits >> 16) & 0xFFFF);
 
-    // // Np is greater than N normally
-    // if result_reg != 1 {
-    //     // We check if the result is correctly reduced. Otherwise, we apply reduction
-    //     cc_pka.pka_sram_raddr().write(|w| unsafe { 
-    //         w.bits(cc_pka.memory_map(result_reg as usize).read().bits()) 
-    //     });
-    //     let mut result = [0u32; OPERAND_SIZE_WORDS];
-    //     for i in 0..OPERAND_SIZE_WORDS {
-    //         result[OPERAND_SIZE_WORDS - 1 - i] = cc_pka.pka_sram_rdata().read().bits();
-    //     }
-    //     // Compare with N
-    //     if let Some(Ordering::Greater) = compare_arrays(&result, &N) {
-    //         // Result > N, perform modular reduction
-    //         execute_operation(cc_pka, cc_pka::opcode::Opcode::Reduction, 
-    //             result_reg, result_reg, 0, 0);
-    //     }
-    // }
-}
+    // We enforce an additional reduction
+    cc_pka.opcode().write(|w| unsafe {
+        w.bits(
+        ((result_reg as u32) << REG_R_POS)
+        | ((0 as u32) << REG_B_POS)
+        | ((0 as u32) << REG_B_CTRL_POS)
+        | ((result_reg as u32) << REG_A_POS)
+        | ((0 as u32) << REG_A_CTRL_POS)
+        | (1 << LEN_POS)
+        | ((cc_pka::opcode::Opcode::Reduction as u32) << OPCODE_POS)
+        )
+        });
+    
+    while cc_pka.pka_done().read().bits() == 0 {}
 
-fn compare_arrays(a: &[u32], b: &[u32]) -> Option<Ordering> {
-    for i in 0..MAX_OPERAND_SIZE_WORDS {
-        match a[i].cmp(&b[i]) {
-            Ordering::Equal => continue,
-            other => return Some(other),
-        }
-    }
-    Some(Ordering::Equal)
 }
 
 fn calculate_np(cc_pka: &pac::CcPka) -> () {
@@ -642,7 +644,8 @@ fn calculate_y_coordinate(cc_pka: &pac::CcPka, reg: usize) -> Result<[u32; OPERA
         1, 
         0
     );
-    // read_word_array(&cc_pka, 5);
+    let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
+    read_word_array(&cc_pka, 5, &mut buffer);
 
     // 2. Calculate ax mod p
     execute_operation(
@@ -655,7 +658,8 @@ fn calculate_y_coordinate(cc_pka: &pac::CcPka, reg: usize) -> Result<[u32; OPERA
         0,
         0
     );
-    // read_word_array(&cc_pka, 4); 
+    let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
+    read_word_array(&cc_pka, 4, &mut buffer);
 
     // 3. Add terms and b
     execute_operation(
@@ -678,6 +682,9 @@ fn calculate_y_coordinate(cc_pka: &pac::CcPka, reg: usize) -> Result<[u32; OPERA
         0,
         0
     );
+    
+    let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
+    read_word_array(&cc_pka, 6, &mut buffer);
     
     // 4. Calculate sqrt
     calculate_sqrt(&cc_pka, reg)
