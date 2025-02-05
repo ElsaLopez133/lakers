@@ -8,6 +8,7 @@ use cortex_m_semihosting::debug::{self, EXIT_SUCCESS};
 use defmt::info;
 use defmt_rtt as _;
 use panic_semihosting as _;
+use cortex_m::asm;
 
 pub use nrf52840_pac as pac;
 use nrf52840_pac::{cc_pka::{self, opcode::Opcode, pka_sram_wclear}, ficr::info, rtc0::cc}; 
@@ -30,10 +31,10 @@ const OPCODE_POS: u8 = 27;     // Operation code position (Bits 27:31)
 // These extra 64 bits must be initialized to zero. 
 const MAX_OPERAND_SIZE_BITS: usize = 62 * 4 * 8;
 const OPERAND_SIZE_BITS: usize = 8 * 4 * 8;
-const NP_OPERAND_SIZE_BITS: usize = 11 * 4 * 8;
+const DOUBLE_OPERAND_SIZE_BITS: usize = 16 * 4 * 8;
 const OPERAND_SIZE_WORDS: usize = OPERAND_SIZE_BITS/8/4;
 const MAX_OPERAND_SIZE_WORDS: usize = MAX_OPERAND_SIZE_BITS/8/4;
-const NP_OPERAND_SIZE_WORDS: usize = NP_OPERAND_SIZE_BITS/8/4;
+const DOUBLE_OPERAND_SIZE_WORDS: usize = DOUBLE_OPERAND_SIZE_BITS/8/4;
 const OPERAND_MEMORY_OFFSET: u32 = (OPERAND_SIZE_BITS as u32)/8/4 + 2;
 const VIRTUAL_MEMORY_SIZE_BITS: usize = 64 * 4 * 8; // 64-bit word size
 const VIRTUAL_MEMORY_OFFSET: u32 = (VIRTUAL_MEMORY_SIZE_BITS as u32)/8/4;
@@ -45,10 +46,10 @@ const VIRTUAL_MEMORY_OFFSET: u32 = (VIRTUAL_MEMORY_SIZE_BITS as u32)/8/4;
 // const B: [u32; 2] = [0x00, 0x10];
 // const P_PLUS_1_DIV_4: [u32; 1] = [0x00];
 
-// P-256 curve parameters
+// P-256 curve parameters. Little endian. The first values are the least significative
 const N: [u32; 8] = [
     0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000,
-    0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+    0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
 ];
 
 const NP: [u32; 8] = [
@@ -57,20 +58,23 @@ const NP: [u32; 8] = [
 ];
 
 const B: [u32; 8] = [
-    0x27D2604B, 0x3BCE3C3E, 0xCC53B0F6, 0x651D06B0,
-    0x769886BC, 0xB3EBBD55, 0xAA3A93E7, 0x5AC635D8
+    0x5ac635d8, 0xaa3a93e7, 0xb3ebbd55, 0x769886bc,
+    0x651d06b0, 0xcc53b0f6, 0x3bce3c3e, 0x27d2604b
 ];
 
 const A: [u32; 8] = [
-    0xFFFFFFFC, 0x00000001, 0x00000000, 0x00000000,
-    0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+    0xFFFFFFFF, 0x00000001, 0x00000000, 0x00000000,
+    0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFC,
 ];
 const P_PLUS_1_DIV_4: [u32; 8] = [
-    0x3FFFFFFF, 0x40000000, 0x40000000, 0x40000000,
-    0x40000000, 0x3FFFFFFF, 0xFFFFFFFF, 0x3FFFFFFF
+    0x3fffffff, 0xc0000000, 0x40000000, 0x00000000, 
+    0x00000000, 0x40000000, 0x00000000, 0x00000000
 ];
-const EXP: [u32; 8] = [
+const EXP_3: [u32; 8] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03
+];
+const EXP_2: [u32; 8] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02
 ];
 // test vectors: http://point-at-infinity.org/ecc/nisttv
 // k = 1
@@ -82,7 +86,12 @@ const TEST_A: [u32; 8] = [
 ];
 
 const TEST_B: [u32; 8] = [
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A
+];
+
+const TEST_C: [u32; 8] = [
+    0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 
+    0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF
 ];
 
 static POINT_X: [u32; 8] = [
@@ -95,7 +104,30 @@ static POINT_Y: [u32; 8] = [
     0x2BCE3357, 0x6B315ECE, 0xCBB64068, 0x37BF51F5
 ];
 
+const POINT_X_3: [u32; 8] = [
+    0x3c609d59, 0x4a3eae9c, 0xb85f8894, 0x4be7a619, 
+    0x497801f4, 0x61809fcd, 0x60f29c8f, 0x83bbd509
+];
 
+const POINT_X_2: [u32; 8] = [
+    0x98f6b84d, 0x29bef2b2, 0x81819a5e, 0x0e3690d8, 
+    0x33b69949, 0x5d694dd1, 0x002ae56c, 0x426b3f8c
+];
+
+const A_TIMES_X: [u32; 8] = [
+    0xbeb88a25, 0x5c7b392a, 0x15c94b4f, 0xd5133d28, 
+    0x9af5877e, 0x763e651d, 0x221c542e, 0x7635b83c
+];
+
+const X_3_PLUS_A_TIMES_X: [u32; 8] = [
+    0xfb19277e, 0xa6b9e7c6, 0xce28d3e4, 0x20fae341, 
+    0xe46d8972, 0xd7bf04ea, 0x830ef0bd, 0xf9f18d45
+];
+
+const X_3_PLUS_A_TIMES_X_PLUS_B: [u32; 8] = [
+    0x55df5d58, 0x50f47bad, 0x82149139, 0x979369fe, 
+    0x498a9022, 0xa412b5e0, 0xbedd2cfc, 0x21c3ed91
+];
 
 #[entry]
 fn main() -> ! {
@@ -112,13 +144,16 @@ fn main() -> ! {
     while cc_misc.clk_status().read().pka_clk().bit_is_clear() {
     // Wait for PKA clock to be ready
     }
+    // Reset PKA
+    cc_pka.pka_sw_reset();
+
     info!("PKA clock ready. PKA engine enabled");
     // max opernad size
     cc_pka.pka_l(0).write(|w| unsafe { w.bits(MAX_OPERAND_SIZE_BITS as u32) });
     // Operand size
     cc_pka.pka_l(1).write(|w| unsafe { w.bits(OPERAND_SIZE_BITS as u32) }); 
     // NP operand size 
-    cc_pka.pka_l(2).write(|w| unsafe { w.bits(NP_OPERAND_SIZE_BITS as u32) }); 
+    cc_pka.pka_l(2).write(|w| unsafe { w.bits(DOUBLE_OPERAND_SIZE_BITS as u32) }); 
 
     // Configure memory map
     configure_memory_map(&cc_pka);
@@ -131,7 +166,6 @@ fn main() -> ! {
     
     // Calculate Np
     // We calculate it using the python script and then direclty load it into the register
-    // calculate_np(&cc_pka);
     load_word_array(&cc_pka, 1, &NP);
 
     // Load Curve Parameters
@@ -144,23 +178,27 @@ fn main() -> ! {
 
     // Verify data is well written
     cc_pka.pka_sram_wclear();
-    let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
-    read_word_array(&cc_pka, 0, &mut buffer);
-    read_word_array(&cc_pka, 1, &mut buffer);
-    read_word_array(&cc_pka, 4, &mut buffer);
-    read_word_array(&cc_pka, 5, &mut buffer);
+    let mut buffer = [0u32; OPERAND_SIZE_WORDS];
+    // read_word_array(&cc_pka, 0, &mut buffer);
+    // read_word_array(&cc_pka, 1, &mut buffer);
+    // read_word_array(&cc_pka, 2, &mut buffer);
+    // read_word_array(&cc_pka, 3, &mut buffer);
+    // read_word_array(&cc_pka, 4, &mut buffer);
+    // read_word_array(&cc_pka, 5, &mut buffer);
     // read_word_array(&cc_pka, 6, &mut buffer);
+    // read_word_array(&cc_pka, 7, &mut buffer);
+    // read_word_array(&cc_pka, 8, &mut buffer);
 
-    // example operation 4 * 5  = 6
-    // clear_pka_register(&cc_pka, 6);
+    // example operation
+    cc_pka.pka_sram_wclear();
+    info!("operation 1");
+    // execute_operation(&cc_pka, cc_pka::opcode::Opcode::ModMul, 7, 0, 0, 0, 0, 1);
     execute_operation(&cc_pka, cc_pka::opcode::Opcode::ModMul, 6, 4, 0, 5, 0, 1);
-    // cc_pka.pka_sram_wclear();
-    let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
-    read_word_array(&cc_pka, 6, &mut buffer);
     
-    // // We enforce an additional reduction
-    // execute_operation(&cc_pka, cc_pka::opcode::Opcode::Reduction, 6, 6, 0, 0, 0, 1);
-
+    while cc_pka.pka_done().read().bits() == 0 {}
+    
+    cc_pka.pka_sram_wclear();
+    read_word_array(&cc_pka, 6, &mut buffer);
 
     // exit via semihosting call
     debug::exit(EXIT_SUCCESS);
@@ -181,7 +219,7 @@ fn configure_memory_map(cc_pka: &pac::CcPka) {
     // R8: temporal
     // T0: register 30
     // T1: register 31
-    for i in 0..9 {
+    for i in 0..13 {
         cc_pka.memory_map(i).write(|w| unsafe { 
             w.bits(i as u32 * VIRTUAL_MEMORY_OFFSET) 
         });
@@ -207,18 +245,7 @@ fn clear_pka_register(cc_pka: &pac::CcPka, reg: usize) {
 }
 
 fn clear_pka_registers(cc_pka: &pac::CcPka) {
-    for i in 0..9 {
-        cc_pka.pka_sram_waddr().write(|w| unsafe { 
-            w.bits(cc_pka.memory_map(i).read().bits()) 
-        });
-        
-        for _ in 0..MAX_OPERAND_SIZE_WORDS + 2 {
-            cc_pka.pka_sram_wdata().write(|w| unsafe { 
-                w.bits(0x00) 
-            });
-        }
-    }
-    for i in 30..32 {
+    for i in 0..32 {
         cc_pka.pka_sram_waddr().write(|w| unsafe { 
             w.bits(cc_pka.memory_map(i).read().bits()) 
         });
@@ -244,7 +271,7 @@ fn load_word_array(cc_pka: &pac::CcPka, reg: usize, data: &[u32]) {
         });
     }
     // Add padding zeros
-    for _ in 0..2 {
+    for _ in 0..8 {
         cc_pka.pka_sram_wdata().write(|w| unsafe { w.bits(0x00) });
     }
 }
@@ -255,6 +282,7 @@ fn read_word_array(cc_pka: &pac::CcPka, reg: usize, buffer: &mut [u32]) {
     });
     for i in 0..buffer.len() {
         buffer[buffer.len() - 1 - i] = cc_pka.pka_sram_rdata().read().bits();
+        // buffer[i] = cc_pka.pka_sram_rdata().read().bits();
     }
     info!("Verification of R{:?}: {:#X}", reg, buffer);
 }
@@ -270,7 +298,7 @@ fn read_word_array_long(cc_pka: &pac::CcPka, reg: usize) {
     info!("Verification of R{:?}: {:#X}", reg, verif);
 }
 
-fn read_result_array(cc_pka: &pac::CcPka, reg: usize, array: &mut [u32]) -> [u32; OPERAND_SIZE_WORDS] {
+fn read_result_array(cc_pka: &pac::CcPka, reg: usize) -> [u32; OPERAND_SIZE_WORDS] {
     cc_pka.pka_sram_raddr().write(|w| unsafe { 
         w.bits(cc_pka.memory_map(reg).read().bits()) 
     });
@@ -296,18 +324,21 @@ fn execute_operation(cc_pka: &pac::CcPka, opcode: cc_pka::opcode::Opcode,
     w.bits(
     ((result_reg as u32) << REG_R_POS)
     | ((operand_b_reg as u32) << REG_B_POS)
-    | ((operand_b_ctrl as u32) << REG_B_CTRL_POS)
+    // | ((operand_b_ctrl as u32) << REG_B_CTRL_POS)
     | ((operand_a_reg as u32) << REG_A_POS)
-    | ((operand_a_ctrl as u32) << REG_A_CTRL_POS)
+    // | ((operand_a_ctrl as u32) << REG_A_CTRL_POS)
     | (operand_size_idx << LEN_POS)
     | ((opcode as u32) << OPCODE_POS)
     )
     });
 
+    // let opcode =  cc_pka.opcode().read().bits();
+    // info!("opcode: {:b}", opcode);
+
     while cc_pka.pka_done().read().bits() == 0 {}
 
-    // Status
-    let status_bits = cc_pka.pka_status().read().bits();
+    // // Status
+    // let status_bits = cc_pka.pka_status().read().bits();
     // info!("PKA status: {:#021b}", status_bits);
     // info!("A (ALU_MSB_4BITS):    {:04b}", (status_bits >> 0) & 0xF); // 0xF is 1111, so the mask keeps the 4 bits
     // info!("B (ALU_LSB_4BITS):    {:04b}", (status_bits >> 4) & 0xF);
@@ -335,6 +366,10 @@ fn execute_operation(cc_pka: &pac::CcPka, opcode: cc_pka::opcode::Opcode,
         });
     
     while cc_pka.pka_done().read().bits() == 0 {}
+
+    // Wait for the specified number of CPU cycles
+    asm::delay(10000000);
+    
 
 }
 
@@ -388,13 +423,7 @@ fn calculate_np(cc_pka: &pac::CcPka) -> () {
 
 
 // Guide to Elliptic Curve Cryptography: point addition
-fn point_addition_ecc(
-    cc_pka: &pac::CcPka,
-    p1_x: &[u32; OPERAND_SIZE_WORDS],
-    p1_y: &[u32; OPERAND_SIZE_WORDS],
-    p2_x: &[u32; OPERAND_SIZE_WORDS],
-    p2_y: &[u32; OPERAND_SIZE_WORDS]
-) -> Result<([u32; OPERAND_SIZE_WORDS], [u32; OPERAND_SIZE_WORDS]), &'static str> {
+fn point_addition_ecc(cc_pka: &pac::CcPka, p1_x: &[u32; OPERAND_SIZE_WORDS], p1_y: &[u32; OPERAND_SIZE_WORDS], p2_x: &[u32; OPERAND_SIZE_WORDS], p2_y: &[u32; OPERAND_SIZE_WORDS]) -> Result<([u32; OPERAND_SIZE_WORDS], [u32; OPERAND_SIZE_WORDS]), &'static str> {
     // Register allocation:
     // R4: x1
     // R5: y1
@@ -423,7 +452,7 @@ fn point_addition_ecc(
     );
     
     let mut temp = [0u32; OPERAND_SIZE_WORDS];
-    read_result_array(cc_pka, 8, &mut temp);
+    read_result_array(cc_pka, 8);
     if temp.iter().all(|&x| x == 0) {
         return Err("Points are equal - use point doubling instead");
     }
@@ -631,62 +660,93 @@ fn read_y_coordinate(cc_pka: &pac::CcPka, positive_root: bool) -> [u32; 8] {
     result
 }
 
-fn calculate_y_coordinate(cc_pka: &pac::CcPka, reg: usize) -> Result<[u32; OPERAND_SIZE_WORDS], &'static str> {
+fn calculate_y_coordinate(cc_pka: &pac::CcPka, reg: usize) -> [u32; OPERAND_SIZE_WORDS] {
     // Calculate y = sqrt(x³ + ax + b mod p)
+    clear_pka_register(cc_pka, 7);
+    clear_pka_register(cc_pka, 8);
+    clear_pka_register(cc_pka, 9);
+    clear_pka_register(cc_pka, 10);
+    clear_pka_register(cc_pka, 11);
+
     // 1. Calculate x³ mod p
+    info!("Calculate x^3");
     execute_operation(
         &cc_pka, 
         cc_pka::opcode::Opcode::ModExp, 
-        5, 
+        7, 
         4,
         0, 
-        3, 
-        1, 
-        0
+        6, 
+        0, 
+        1
     );
     let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
-    read_word_array(&cc_pka, 5, &mut buffer);
+    read_word_array(&cc_pka, 7, &mut buffer);
 
     // 2. Calculate ax mod p
+    info!("Calculate  ax mod N");
     execute_operation(
         &cc_pka, 
         cc_pka::opcode::Opcode::ModMul, 
-        4, 
+        8, 
         4, 
         0,
         2, 
         0,
-        0
+        1
     );
     let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
-    read_word_array(&cc_pka, 4, &mut buffer);
+    read_word_array(&cc_pka, 8, &mut buffer);
 
     // 3. Add terms and b
+    info!("Calculate x^3 + ax + b mod N");
     execute_operation(
         &cc_pka, 
         cc_pka::opcode::Opcode::ModAddInc, 
-        5, 
-        5, 
+        9, 
+        7, 
         0,
-        4, 
+        8, 
         0,
-        0
+        1
     );
     execute_operation(
         &cc_pka, 
         cc_pka::opcode::Opcode::ModAddInc, 
-        6, 
-        5, 
+        10, 
+        9, 
         0,
         3, 
         0,
-        0
+        1
     );
     
     let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
-    read_word_array(&cc_pka, 6, &mut buffer);
+    read_word_array(&cc_pka, 10, &mut buffer);
     
+    //  Calculate y^2
+    info!("Read y");
+    let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
+    read_word_array(&cc_pka, 5, &mut buffer);
+    
+    info!("Calculate y^2");
+    execute_operation(
+        &cc_pka, 
+        cc_pka::opcode::Opcode::ModMul, 
+        11, 
+        5, 
+        0,
+        5, 
+        0,
+        1
+    );
+    let mut buffer = [0u32; OPERAND_SIZE_WORDS + 3];
+    read_word_array(&cc_pka, 11, &mut buffer);
+
+
+    let result = read_result_array(cc_pka, 8);
+    result
     // 4. Calculate sqrt
-    calculate_sqrt(&cc_pka, reg)
+    // calculate_sqrt(&cc_pka, reg)
 }
  
