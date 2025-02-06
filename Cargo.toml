@@ -12,6 +12,7 @@ members = [
   "examples/lakers-nrf52840",
   "lakers-c",
   "lakers-python",
+  "examples/lakers-nrf52840-like",
 ]
 
 # reduced "default-members", should include only packages that can be built and
