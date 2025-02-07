@@ -75,7 +75,7 @@ fn main() -> ! {
                 info!("Response not received");
             }
             info!("-------End iteration {}--------\n", counter);
-            timer.delay(8_000_000);
+            timer.delay(4_000_000);
         }
     }
         

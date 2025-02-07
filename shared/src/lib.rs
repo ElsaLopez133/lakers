@@ -9,6 +9,7 @@
 //! [lakers-ead]: https://docs.rs/lakers-ead/latest/lakers_ead/
 // NOTE: if there is no python-bindings feature, which will be the case for embedded builds,
 //       then the crate will be no_std
+
 #![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
@@ -49,7 +50,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = SCALE_FACTOR * (128 + 64);
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 5u8; // stat-stat is the only supported method
+pub const EDHOC_METHOD: u8 = 3u8; // stat-stat is the only supported method
 pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
