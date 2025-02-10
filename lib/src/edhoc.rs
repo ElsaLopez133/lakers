@@ -345,6 +345,7 @@ pub fn r_verify_message_3(
     };
     // println!("mac_3: {:?}", state.mac_3);
     // println!("expected_mac_3: {:?}", expected_mac_3);
+    // println!("valid_cred_i: {:?}", valid_cred_i);
     //let mac_3_ref: Option<&[u8; 8]> = expected_mac_3.as_ref().map(|m| m);
 
     // verify mac_3
@@ -1474,7 +1475,7 @@ mod tests {
     fn test_encode_message_1() {
         let suites_i_tv = EdhocBuffer::from_hex(SUITES_I_TV);
         let message_1 =
-            encode_message_1(METHOD_TV, &suites_i_tv, &G_X_TV, C_I_TV, &None::<EADItem>).unwrap();
+            encode_message_1(METHOD_TV, &suites_i_tv, &G_X_TV, C_I_TV,None, &None::<EADItem>).unwrap();
 
         assert_eq!(message_1.len, 39);
         assert_eq!(message_1, BufferMessage1::from_hex(MESSAGE_1_TV));
@@ -1727,10 +1728,10 @@ mod tests {
         let plaintext_2_tv = BufferPlaintext2::from_hex(PLAINTEXT_2_TV);
         let plaintext_2 = encode_plaintext_2(
             C_R_TV,
-            IdCred::from_full_value(&ID_CRED_R_TV[..])
+            Some(IdCred::from_full_value(&ID_CRED_R_TV[..])
                 .unwrap()
-                .as_encoded_value(),
-            &MAC_2_TV,
+                .as_encoded_value()),
+            &Some(MAC_2_TV),
             &None::<EADItem>,
         )
         .unwrap();
@@ -1741,11 +1742,11 @@ mod tests {
     #[test]
     fn test_parse_plaintext_2_invalid_traces() {
         let plaintext_2_tv = BufferPlaintext2::from_hex(PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV);
-        let ret = decode_plaintext_2(&plaintext_2_tv);
+        let ret = decode_plaintext_2(EDHOC_METHOD, &plaintext_2_tv);
         assert_eq!(ret.unwrap_err(), EDHOCError::ParsingError);
 
         let plaintext_2_tv = BufferPlaintext2::from_hex(PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV);
-        let ret = decode_plaintext_2(&plaintext_2_tv);
+        let ret = decode_plaintext_2(EDHOC_METHOD, &plaintext_2_tv);
         assert_eq!(ret.unwrap_err(), EDHOCError::ParsingError);
     }
 
@@ -1753,12 +1754,12 @@ mod tests {
     fn test_decode_plaintext_2() {
         let plaintext_2_tv = BufferPlaintext2::from_hex(PLAINTEXT_2_TV);
 
-        let plaintext_2 = decode_plaintext_2(&plaintext_2_tv);
+        let plaintext_2 = decode_plaintext_2(EDHOC_METHOD, &plaintext_2_tv);
         assert!(plaintext_2.is_ok());
         let (c_r, id_cred_r, mac_2, ead_2) = plaintext_2.unwrap();
         assert_eq!(c_r, C_R_TV);
         assert_eq!(id_cred_r.as_full_value(), ID_CRED_R_TV);
-        assert_eq!(mac_2, MAC_2_TV);
+        assert_eq!(Some(mac_2), MAC_2_TV);
         assert!(ead_2.is_none());
     }
 
@@ -1811,10 +1812,10 @@ mod tests {
     fn test_encode_plaintext_3() {
         let plaintext_3_tv = BufferPlaintext3::from_hex(PLAINTEXT_3_TV);
         let plaintext_3 = encode_plaintext_3(
-            IdCred::from_full_value(&ID_CRED_I_TV[..])
+            Some(IdCred::from_full_value(&ID_CRED_I_TV[..])
                 .unwrap()
-                .as_encoded_value(),
-            &MAC_3_TV,
+                .as_encoded_value()),
+            &Some(MAC_3_TV),
             &None::<EADItem>,
         )
         .unwrap();
@@ -1825,9 +1826,9 @@ mod tests {
     fn test_decode_plaintext_3() {
         let plaintext_3_tv = BufferPlaintext3::from_hex(PLAINTEXT_3_TV);
 
-        let (id_cred_i, mac_3, ead_3) = decode_plaintext_3(&plaintext_3_tv).unwrap();
+        let (id_cred_i, mac_3, ead_3) = decode_plaintext_3(EDHOC_METHOD, &plaintext_3_tv).unwrap();
 
-        assert_eq!(mac_3, MAC_3_TV);
+        assert_eq!(Some(mac_3), MAC_3_TV);
         assert_eq!(id_cred_i.as_full_value(), ID_CRED_I_TV);
         assert!(ead_3.is_none());
     }
@@ -1860,7 +1861,7 @@ mod tests {
             value: Some(EdhocMessageBuffer::from_hex(EAD_DUMMY_VALUE_TV)),
         };
 
-        let res = encode_message_1(method_tv, &suites_i_tv, &G_X_TV, c_i_tv, &Some(ead_item));
+        let res = encode_message_1(method_tv, &suites_i_tv, &G_X_TV, c_i_tv, None, &Some(ead_item));
         assert!(res.is_ok());
         let message_1 = res.unwrap();
 
@@ -1883,7 +1884,7 @@ mod tests {
             value: Some(ead_value),
         };
 
-        let res = encode_message_1(method_tv, &suites_i_tv, &G_X_TV, c_i_tv, &Some(ead_item));
+        let res = encode_message_1(method_tv, &suites_i_tv, &G_X_TV, c_i_tv,None,  &Some(ead_item));
         assert_eq!(res.unwrap_err(), EDHOCError::EadTooLongError);
     }
 

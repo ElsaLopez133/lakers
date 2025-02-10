@@ -1,10 +1,10 @@
 import serial
 import serial.tools.list_ports
-import time
 import lakers
 import cbor2
 import pytest
 from lakers import CredentialTransfer, EdhocInitiator, EdhocResponder
+import time
 
 R = bytes.fromhex("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac")
 CRED_R = bytes.fromhex("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072")
@@ -23,62 +23,101 @@ class EdhocServerSerial:
         
         # Initialize EDHOC responder
         self.responder = EdhocResponder(R, CRED_R)
+        self.edhoc_connections = []
 
     def run(self):
-        print(f"Listening on {self.ser.port} at {self.ser.baudrate} baud...")
-        stage = 0
+        print(f"Server listening on {self.ser.port} at {self.ser.baudrate} baud...")
 
         while True:
             if self.ser.in_waiting:
-                message_raw = self.ser.readline()
-                print(f"Received message: {list(message_raw)}")
+                message_raw = []
+                # message_raw = self.ser.readline()
+                
+                start_time = time.time()
+                timeout = 0.5
 
-                try:
-                    if stage == 0:
-                        # Process message 1
-                        c_i, ead_1 = self.responder.process_message_1(message_raw)
-                        print(f"connection identifier {list(c_i)}")
-                        
-                        # Prepare message 2
-                        message_2 = self.responder.prepare_message_2(
-                            CredentialTransfer.ByReference, 
-                            None, 
-                            ead_1
-                        )
-                        
-                        # Send message 2
-                        print(f"Sending message 2: {list(message_2)}")
-                        self.ser.write(message_2)
-                        # self.ser.write(b'\r\n')
-                        self.ser.flush()
-                        stage = 1
+                while (time.time() - start_time) < timeout:
+                    if self.ser.in_waiting:
+                        message_raw.extend(self.ser.read(self.ser.in_waiting))
+                    # time.sleep(0.05)
 
-                    elif stage == 1:
-                        # Process message 3
-                        print("message_3")
-                        id_cred_i, ead_3 = self.responder.parse_message_3(message_raw)
-                        print(f"id_cred_i: {list(id_cred_i)}")
-                        
-                        # Verify message 3
-                        valid_cred_i = lakers.credential_check_or_fetch(id_cred_i, CRED_I)
-                        # print(f"valid_cred_i: {list(valid_cred_i)}")
-                        # print(f"cred_i: {list(CRED_I)}")
+                # If we received a message, process it
+                if message_raw:
+                    print(f"Received message: {list(message_raw)}")
+                    print(f"length: {len(message_raw)}")
 
-                        prk_out = self.responder.verify_message_3(valid_cred_i)
-                        
-                        # Derive OSCORE keys
-                        oscore_secret = self.responder.edhoc_exporter(0, [], 16)
-                        oscore_salt = self.responder.edhoc_exporter(1, [], 8)
-                        
-                        print("EDHOC Handshake Complete!")
-                        print(f"OSCORE Secret: {list(oscore_secret)}")
-                        print(f"OSCORE Salt: {list(oscore_salt)}")
-                        
-                        stage = 2
+                    if all(b == 0 for b in message_raw):
+                        print("Received an invalid message (all zeros). Ignoring...")
+                        continue  # Ignore all-zero messages
+                    try:
+                        if message_raw[0] == 0xf5:
+                            # Process message 1
+                            c_i, ead_1 = self.responder.process_message_1(message_raw[1:])
+                            print(f"connection identifier {list(c_i)}")
+                            
+                            # Prepare message 2
+                            c_r = [0xA] # ConnId.from_int_raw(10)
+                            message_2 = self.responder.prepare_message_2(
+                                CredentialTransfer.ByReference, 
+                                c_r, 
+                                ead_1
+                            )
+                            message_2_with_true = b"\xf5" + message_2
+                            
+                            # Send message 2
+                            print(f"Sending message 2: {list(message_2_with_true)}")
+                            print(f"len of message_2: {len(list(message_2_with_true))}")
+                            # Store the connection state
+                            self.edhoc_connections.append((c_r, self.responder))
 
-                except Exception as e:
-                    print(f"EDHOC Error: {e}")
-                    stage = 0
+                            self.ser.write(message_2_with_true)
+                            # self.ser.write(b'\r\n')
+                            self.ser.flush()
+                            # time.sleep(5)
+
+                        else:
+                            # Process message 3
+                            print("message_3")
+                            c_r_rcvd = [message_raw[0]] # ConnId.from_int_raw(message_raw[0])
+                            print(f"c_r_rcv: {c_r_rcvd}")
+                            id_cred_i, ead_3 = self.responder.parse_message_3(message_raw[1:])
+                            print(f"id_cred_i: {list(id_cred_i)}")
+
+                            # Find and remove the corresponding responder state
+                            self.responder = self.take_state(c_r_rcvd)
+                            
+                            # Verify message 3
+                            valid_cred_i = lakers.credential_check_or_fetch(id_cred_i, CRED_I)
+                            # print(f"valid_cred_i: {list(valid_cred_i)}")
+                            # print(f"cred_i: {list(CRED_I)}")
+
+                            print("Verify message_3")
+                            prk_out = self.responder.verify_message_3(valid_cred_i)
+                            print(f"prk_out: {list(prk_out)}")
+                            self.responder.completed_without_message_4()
+                            
+                            # Derive OSCORE keys
+                            oscore_secret = self.responder.edhoc_exporter(0, [], 16)
+                            oscore_salt = self.responder.edhoc_exporter(1, [], 8)
+
+                            print("EDHOC Handshake Complete!")
+                            print(f"OSCORE Secret: {list(oscore_secret)}")
+                            print(f"OSCORE Salt: {list(oscore_salt)}")
+                            
+                            break
+
+                    except Exception as e:
+                        print(f"EDHOC Error: {e}")
+        
+    def take_state(self, c_r_rcvd):
+        print(f"edhoc_connections; {self.edhoc_connections}")
+        for i, (c_r, self.responder) in enumerate(self.edhoc_connections):
+            if c_r == c_r_rcvd:
+                # Remove and return the responder
+                return self.edhoc_connections.pop(i)[1]
+        
+        raise ValueError("No stored state available for that Connection Identifier")
+
 
 if __name__ == "__main__":
     server = EdhocServerSerial()

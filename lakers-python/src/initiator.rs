@@ -28,6 +28,7 @@ impl PyEdhocInitiator {
                 g_x,
                 method: EDHOCMethod::StatStat.into(),
                 suites_i,
+                cred_i,
             },
             wait_m2: WaitM2::default(),
             processing_m2: ProcessingM2::default(),
