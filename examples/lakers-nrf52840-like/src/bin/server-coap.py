@@ -1,9 +1,11 @@
 import asyncio
 import logging
-from aiocoap import Context, Message
+import aiocoap
+# from aiocoap import *
+from aiocoap import Message, Context
 from aiocoap.resource import Site, Resource
 import lakers
-from lakers import EdhocResponder, Credential, ConnId, CredentialTransfer
+from lakers import EdhocResponder, CredentialTransfer
 
 # Credentials and identifiers matching the Rust implementation
 ID_CRED_I = bytes.fromhex("a104412b")
@@ -13,95 +15,92 @@ CRED_R = bytes.fromhex("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940C
 R = bytes.fromhex("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac")
 
 class EdhocResource(Resource):
+    # We inherit the features from Resource class
     def __init__(self):
         super().__init__()
-        
-        # Logging setup
-        logging.basicConfig(level=logging.INFO, 
-                            format='%(asctime)s - %(levelname)s: %(message)s')
-        self.logger = logging.getLogger(__name__)
-        
-        # Store EDHOC connection states
         self.edhoc_connections = []
+        self.responder = EdhocResponder(R, CRED_R)
 
     async def render_post(self, request):
+        # We overwrite the render_post function of Resource class
         try:
             payload = request.payload
-            self.logger.info(f"Received message: {list(payload)}")
+            path = request.opt.uri_path
 
-            # Check if this is an initial EDHOC message
-            if payload[0] == 0xf5:
-                return await self.handle_message_1(payload[1:])
-            else:
-                return await self.handle_message_3(payload)
+            # print("Request Debug Info:")
+            # print(f"Payload: {list(payload)}")
+            # print(f"URI Path: {request.opt.uri_path}")
+            # print(f"URI Host: {request.opt.uri_host}")
 
+            # print(f"Full URI: {request.get_request_uri()}")  
+            # print(f"Path segments: {path}")
+            # print(f"All options: {request.opt}")
+            # print(f"Remote: {request.remote}")
+            # print(f"Code: {request.code}")
+            
+            if not path:
+                uri_path = request.get_request_uri().split('://')[-1].split('/', 1)[-1]
+                path = uri_path.split('/')
+                print(f"Extracted path: {path}")
+
+            if path == ['.well-known', 'edhoc'] or (isinstance(path, str) and path == '.well-known/edhoc'):
+                print(f"Received message: {list(payload)}")
+                
+                if payload[0] == 0xf5:
+                    # Process message 1 (EDHOC)
+                    message_1 = payload[1:]
+                    c_i, ead_1 = self.responder.process_message_1(message_1)
+                    
+                    c_r = [0xA]  # ConnId.from_int_raw(10)                    
+                    message_2 = self.responder.prepare_message_2(CredentialTransfer.ByReference, c_r, None)
+                    
+                    response = Message(
+                        code=aiocoap.CHANGED, 
+                        payload=message_2
+                    )
+                    
+                    self.edhoc_connections.append((c_r, self.responder))
+                    print(f"Message 2: {list(response.payload)}")
+                    
+                    return response
+                
+                elif payload[0] != 0xf5:
+                    # Process message 3
+                    c_r_rcvd = [payload[0]]
+                    self.responder = self.take_state(c_r_rcvd)
+                    message_3 = payload[1:]
+                    
+                    id_cred_i, ead_3 = self.responder.parse_message_3(message_3)
+                    valid_cred_i = lakers.credential_check_or_fetch(id_cred_i, CRED_I)
+                    prk_out = self.responder.verify_message_3(valid_cred_i)
+                    print(f"prk_out: {list(prk_out)}")
+
+                    self.responder.completed_without_message_4()
+                    
+                    # Derive OSCORE keys
+                    oscore_secret = self.responder.edhoc_exporter(0, [], 16)
+                    oscore_salt = self.responder.edhoc_exporter(1, [], 8)
+
+                    print("EDHOC Handshake Complete!")
+                    print(f"OSCORE Secret: {list(oscore_secret)}")
+                    print(f"OSCORE Salt: {list(oscore_salt)}")
+
+                    return Message(code=aiocoap.CONTENT, payload=b"")
+            
+            # Resource not found
+            return Message(code=aiocoap.NOT_FOUND, payload=b"Resource not found")
+        
         except Exception as e:
-            self.logger.error(f"EDHOC Processing Error: {e}")
-            return Message(payload=b'Error processing message')
-
-    async def handle_message_1(self, message_1_payload):
-        # Initialize Responder
-        responder = EdhocResponder(R, CRED_R)
-
-        # Process message 1
-        message_1 = lakers.EdhocMessageBuffer.new_from_slice(message_1_payload)
-        c_i, ead_1 = responder.process_message_1(message_1)
-        self.logger.info(f"connection identifier {list(c_i)}")
-        
-        # Prepare message 2
-        c_r = ConnId.from_int_raw(10) 
-        message_2 = self.responder.prepare_message_2(
-            CredentialTransfer.ByReference, 
-            c_r, 
-            ead_1
-        )
-        # Prepend CBOR true (0xF5) to message_2
-        message_2_with_true = b"\xf5" + message_2.as_slice()
-
-        # Store the connection state
-        self.edhoc_connections.append((c_r, responder))
-        
-        self.logger.info(f"Sending message 2: {list(message_2.as_slice())}")
-        return Message(payload=message_2_with_true.as_slice())
-
-    async def handle_message_3(self, payload):
-        # Extract connection identifier and message 3
-        c_r_rcvd = ConnId.from_int_raw(payload[0])
-        message_3 = lakers.EdhocMessageBuffer.new_from_slice(payload[1:])
-        
-        # Find and remove the corresponding responder state
-        responder = self.take_state(c_r_rcvd)
-        
-        # Process message 3
-        id_cred_i, ead_3 = self.responder.parse_message_3(message_3)
-        self.logger.info(f"id_cred_i: {list(id_cred_i)}")
-        
-        # Verify credentials
-        valid_cred_i = lakers.credential_check_or_fetch(id_cred_i, CRED_I)
-        
-        # Verify message 3
-        prk_out = self.responder.verify_message_3(valid_cred_i)
-        self.responder.completed_without_message_4()
-        self.logger.info(f"prk_out: {list(prk_out)}")
-        
-        # Derive OSCORE keys (similar to Rust implementation)
-        oscore_secret = responder.edhoc_exporter(0, [], 16)
-        oscore_salt = responder.edhoc_exporter(1, [], 8)
-        
-        self.logger.info("EDHOC exchange completed")
-        self.logger.info(f"OSCORE Secret: {oscore_secret.hex()}")
-        self.logger.info(f"OSCORE Salt: {oscore_salt.hex()}")
-        
-        return Message(payload=b'')
+            print(f"Error: {e}")
+            return Message(code=aiocoap.BAD_REQUEST, payload=str(e).encode())
 
     def take_state(self, c_r_rcvd):
-        """Find and remove the responder state for a given connection identifier"""
+        print(self.edhoc_connections)
         for i, (c_r, responder) in enumerate(self.edhoc_connections):
             if c_r == c_r_rcvd:
-                # Remove and return the responder
-                return self.edhoc_connections.pop(i)[1]
-        
-        raise ValueError("No stored state available for that Connection Identifier")
+                self.edhoc_connections.pop(i)
+                return responder
+        raise ValueError("No stored state available for that C_R")
 
 class EdhocServer:
     def __init__(self, host='127.0.0.1', port=5683):
@@ -109,27 +108,20 @@ class EdhocServer:
         self.port = port
 
     async def run(self):
-        # Create a site with the EDHOC resource
         site = Site()
         site.add_resource(['.well-known', 'edhoc'], EdhocResource())
-
-        # Create and run the server
+        
         server = await Context.create_server_context(site, bind=(self.host, self.port))
-        
         print(f"EDHOC CoAP Server listening on {self.host}:{self.port}")
-        
         try:
-            # Run indefinitely
-            await server.wait_closed()
+            await asyncio.sleep(3600)
         except KeyboardInterrupt:
+            print("Shutting down server...")
             await server.shutdown()
-
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    
     server = EdhocServer(host='127.0.0.1', port=5683)
-    
     asyncio.run(server.run())
 
 if __name__ == "__main__":
