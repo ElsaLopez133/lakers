@@ -32,7 +32,7 @@ class EdhocSerialToCoAPProxy:
             context = await aiocoap.Context.create_client_context()
             request = aiocoap.Message(code=aiocoap.Code.POST, uri=self.coap_server_uri, payload=payload)
             response = await context.request(request).response
-            self.logger.info(f"CoAP Response: {response.payload}")
+            self.logger.info(f"CoAP Response: {list(response.payload)}")
             
             # If response is not empty, send it back to serial
             if response.payload:
@@ -48,9 +48,7 @@ class EdhocSerialToCoAPProxy:
         self.logger.info("Starting Serial to CoAP Proxy")
         
         while True:
-            # Check for incoming serial messages
             if self.ser.in_waiting:
-                # Read all available bytes
                 message_raw = self.ser.read(self.ser.in_waiting)
                 self.logger.info(f"Received serial message: {list(message_raw)}")
                 
@@ -59,7 +57,7 @@ class EdhocSerialToCoAPProxy:
                 # Send to CoAP server
                 await self.send_coap_message(payload)
                             
-            # Small delay to prevent tight looping
+            # Small delay
             await asyncio.sleep(0.1)
 
 async def main():

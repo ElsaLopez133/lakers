@@ -53,7 +53,8 @@ class EdhocResource(Resource):
                     
                     c_r = [0xA]  # ConnId.from_int_raw(10)                    
                     message_2 = self.responder.prepare_message_2(CredentialTransfer.ByReference, c_r, None)
-                    
+                    message_2 = b"\xf5" + message_2 
+
                     response = Message(
                         code=aiocoap.CHANGED, 
                         payload=message_2
@@ -76,7 +77,15 @@ class EdhocResource(Resource):
                     print(f"prk_out: {list(prk_out)}")
 
                     self.responder.completed_without_message_4()
-                    
+
+                    # Send an empty message as ack
+                    # ack = b"0x00"
+                    # response = Message(
+                    #     code=aiocoap.CHANGED, 
+                    #     payload=ack
+                    # )
+                    # print(f"ack: {list(response.payload)}")   
+
                     # Derive OSCORE keys
                     oscore_secret = self.responder.edhoc_exporter(0, [], 16)
                     oscore_salt = self.responder.edhoc_exporter(1, [], 8)
@@ -85,7 +94,7 @@ class EdhocResource(Resource):
                     print(f"OSCORE Secret: {list(oscore_secret)}")
                     print(f"OSCORE Salt: {list(oscore_salt)}")
 
-                    return Message(code=aiocoap.CONTENT, payload=b"")
+                    return Message(code=aiocoap.CONTENT, payload=b"0x0")
             
             # Resource not found
             return Message(code=aiocoap.NOT_FOUND, payload=b"Resource not found")

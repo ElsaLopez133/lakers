@@ -14,6 +14,7 @@ use defmt_rtt as _;
 // Use a static buffer in RAM
 static mut TX_BUFFER: [u8; 64] = [0; 64];
 static mut RX_BUFFER_2: [u8; 46] = [0; 46];
+static mut RX_BUFFER_3: [u8; 1] = [0; 1];
 const MAX_MSG_SIZE: usize = 38; 
 
 pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
@@ -136,6 +137,23 @@ fn main() -> ! {
                     Err(_) => info!("Failed to send message_3"),
                 }
                 
+                // Wait for ack
+                info!("Waiting for ack");
+                RX_BUFFER_3.fill(0);
+                let mut received_bytes = 0;
+                while received_bytes < RX_BUFFER_3.len() {
+                    match uart.read(&mut RX_BUFFER_3[received_bytes..received_bytes+1]) {
+                        Ok(_) => {
+                            received_bytes += 1;
+                        }
+                        Err(_) => break,
+                    }
+                }
+                if received_bytes > 0 {
+                    info!("Received {} bytes", received_bytes);
+                    info!("Received ack: {:?}", &RX_BUFFER_3[..received_bytes]);
+                }
+
                 // Key derivation example
                 let oscore_secret = initiator.edhoc_exporter(0u8, &[], 16);
                 let oscore_salt = initiator.edhoc_exporter(1u8, &[], 8);

@@ -50,17 +50,20 @@ fn client_handshake() -> Result<(), EDHOCError> {
     if response.get_status() != &ResponseType::Changed {
         panic!("Message 1 response error: {:?}", response.get_status());
     }
-    // println!("response_vec = {:02x?}", response.message.payload);
+    println!("response_vec = {:02x?}", response.message.payload);
     println!("message_2 len = {}", response.message.payload.len());
 
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
     let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
-    
     initiator.set_identity(Some(I.try_into().unwrap()), cred_i);
-    println!("verify message_2");
     let initiator = initiator.verify_message_2(valid_cred_r)?;
-    // println!("cred_i: {:?}", cred_i.by_value().unwrap().bytes.content);
+
+    // compute SoK. We need to store g^r. this is in cred_r
+    ephemeral_public_key_resp = [u08; P256_ELEM_LEN];
+    ephemeral_public_key_resp.copy_from_slice(valid_cred_r.bytes);
+    //  What are the message w_I and hash h_I??
+    let sok = initiator.compute_sok(I.try_into(), ephemeral_public_key_resp, w_I, h_I);
 
     let mut msg_3 = Vec::from(c_r.as_cbor());
     let (mut initiator, message_3, prk_out) =
@@ -72,13 +75,13 @@ fn client_handshake() -> Result<(), EDHOCError> {
     // we don't care about the response to message_3 for now
 
     println!("EDHOC exchange successfully completed");
-    // println!("PRK_out: {:02x?}", prk_out);
+    println!("PRK_out: {:02x?}", prk_out);
 
     let mut oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     let mut oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    // println!("OSCORE secret: {:02x?}", oscore_secret);
-    // println!("OSCORE salt: {:02x?}", oscore_salt);
+    println!("OSCORE secret: {:02x?}", oscore_secret);
+    println!("OSCORE salt: {:02x?}", oscore_salt);
 
     // context of key update is a test vector from draft-ietf-lake-traces
     let prk_out_new = initiator.edhoc_key_update(&[
@@ -86,14 +89,14 @@ fn client_handshake() -> Result<(), EDHOCError> {
         0xea,
     ]);
 
-    // println!("PRK_out after key update: {:02x?}?", prk_out_new);
+    println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
     // compute OSCORE secret and salt after key update
     oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
     oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
 
-    // println!("OSCORE secret after key update: {:02x?}", oscore_secret);
-    // println!("OSCORE salt after key update: {:02x?}", oscore_salt);
+    println!("OSCORE secret after key update: {:02x?}", oscore_secret);
+    println!("OSCORE salt after key update: {:02x?}", oscore_salt);
 
     Ok(())
 }
