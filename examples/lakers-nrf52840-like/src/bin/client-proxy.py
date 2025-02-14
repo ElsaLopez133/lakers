@@ -2,12 +2,13 @@ import serial
 import asyncio
 import logging
 import aiocoap
+import time
 
 class EdhocSerialToCoAPProxy:
     def __init__(self, 
                  serial_port='/dev/ttyACM0', 
                  serial_baud=9600, 
-                 coap_server='coap://localhost:5683/.well-known/edhoc'):
+                 proxy_coap_server='coap://127.0.0.1:5684/.well-known/edhoc'):
         
         # Serial configuration
         self.ser = serial.Serial(
@@ -16,12 +17,16 @@ class EdhocSerialToCoAPProxy:
             timeout=1,
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE
+            stopbits=serial.STOPBITS_ONE                    
         )
         
         # CoAP server endpoint
-        self.coap_server_uri = coap_server
+        self.coap_server_uri = proxy_coap_server
         
+        self.current_state = "WAITING_FOR_MSG1"
+        self.buffer = bytearray()
+        self.message_counter = 0
+
         # Logging setup
         logging.basicConfig(level=logging.INFO, 
                             format='%(asctime)s - %(levelname)s: %(message)s')
@@ -34,7 +39,6 @@ class EdhocSerialToCoAPProxy:
             response = await context.request(request).response
             self.logger.info(f"CoAP Response: {list(response.payload)}")
             
-            # If response is not empty, send it back to serial
             if response.payload:
                 self.ser.write(response.payload)
                 self.ser.flush()
@@ -49,19 +53,38 @@ class EdhocSerialToCoAPProxy:
         
         while True:
             if self.ser.in_waiting:
-                message_raw = self.ser.read(self.ser.in_waiting)
-                self.logger.info(f"Received serial message: {list(message_raw)}")
+                self.buffer.clear() 
+                                
+                start_time = time.time()
+                timeout = 0.5
                 
-                payload = message_raw
+                while (time.time() - start_time) < timeout:
+                    if self.ser.in_waiting:
+                        chunk = self.ser.read(self.ser.in_waiting)
+                        self.buffer.extend(chunk)
+                    await asyncio.sleep(0.05)
                 
-                # Send to CoAP server
-                await self.send_coap_message(payload)
-                            
-            # Small delay
+                if len(self.buffer) > 0:
+                    self.logger.info(f"Collected message after timeout: {list(self.buffer)}")
+                    
+                    # Send to CoAP server
+                    await self.send_coap_message(bytes(self.buffer))
+                    self.message_counter += 1
+                    
+                    # Update state based on message type
+                    if len(self.buffer) > 0 and self.buffer[0] == 0xF5 and self.current_state == "WAITING_FOR_MSG1":
+                        self.current_state = "WAITING_FOR_MSG3"
+                    elif self.current_state == "WAITING_FOR_MSG3":
+                        self.current_state = "HANDSHAKE_COMPLETE"
+                    
+                    self.logger.info(f"Updated state: {self.current_state}")
+
+                    await asyncio.sleep(0.5)
+            
             await asyncio.sleep(0.1)
 
 async def main():
-    proxy = EdhocSerialToCoAPProxy()
+    proxy = EdhocSerialToCoAPProxy(proxy_coap_server='coap://127.0.0.1:5684/.well-known/edhoc')
     await proxy.process_serial_messages()
 
 if __name__ == "__main__":

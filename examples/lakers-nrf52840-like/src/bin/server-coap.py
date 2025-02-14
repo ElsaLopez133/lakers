@@ -48,6 +48,7 @@ class EdhocResource(Resource):
                 
                 if payload[0] == 0xf5:
                     # Process message 1 (EDHOC)
+                    print("----message_1-----")
                     message_1 = payload[1:]
                     c_i, ead_1 = self.responder.process_message_1(message_1)
                     
@@ -66,6 +67,7 @@ class EdhocResource(Resource):
                     return response
                 
                 elif payload[0] != 0xf5:
+                    print("----message_3-----")
                     # Process message 3
                     c_r_rcvd = [payload[0]]
                     self.responder = self.take_state(c_r_rcvd)
@@ -94,7 +96,7 @@ class EdhocResource(Resource):
                     print(f"OSCORE Secret: {list(oscore_secret)}")
                     print(f"OSCORE Salt: {list(oscore_salt)}")
 
-                    return Message(code=aiocoap.CONTENT, payload=b"0x0")
+                    return Message(code=aiocoap.CHANGED, payload=b"\x00")
             
             # Resource not found
             return Message(code=aiocoap.NOT_FOUND, payload=b"Resource not found")
@@ -104,7 +106,6 @@ class EdhocResource(Resource):
             return Message(code=aiocoap.BAD_REQUEST, payload=str(e).encode())
 
     def take_state(self, c_r_rcvd):
-        print(self.edhoc_connections)
         for i, (c_r, responder) in enumerate(self.edhoc_connections):
             if c_r == c_r_rcvd:
                 self.edhoc_connections.pop(i)
