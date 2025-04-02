@@ -7,6 +7,8 @@ use cortex_m::asm;
 use cortex_m_rt::entry;
 use stm32wba::stm32wba55;
 use {defmt_rtt as _, panic_probe as _};
+
+use lakers::*;
 // use defmt::info;
 
 #[entry]
@@ -14,9 +16,11 @@ unsafe fn main() -> ! {
     // Access peripherals via PAC
     let p = stm32wba55::Peripherals::take().unwrap();
 
+    let crypto = lakers_crypto_rustcrypto_stm::Crypto::new(p);
+
     // call lakers-crypto-rustcrypto-stm private init function
 
-    lakers_crypto_rustcrypto_stm_init(p);
+    //lakers_crypto_rustcrypto_stm_init(p);
 
     // call lakers prepare_ead_1
     // call lakers prepare_message_1
