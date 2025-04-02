@@ -40,6 +40,8 @@ embedded-alloc = "0.5.0"
 defmt = "0.3"
 defmt-rtt = "0.4"
 
+# embedded-io = { version = "0.6.1", default-features = false }
+
 stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55", "defmt"] }
 
 # lakers
