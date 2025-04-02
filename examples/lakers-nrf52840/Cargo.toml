@@ -10,11 +10,16 @@ categories.workspace = true
 [dependencies]
 
 # embassy deps
-embassy-executor = { version = "0.6.1", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"] }
-embassy-time = { version = "0.3.2", features = ["defmt", "defmt-timestamp-uptime"] }
-embassy-nrf = { version = "0.2.0", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
-nrf52840-hal = "0.16.0"  # Use the latest version available
-embedded-hal = "0.2.7"  # or whichever version you're using
+# embassy-executor = { version = "0.6.1", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"] }
+# embassy-nrf = { version = "0.2.0", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
+
+# embassy deps
+embassy-executor = { git =  "https://github.com/embassy-rs/embassy.git", branch = "main", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-time", branch = "main", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+embassy-nrf = { git =  "https://github.com/embassy-rs/embassy.git", branch = "main", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
+
+nrf52840-hal = "0.16.0" 
+embedded-hal = "0.2.7"  
 
 # lakers
 lakers = { package = "lakers", path = "../../lib", default-features = false }

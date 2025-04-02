@@ -121,6 +121,25 @@ pub type BytesMac = [u8; MAC_LENGTH];
 pub type BytesEncodedVoucher = [u8; ENCODED_VOUCHER_LEN];
 pub type EADMessageBuffer = EdhocMessageBuffer; // TODO: make it of size MAX_EAD_SIZE_LEN
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BytesP256AuthPubKey {
+    pub pk1: [u8; 32], // X-coordinate of the P-256 public key
+    pub pk2: [u8; 32], // Proof of knowledge
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SokLogProof {
+    pub pi1: [u8; 32], // Commitment (R), likely the x-coordinate of an elliptic curve point
+    pub pi2: [u8; 32], // Response (z), a scalar
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SokLogEqProof {
+    pub pi1: [u8; 32], 
+    pub pi2: [u8; 32], 
+    pub pi3: [u8; 32], 
+}
+
 /// Value of C_R or C_I, as chosen by ourself or the peer.
 ///
 /// Semantically, this is a byte string of some length.

@@ -6,15 +6,15 @@ members = [
   "crypto",
   "crypto/lakers-crypto-psa",
   "crypto/lakers-crypto-rustcrypto",
+  "crypto/lakers-crypto-rustcrypto-stm",
   "crypto/lakers-crypto-cryptocell310-sys",
   "examples/coap",
   "examples/lakers-no_std",
   "examples/lakers-nrf52840",
+  "examples/lakers-stm32wba",
   "lakers-c",
   "lakers-python",
-  "examples/lakers-nrf52840-like", 
-  "examples/lakers-esp32c6", 
-  "examples/esp32c6-blink",
+  "examples/lakers-nrf52840-like"
 ]
 
 # reduced "default-members", should include only packages that can be built and
@@ -51,6 +51,7 @@ lakers-crypto = { path = "crypto/" }
 lakers-crypto-cryptocell310 = { path = "crypto/lakers-crypto-cryptocell310-sys/" }
 lakers-crypto-psa = { path = "crypto/lakers-crypto-psa/" }
 lakers-crypto-rustcrypto = { package = "lakers-crypto-rustcrypto", path = "crypto/lakers-crypto-rustcrypto/", version = "^0.6.2" }
+lakers-crypto-rustcrypto-stm = { path = "crypto/lakers-crypto-rustcrypto-stm/" }
 
 lakers = { package = "lakers", path = "lib/", version = "^0.6.2", default-features = false }
 
