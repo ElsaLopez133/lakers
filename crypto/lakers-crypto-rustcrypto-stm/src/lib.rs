@@ -1,5 +1,6 @@
 #![no_std]
 
+use lakers_shared::P256_ELEM_LEN;
 use lakers_shared::{
     BufferCiphertext3, BufferPlaintext3, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen,
     BytesMaxBuffer, BytesMaxInfoBuffer, BytesP256ElemLen, Crypto as CryptoTrait, EDHOCError,
@@ -24,6 +25,7 @@ type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
 /// [ccm], [p256]).
 ///
 /// Its size depends on the implementation of Rng passed in at creation.
+
 pub struct Crypto {
     p: peripherals,
     // hash: peripherals::HASH,
@@ -31,8 +33,8 @@ pub struct Crypto {
 }
 
 impl Crypto {
-    pub const fn new(p: peripherals ) -> Self {
-        Self { p}
+    pub const fn new(p: peripherals) -> Self {
+        Self { p }
     }
 
     pub fn lakers_crypto_rustcrypto_stm_init(&self) {
@@ -52,13 +54,13 @@ impl Crypto {
     }
 }
 
-// impl core::fmt::Debug for Crypto {
-//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
-//         f.debug_struct("lakers_crypto_rustcrypto::Crypto")
-//             .field("rng", &core::any::type_name::<Rng>())
-//             .finish()
-//     }
-// }
+impl core::fmt::Debug for Crypto {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.debug_struct("lakers_crypto_rustcrypto::Crypto")
+            // Exclude the rng field from Debug output
+            .finish()
+    }
+}
 
 impl CryptoTrait for Crypto {
    
@@ -210,13 +212,13 @@ impl CryptoTrait for Crypto {
     }
 
     fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen) {
-        let secret = p256::SecretKey::random(&mut self.rng);
+        // let secret = p256::SecretKey::random(&mut self.rng);
 
-        let public_key = secret.public_key().as_affine().x();
-        let private_key = secret.to_bytes();
+        // let public_key = secret.public_key().as_affine().x();
+        // let private_key = secret.to_bytes();
 
-        (private_key.into(), public_key.into())
-        // ([0u8; BytesP256ElemLen], [0u8; BytesP256ElemLen])
+        // (private_key.into(), public_key.into())
+        ([0u8; P256_ELEM_LEN], [0u8; P256_ELEM_LEN])
     }
 
     // fn build_hash_input(

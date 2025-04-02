@@ -16,7 +16,7 @@ unsafe fn main() -> ! {
     
     // call lakers-crypto-rustcrypto-stm private init function
 
-    lakers_crypto_rustcrypto_stm_init(p);
+    // lakers_crypto_rustcrypto_stm_init(p);
 
     // call lakers prepare_ead_1
     // call lakers prepare_message_1
