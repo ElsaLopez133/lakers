@@ -16,9 +16,12 @@ ccm = { version = "0.5.0", default-features = false }
 hkdf = { version = "0.12.3", default-features = false }
 p256 = { version = "0.13.2", default-features = false, features = [ "ecdh" ] }
 sha2 = { version = "0.10.8", default-features = false }
-# rand_core = { version = "0.6.4", default-features = false }
 
-stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55"] }
+stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55", "defmt"] }
 
-cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
-cortex-m-rt = { version = "0.7.3", optional = false }
+# cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
+# cortex-m-rt = { version = "0.7.3", optional = false }
+
+# defmt
+defmt = "0.3"
+defmt-rtt = "0.4"

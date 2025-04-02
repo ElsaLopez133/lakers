@@ -6,19 +6,24 @@ license.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+# [patch."https://github.com/embassy-rs/embassy.git"]
+# embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-time-driver", rev = "17851c7ed0b7ef0081e46b31bd30e6169fa3a611" }
+
 [dependencies]
 # getrandom = { version = "0.2", default-features = false, features = ["custom"] }
 
-# defmt
-defmt = "0.3"
-defmt-rtt = "0.4"
-
 # embassy dependencies
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-stm32", branch = "main", features = ["defmt", "stm32wba55cg", "time-driver-any", "memory-x", "exti"] }
+# NOTE: this version says it does not have feature stm32wba55cg even though it is in the cargo.toml
+# Could it be sth with the stm320metadata pac they are calling?
+
+# embassy-stm32 = { version = "0.1.0", features = ["defmt", "stm32wba55cg", "time-driver-any", "memory-x", "exti"] }
+# embassy-executor = { version = "0.6.3", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread"] }
+# embassy-time = { version = "0.3.2", features = ["defmt", "defmt-timestamp-uptime",  "tick-hz-32_768"] }
+
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-sync", branch = "main", features = ["defmt"] }
-# embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-executor", branch = "main", features = ["arch-cortex-m", "executor-thread", "defmt"] }
-embassy-executor = { version = "0.6.3", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread"] }
 embassy-time = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-time", branch = "main", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-executor", branch = "main", features = ["arch-cortex-m", "executor-thread", "defmt"] }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-stm32", branch = "main", features = ["defmt", "stm32wba55cg", "time-driver-any", "memory-x", "exti"] }
 
 # Cortex-M dependencies
 cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
@@ -31,7 +36,11 @@ static_cell = "2"
 # Optional allocator support
 embedded-alloc = "0.5.0"
 
-stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55"] }
+# defmt
+defmt = "0.3"
+defmt-rtt = "0.4"
+
+stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55", "defmt"] }
 
 # lakers
 lakers = { package = "lakers", path = "../../lib", default-features = false }
@@ -39,7 +48,7 @@ lakers-crypto = { path = "../../crypto", default-features = false }
 lakers-crypto-rustcrypto-stm = { path = "../../crypto/lakers-crypto-rustcrypto-stm", default-features = false }
 
 [features]
-default = [ "defmt", "crypto-rustcrypto-stm", "ead-none" ]
-defmt = []
-crypto-rustcrypto-stm = [ "lakers-crypto/rustcrypto-stm" ]
-ead-none = [ ]
+default = ["crypto-rustcrypto-stm", "ead-none", "defmt"]
+crypto-rustcrypto-stm = ["lakers-crypto/rustcrypto-stm"]
+ead-none = []
+defmt = [] 

@@ -6,13 +6,13 @@ use lakers_shared::{
     AES_CCM_TAG_LEN, MAX_BUFFER_LEN, BytesP256AuthPubKey,SokLogProof,SokLogEqProof,
 };
 
-use stm32wba::stm32wba55;
 use ccm::AeadInPlace;
 use ccm::KeyInit;
 use p256::elliptic_curve::point::AffineCoordinates;
 use p256::elliptic_curve::point::DecompressPoint;
 use sha2::Digest;
-use cortex_m::asm;
+// use cortex_m::asm;
+use stm32wba::stm32wba55;
 use stm32wba::stm32wba55::Peripherals as peripherals;
 use stm32wba::stm32wba55::PKA as PKA;
 use stm32wba::stm32wba55::HASH as HASH;
@@ -96,15 +96,15 @@ impl CryptoTrait for Crypto {
         // Start padding and digest computation
         self.p.HASH.hash_str().write(|w| w.dcal().set_bit());
 
-        // Wait for busy bit to clear
-        while self.p.HASH.hash_sr().read().busy().bit_is_set() {
-            asm::nop();
-        }
+        // // Wait for busy bit to clear
+        // while self.p.HASH.hash_sr().read().busy().bit_is_set() {
+        //     asm::nop();
+        // }
 
-        // Also check that DCAL bit has been cleared by hardware
-        while self.p.HASH.hash_sr().read().dcis().bit_is_clear() {
-            asm::nop();
-        }
+        // // Also check that DCAL bit has been cleared by hardware
+        // while self.p.HASH.hash_sr().read().dcis().bit_is_clear() {
+        //     asm::nop();
+        // }
 
         // // Read final hash
         // let hash_result = [

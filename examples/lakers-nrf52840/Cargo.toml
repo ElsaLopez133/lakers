@@ -10,8 +10,9 @@ categories.workspace = true
 [dependencies]
 
 # embassy deps
-# embassy-executor = { version = "0.6.1", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"] }
+# embassy-executor = { version = "0.6.3", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 # embassy-nrf = { version = "0.2.0", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
+# embassy-time = { version = "0.3.2", features = ["defmt", "defmt-timestamp-uptime",  "tick-hz-32_768"] }
 
 # embassy deps
 embassy-executor = { git =  "https://github.com/embassy-rs/embassy.git", branch = "main", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
