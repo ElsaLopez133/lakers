@@ -43,6 +43,7 @@ stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version
 lakers = { package = "lakers", path = "../../lib", default-features = false }
 lakers-crypto = { path = "../../crypto", default-features = false }
 lakers-crypto-rustcrypto-stm = { path = "../../crypto/lakers-crypto-rustcrypto-stm", default-features = false }
+lakers-shared.workspace = true
 
 [features]
 default = ["crypto-rustcrypto-stm", "ead-none", "defmt"]

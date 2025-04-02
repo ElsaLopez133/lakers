@@ -7,16 +7,22 @@ use stm32wba::stm32wba55;
 use {defmt_rtt as _, panic_probe as _};
 use cortex_m_rt::entry;
 use cortex_m::asm;
+use lakers::*;
+use lakers_shared::{Crypto as CryptoTrait, *};
+use lakers_crypto_rustcrypto_stm::Crypto;
 // use defmt::info;
 
 #[entry]
 unsafe fn main() -> ! {
     // Access peripherals via PAC
     let p = stm32wba55::Peripherals::take().unwrap();
+    let hash = p.HASH;
     
     // call lakers-crypto-rustcrypto-stm private init function
 
-    // lakers_crypto_rustcrypto_stm_init(p);
+    let crypto = Crypto::new(p, hash);
+
+    crypto.lakers_crypto_rustcrypto_stm_init();
 
     // call lakers prepare_ead_1
     // call lakers prepare_message_1

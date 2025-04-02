@@ -12,11 +12,13 @@ use ccm::KeyInit;
 use p256::elliptic_curve::point::AffineCoordinates;
 use p256::elliptic_curve::point::DecompressPoint;
 use sha2::Digest;
-// use cortex_m::asm;
+use cortex_m::asm;
 use stm32wba::stm32wba55;
 use stm32wba::stm32wba55::Peripherals as peripherals;
 use stm32wba::stm32wba55::PKA as PKA;
 use stm32wba::stm32wba55::HASH as HASH;
+use stm32wba::stm32wba55::RCC as RCC;
+
 
 
 type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
@@ -28,29 +30,62 @@ type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
 
 pub struct Crypto {
     p: peripherals,
-    // hash: peripherals::HASH,
+    hash: HASH,
     // pka: peripherals::PKA,
 }
 
 impl Crypto {
-    pub const fn new(p: peripherals) -> Self {
-        Self { p }
+    pub const fn new(p: peripherals, hash: HASH) -> Self {
+        Self { p, hash }
     }
 
     pub fn lakers_crypto_rustcrypto_stm_init(&self) {
 
+        let rcc = Self::stm32wba_init_rcc(self);
         let hash = Self::stm32wba_init_hash(self);
         let pka = Self::stm32wba_init_pka(self);
+        
     }
 
     fn stm32wba_init_pka(&self) -> &PKA {
+
         // TODO
         &self.p.PKA
     }
 
     fn stm32wba_init_hash(&self) -> &HASH {
+
+        // Enable HASH peripheral clock via RCC_AHB2ENR register
+        // HASH peripheral is located on AHB2
+        let clock = &self.p.RCC;
+        // let hash = &self.p.HASH;
+
+        clock.rcc_ahb2enr().modify(|_, w| w.hashen().set_bit());
+
+        // Reset HASH peripheral
+        self.hash.hash_cr().write(|w| w.init().set_bit());
+        while self.hash.hash_cr().read().init().bit_is_set() {
+            asm::nop();
+        }
+
+        // Configure for SHA-256 mode with byte-swapping
+        unsafe {
+            self.hash.hash_cr().write(|w| w
+                .algo().bits(0b11)      // SHA-256 algorithm
+                .mode().bit(false)      // Hash mode (not HMAC)
+                .datatype().bits(0b10)  // 8-bit data with byte swapping
+                .dmae().clear_bit()     // No DMA
+                .init().set_bit()     
+            );
+        }
+
         // TODO
-        &self.p.HASH
+        &self.hash
+    }
+
+    fn stm32wba_init_rcc(&self) -> &RCC {
+        // TODO
+        &self.p.RCC
     }
 }
 
@@ -65,60 +100,35 @@ impl core::fmt::Debug for Crypto {
 impl CryptoTrait for Crypto {
    
     fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
-        // Pack bytes into a word (big-endian for SHA-256)
-        let mut word = 0u32;
-        for (i, &byte) in message.iter().enumerate() {
-            // Shift existing bits and add new byte
-            word |= u32::from(byte) << (8 * (3 - (i % 4)));
-            
-            // Write word when we have 4 bytes or at the end of the message
-            if ((i + 1) % 4 == 0) || (i == message_len - 1) {
-                // If it's the last word and not a full 4-byte word, add padding
-                if i == message_len - 1 && message_len % 4 != 0 {
-                    word |= 0x80 >> (8 * (i % 4 + 1));
-                }
-                
-                // info!("Writing word: 0x{:08x}", word);
-                unsafe {
-                    self.p.HASH.hash_din().write(|w| w.bits(word));
-                    word = 0;
-                }
-            }
-        }
 
-
-        // If message length is not a multiple of 4, ensure proper padding
-        if message_len % 4 != 0 {
-            // Set NBLW to the number of valid bits in the last word
-            unsafe {
-                self.p.HASH.hash_str().write(|w| w.nblw().bits((message_len as u8 % 4) * 8));
+        // Set NBLW to 24 (original message length)
+        unsafe {
+            for chunk in message[..message_len].chunks_exact(4) {
+                let word = u32::from_le_bytes(chunk.try_into().unwrap());
+                self.hash.hash_din().write(|w| w.bits(word));
             }
+            self.hash.hash_str().write(|w| w.nblw().bits(message_len as u8));
         }
 
         // Start padding and digest computation
-        self.p.HASH.hash_str().write(|w| w.dcal().set_bit());
+        self.hash.hash_str().write(|w| w.dcal().set_bit());
 
-        // // Wait for busy bit to clear
-        // while self.p.HASH.hash_sr().read().busy().bit_is_set() {
-        //     asm::nop();
-        // }
+        // Wait for digest calculation to complete
+        while self.hash.hash_sr().read().busy().bit_is_set() {
+            asm::nop();
+        }
 
-        // // Also check that DCAL bit has been cleared by hardware
-        // while self.p.HASH.hash_sr().read().dcis().bit_is_clear() {
-        //     asm::nop();
-        // }
-
-        // // Read final hash
-        // let hash_result = [
-        //     hash.hash_hr0().read().bits(),
-        //     hash.hash_hr1().read().bits(),
-        //     hash.hash_hr2().read().bits(),
-        //     hash.hash_hr3().read().bits(),
-        //     hash.hash_hr4().read().bits(),
-        //     hash.hash_hr5().read().bits(),
-        //     hash.hash_hr6().read().bits(),
-        //     hash.hash_hr7().read().bits(),
-        // ];
+        // Read final hash
+        let hash_result = [
+            self.hash.hash_hr0().read().bits(),
+            self.hash.hash_hr1().read().bits(),
+            self.hash.hash_hr2().read().bits(),
+            self.hash.hash_hr3().read().bits(),
+            self.hash.hash_hr4().read().bits(),
+            self.hash.hash_hr5().read().bits(),
+            self.hash.hash_hr6().read().bits(),
+            self.hash.hash_hr7().read().bits(),
+        ];
 
         [0u8;32]
 

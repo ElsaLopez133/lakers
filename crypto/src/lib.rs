@@ -13,8 +13,8 @@ pub use lakers_shared::Crypto as CryptoTrait;
 pub type Crypto = lakers_crypto_rustcrypto_stm::Crypto;
 
 #[cfg(feature = "rustcrypto-stm")]
-pub fn default_crypto(p: stm32wba::stm32wba55::Peripherals) -> Crypto {
-    lakers_crypto_rustcrypto_stm::Crypto::new(p)
+pub fn default_crypto(p: stm32wba::stm32wba55::Peripherals, hash: stm32wba::stm32wba55::HASH ) -> Crypto {
+    lakers_crypto_rustcrypto_stm::Crypto::new(p, hash)
 }
 
 #[cfg(any(feature = "psa", feature = "psa-rust",))]
