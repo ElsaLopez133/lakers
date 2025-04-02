@@ -43,4 +43,4 @@ cryptocell310 = [ "lakers-crypto-cryptocell310" ]
 # lakers-crypto-rustcrypto on their own, and combine it with an entropy choice
 # of their avail.
 rustcrypto = [ "lakers-crypto-rustcrypto", "rand_core/getrandom" ]
-rustcrypto-stm = [ "lakers-crypto-rustcrypto-stm"]
+rustcrypto-stm = [ "lakers-crypto-rustcrypto-stm" ]

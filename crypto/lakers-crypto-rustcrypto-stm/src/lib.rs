@@ -2,8 +2,8 @@
 
 use lakers_shared::{
     BufferCiphertext3, BufferPlaintext3, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen,
-    BytesMaxBuffer, BytesMaxInfoBuffer, BytesP256ElemLen, Crypto as CryptoTrait, EDHOCError,
-    AES_CCM_TAG_LEN, MAX_BUFFER_LEN, BytesP256AuthPubKey,SokLogProof,SokLogEqProof,
+    BytesMaxBuffer, BytesMaxInfoBuffer, BytesP256AuthPubKey, BytesP256ElemLen,
+    Crypto as CryptoTrait, EDHOCError, SokLogEqProof, SokLogProof, AES_CCM_TAG_LEN, MAX_BUFFER_LEN,
 };
 
 use ccm::AeadInPlace;
@@ -14,9 +14,8 @@ use sha2::Digest;
 // use cortex_m::asm;
 use stm32wba::stm32wba55;
 use stm32wba::stm32wba55::Peripherals as peripherals;
-use stm32wba::stm32wba55::PKA as PKA;
-use stm32wba::stm32wba55::HASH as HASH;
-
+use stm32wba::stm32wba55::HASH;
+use stm32wba::stm32wba55::PKA;
 
 type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
 
@@ -31,12 +30,11 @@ pub struct Crypto {
 }
 
 impl Crypto {
-    pub const fn new(p: peripherals ) -> Self {
-        Self { p}
+    pub const fn new(p: peripherals) -> Self {
+        Self { p }
     }
 
     pub fn lakers_crypto_rustcrypto_stm_init(&self) {
-
         let hash = Self::stm32wba_init_hash(self);
         let pka = Self::stm32wba_init_pka(self);
     }
@@ -52,30 +50,27 @@ impl Crypto {
     }
 }
 
-// impl core::fmt::Debug for Crypto {
-//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
-//         f.debug_struct("lakers_crypto_rustcrypto::Crypto")
-//             .field("rng", &core::any::type_name::<Rng>())
-//             .finish()
-//     }
-// }
+impl core::fmt::Debug for Crypto {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.debug_struct("lakers_crypto_rustcrypto::Crypto").finish()
+    }
+}
 
 impl CryptoTrait for Crypto {
-   
     fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
         // Pack bytes into a word (big-endian for SHA-256)
         let mut word = 0u32;
         for (i, &byte) in message.iter().enumerate() {
             // Shift existing bits and add new byte
             word |= u32::from(byte) << (8 * (3 - (i % 4)));
-            
+
             // Write word when we have 4 bytes or at the end of the message
             if ((i + 1) % 4 == 0) || (i == message_len - 1) {
                 // If it's the last word and not a full 4-byte word, add padding
                 if i == message_len - 1 && message_len % 4 != 0 {
                     word |= 0x80 >> (8 * (i % 4 + 1));
                 }
-                
+
                 // info!("Writing word: 0x{:08x}", word);
                 unsafe {
                     self.p.HASH.hash_din().write(|w| w.bits(word));
@@ -84,12 +79,14 @@ impl CryptoTrait for Crypto {
             }
         }
 
-
         // If message length is not a multiple of 4, ensure proper padding
         if message_len % 4 != 0 {
             // Set NBLW to the number of valid bits in the last word
             unsafe {
-                self.p.HASH.hash_str().write(|w| w.nblw().bits((message_len as u8 % 4) * 8));
+                self.p
+                    .HASH
+                    .hash_str()
+                    .write(|w| w.nblw().bits((message_len as u8 % 4) * 8));
             }
         }
 
@@ -118,8 +115,7 @@ impl CryptoTrait for Crypto {
         //     hash.hash_hr7().read().bits(),
         // ];
 
-        [0u8;32]
-
+        [0u8; 32]
     }
 
     fn hkdf_expand(
@@ -210,13 +206,13 @@ impl CryptoTrait for Crypto {
     }
 
     fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen) {
-        let secret = p256::SecretKey::random(&mut self.rng);
+        //let secret = p256::SecretKey::random(&mut self.rng);
 
-        let public_key = secret.public_key().as_affine().x();
-        let private_key = secret.to_bytes();
+        //let public_key = secret.public_key().as_affine().x();
+        //let private_key = secret.to_bytes();
 
-        (private_key.into(), public_key.into())
-        // ([0u8; BytesP256ElemLen], [0u8; BytesP256ElemLen])
+        //private_key.into(), public_key.into())
+        ([0u8; 32], [0u8; 32])
     }
 
     // fn build_hash_input(
@@ -243,26 +239,26 @@ impl CryptoTrait for Crypto {
     //         bytes.into(),
     //         1.into(), // Y coordinate choice
     //     ).expect("Invalid public key point");
-    
+
     //     p256::ProjectivePoint::from(affine_point) // Convert to projective point
     // }
 
     // fn build_hash_input(inputs: &[&[u8]]) -> Vec<u8> {
     //     let total_len: usize = inputs.iter().map(|x| x.len()).sum();
     //     let mut hash_input = Vec::with_capacity(total_len);
-        
+
     //     for input in inputs {
     //         hash_input.extend_from_slice(input);
     //     }
-        
+
     //     hash_input
     // }
 
     // fn hash_to_scalar(&self, input: &[u8]) -> p256::NonZeroScalar {
     //     let hash = sha2::Sha256::digest(input);  // Hash the input
-    //     let mut scalar_bytes = [0u8; 32];  
+    //     let mut scalar_bytes = [0u8; 32];
     //     scalar_bytes.copy_from_slice(&hash[..32]);  // Copy into fixed-size array
-    
+
     //     // Convert to scalar modulo the curve order
     //     p256::NonZeroScalar::from_repr(scalar_bytes.into()).expect("Hash must be a valid scalar")
     // }
@@ -276,19 +272,19 @@ impl CryptoTrait for Crypto {
     // fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen) {
     //     // Generate random secret key
     //     let sk = p256::NonZeroScalar::random(&mut self.rng);
-        
+
     //     // pk1 = g^sk (g is the generator point in P256)
     //     let pk1_point = p256::ProjectivePoint::generator() * sk;
     //     let pk1_bytes = pk1_point.to_affine().x().to_bytes();
-        
+
     //     // Create proof of knowledge of sk
     //     let pk2 = self.sok_log(sk, &pk1_bytes, None);
-        
+
     //     // Create the authority public key structure
     //     let mut pk = BytesP256AuthPubKey::default();
     //     pk.pk1.copy_from_slice(&pk1_bytes);
     //     pk.pk2 = pk2;
-        
+
     //     // Return (pk, sk)
     //     (pk, sk.to_bytes().into())
     // }
@@ -308,11 +304,11 @@ impl CryptoTrait for Crypto {
     //     // Generate random value r_I, s_I
     //     let r = p256::NonZeroScalar::random(&mut self.rng);
     //     let s = p256::NonZeroScalar::random(&mut self.rng);
-        
+
     //     // Convert byte arrays to points
     //     let h_g_y_point = self.bytes_to_point(h_g_y);
     //     let h_g_r_point = self.bytes_to_point(h_g_r);
-        
+
     //     // Compute I_1 = g^r_I
     //     let I_1_point = g * r;
     //     let I_1 = I_1_point.to_affine().x().to_bytes();
@@ -329,29 +325,29 @@ impl CryptoTrait for Crypto {
 
     //     // Compute I_5 = (h_I g^y)^s
     //     let I_5 = h_g_y_point * s;
-        
+
     //     // Create the hash input (I_1, I_2, I_3, I_4, I_5, message)
     //     let inputs = [I_1, I_2, I_3, I_4, I_5, message.unwrap_or(&[])];
     //     let hash_input = build_hash_input(&inputs);
-        
+
     //     // Compute alpha = H(I_1, I_2, I_3, I_4, I_5, message)
     //     let alpha = self.hash_to_scalar(&hash_input);
-        
+
     //     // Compute beta = r - x*alpha
     //     let beta = r - (x * alpha);
 
     //     // Compute gamma = s - i*alpha
     //     let gamma = s - (i * alpha);
-        
+
     //     // Return the proof (alpha, beta, gamma)
     //     let mut proof = SokLogEqProof::default();
     //     proof.pi1.copy_from_slice(&alpha);
     //     proof.pi2.copy_from_slice(&beta.to_bytes());
     //     proof.pi3.copy_from_slice(&gamma.to_bytes());
-        
+
     //     proof
     // }
-    
+
     // fn vok_log_eq(
     //     &mut self,
     //     g1: &BytesP256ElemLen,
@@ -372,13 +368,13 @@ impl CryptoTrait for Crypto {
     //         Some(z) => z,
     //         None => return false,
     //     };
-        
+
     //     // Create the hash input (R1, R2, g1, g2, h1, h2, message)
     //     let inputs = [&r1_bytes[..], &r2_bytes[..], g1, g2, h1, h2, message.unwrap_or(&[])];
     //     let let hash_input = build_hash_input(&inputs);
 
     //     // let mut hash_input = Vec::with_capacity(
-    //     //     pi.pi1.len() + pi.pi2.len() + g1.len() + g2.len() + h1.len() + h2.len() + 
+    //     //     pi.pi1.len() + pi.pi2.len() + g1.len() + g2.len() + h1.len() + h2.len() +
     //     //     message.map_or(0, |m| m.len())
     //     // );
     //     // hash_input.extend_from_slice(&pi.pi1);
@@ -390,19 +386,19 @@ impl CryptoTrait for Crypto {
     //     // if let Some(msg) = message {
     //     //     hash_input.extend_from_slice(msg);
     //     // }
-        
+
     //     // Compute c = H(R1, R2, g1, g2, h1, h2, message)
     //     let c = self.hash_to_scalar(&hash_input);
-        
+
     //     // Verify: g1^z == R1 * h1^c and g2^z == R2 * h2^c
     //     let g1_z = g1_point * z;
     //     let h1_c = h1_point * c;
     //     let expected1 = r1_point + h1_c;
-        
+
     //     let g2_z = g2_point * z;
     //     let h2_c = h2_point * c;
     //     let expected2 = r2_point + h2_c;
-        
+
     //     g1_z == expected1 && g2_z == expected2
     // }
 
@@ -419,7 +415,7 @@ impl CryptoTrait for Crypto {
     //             panic!("Error: authority keys invalid");
     //         }
     //     }
-        
+
     //     // Compute h as the product of all authority public keys
     //     let mut h_point = self.bytes_to_point(&pk_aut[0].pk1);
     //     for i in 1..pk_aut.len() {
@@ -429,16 +425,16 @@ impl CryptoTrait for Crypto {
 
     //     // Compute w as concatenation of authority public keys and hash of peer identity
     //     let mut w = Vec::new();
-        
+
     //     // Add all authority public keys to the concatenation
     //     for auth_pk in pk_aut {
     //         w.extend_from_slice(&auth_pk.pk1);
     //     }
-        
+
     //     // Add hash of id_cred
     //     let peer_id_hash = self.sha256_digest(id_cred);
     //     w.extend_from_slice(&peer_id_hash);
-        
+
     //     // Return the computed values
     //     (h_point.to_bytes(), w)
 
@@ -447,12 +443,12 @@ impl CryptoTrait for Crypto {
     // fn initiator_sok(
     //     &mut self,
     //     h: &BytesP256ElemLen,
-    //     g_r: &BytesP256ElemLen, 
-    //     g_x: &BytesP256ElemLen, 
-    //     g_y: &BytesP256ElemLen, 
-    //     x: &BytesP256ElemLen, 
+    //     g_r: &BytesP256ElemLen,
+    //     g_x: &BytesP256ElemLen,
+    //     g_y: &BytesP256ElemLen,
+    //     x: &BytesP256ElemLen,
     //     i: &BytesP256ElemLen,
-    //     w: &BytesHashLen, 
+    //     w: &BytesHashLen,
     // ) -> () {
     //     // Compute X = g^x
     //     // let x_point = p256::ProjectivePoint::generator() * x;
@@ -475,7 +471,7 @@ impl CryptoTrait for Crypto {
     //     // Generate proof pi
     //     let h_g_y_bytes = h_g_y.to_affine().x().to_bytes();
     //     let h_g_r_bytes = h_g_r.to_affine().x().to_bytes();
-        
+
     //     let pi = self.sok_log_eq(
     //         x,
     //         &g_x,
@@ -488,12 +484,12 @@ impl CryptoTrait for Crypto {
     // fn responder_sok(
     //     &mut self,
     //     h: &BytesP256ElemLen,
-    //     g_i: &BytesP256ElemLen, 
-    //     g_y: &BytesP256ElemLen, 
-    //     g_x: &BytesP256ElemLen, 
-    //     y: &BytesP256ElemLen, 
+    //     g_i: &BytesP256ElemLen,
+    //     g_y: &BytesP256ElemLen,
+    //     g_x: &BytesP256ElemLen,
+    //     y: &BytesP256ElemLen,
     //     r: &BytesP256ElemLen,
-    //     w: &BytesHashLen, 
+    //     w: &BytesHashLen,
     // ) -> () {
     //     // Compute Y = g^y
     //     // let y_point = p256::ProjectivePoint::generator() * y;
@@ -516,7 +512,7 @@ impl CryptoTrait for Crypto {
     //     // Generate proof pi
     //     let h_g_x_bytes = h_g_x.to_affine().x().to_bytes();
     //     let h_g_i_bytes = h_g_i.to_affine().x().to_bytes();
-        
+
     //     let pi = self.sok_log_eq(
     //         y,
     //         &g_y,
@@ -526,4 +522,3 @@ impl CryptoTrait for Crypto {
     //     );
     // }
 }
-

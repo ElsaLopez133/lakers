@@ -25,6 +25,9 @@ pub const fn default_crypto() -> Crypto {
     lakers_crypto_rustcrypto::Crypto::new(rand_core::OsRng)
 }
 
+#[cfg(feature = "rustcrypto-stm")]
+pub type Crypto = lakers_crypto_rustcrypto_stm::Crypto;
+
 #[cfg(any(feature = "cryptocell310", feature = "cryptocell310-rust"))]
 pub type Crypto = lakers_crypto_cryptocell310::Crypto;
 

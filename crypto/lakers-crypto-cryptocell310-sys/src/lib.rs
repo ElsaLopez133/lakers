@@ -34,7 +34,7 @@ static mut rnd_context: CRYS_RND_State_t = CRYS_RND_State_t {
     EntropySizeBits: 0,
 };
 static mut rnd_work_buffer: CRYS_RND_WorkBuff_t = CRYS_RND_WorkBuff_t {
-    crysRndWorkBuff: [0; 1528usize]
+    crysRndWorkBuff: [0; 1528usize],
 };
 
 pub unsafe fn edhoc_rs_crypto_init() {

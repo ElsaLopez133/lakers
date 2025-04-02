@@ -65,7 +65,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let _response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
     // we don't care about the response to message_3 for now
-    
+
     println!("\n---------END-----------\n");
     println!("EDHOC exchange successfully completed");
     println!("PRK_out: {:02x?}", prk_out);

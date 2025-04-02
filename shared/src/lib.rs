@@ -135,9 +135,9 @@ pub struct SokLogProof {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SokLogEqProof {
-    pub pi1: [u8; 32], 
-    pub pi2: [u8; 32], 
-    pub pi3: [u8; 32], 
+    pub pi1: [u8; 32],
+    pub pi2: [u8; 32],
+    pub pi3: [u8; 32],
 }
 
 /// Value of C_R or C_I, as chosen by ourself or the peer.

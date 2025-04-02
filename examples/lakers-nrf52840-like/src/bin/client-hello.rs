@@ -2,10 +2,10 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use nrf52840_hal::gpio::Level;
-use nrf52840_hal::{pac, Uarte, Timer};
-use {defmt_rtt as _, panic_probe as _};
 use defmt::info;
+use nrf52840_hal::gpio::Level;
+use nrf52840_hal::{pac, Timer, Uarte};
+use {defmt_rtt as _, panic_probe as _};
 
 // Use a static buffer in RAM
 static mut TX_BUFFER: [u8; 64] = [0; 64];
@@ -36,12 +36,12 @@ fn main() -> ! {
     );
 
     let mut timer = Timer::new(peripherals.TIMER0);
-    let message = b"Hello world from nrf52840\n"; 
+    let message = b"Hello world from nrf52840\n";
     let mut counter = 0;
-   
+
     unsafe {
-        loop{
-            counter +=  1;
+        loop {
+            counter += 1;
             info!("-------Iteration {}--------", counter);
 
             TX_BUFFER[..message.len()].copy_from_slice(message);
@@ -54,11 +54,13 @@ fn main() -> ! {
             RX_BUFFER.fill(0);
             let mut received_bytes = 0;
             while received_bytes < RX_BUFFER.len() {
-                match uart.read(&mut RX_BUFFER[received_bytes..received_bytes+1]) {
+                match uart.read(&mut RX_BUFFER[received_bytes..received_bytes + 1]) {
                     Ok(_) => {
                         received_bytes += 1;
 
-                        if RX_BUFFER[received_bytes-1] == b'\n' || RX_BUFFER[received_bytes-1] == b'\r' {
+                        if RX_BUFFER[received_bytes - 1] == b'\n'
+                            || RX_BUFFER[received_bytes - 1] == b'\r'
+                        {
                             break;
                         }
                     }
@@ -78,5 +80,4 @@ fn main() -> ! {
             timer.delay(4_000_000);
         }
     }
-        
 }

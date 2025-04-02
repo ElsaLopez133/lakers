@@ -1,5 +1,6 @@
 [package]
 name = "lakers-stm32wba"
+edition = "2021"
 version.workspace = true
 repository.workspace = true
 license.workspace = true

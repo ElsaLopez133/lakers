@@ -8,12 +8,12 @@ use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use {defmt_rtt as _, panic_probe as _};
 use nrf52840_hal::pac;
 use nrf52840_hal::prelude::*;
+use {defmt_rtt as _, panic_probe as _};
 //use nrf52840_hal::gpio::{Level, Output, OutputDrive, Pin};
-use embassy_time::{Duration, Timer};
 use embassy_time::Instant;
+use embassy_time::{Duration, Timer};
 
 use lakers::*;
 use lakers_crypto_cryptocell310::edhoc_rs_crypto_init;
@@ -43,20 +43,35 @@ async fn main(spawner: Spawner) {
     let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
     let p1 = nrf52840_hal::gpio::p1::Parts::new(peripherals.P1);
 
-    let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_26 = p0
+        .p0_26
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     // let mut led_pin_p0_8 = p0.p0_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     // let mut led_pin_p0_7 = p0.p0_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     // let mut led_pin_p0_6 = p0.p0_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     // let mut led_pin_p0_5 = p0.p0_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
-    let mut led_pin_p1_07 = p1.p1_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_08 = p1.p1_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_06 = p1.p1_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_05 = p1.p1_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_04 = p1.p1_04.into_push_pull_output(nrf52840_hal::gpio::Level::Low); // used for the whole message
-    let mut led_pin_p1_10 = p1.p1_10.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_14 = p1.p1_14.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-
+    let mut led_pin_p1_07 = p1
+        .p1_07
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_08 = p1
+        .p1_08
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_06 = p1
+        .p1_06
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_05 = p1
+        .p1_05
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_04 = p1
+        .p1_04
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low); // used for the whole message
+    let mut led_pin_p1_10 = p1
+        .p1_10
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_14 = p1
+        .p1_14
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
@@ -95,7 +110,7 @@ async fn main(spawner: Spawner) {
         radio.set_mode(Mode::BLE_1MBIT);
         radio.set_tx_power(TxPower::_0D_BM);
         radio.set_frequency(common::FREQ);
-    
+
         radio.set_access_address(common::ADV_ADDRESS);
         radio.set_header_expansion(false);
         radio.set_crc_init(common::ADV_CRC_INIT);
@@ -105,11 +120,13 @@ async fn main(spawner: Spawner) {
         led_pin_p0_26.set_high();
         led_pin_p1_04.set_high();
         led_pin_p1_07.set_high();
-        let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-        let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+        let cred_i: Credential =
+            Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+        let cred_r: Credential =
+            Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
         led_pin_p1_07.set_low();
         //info!("cred_r:{:?}", cred_r.bytes.content);
-        
+
         led_pin_p1_07.set_high();
         let mut initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
@@ -136,7 +153,9 @@ async fn main(spawner: Spawner) {
             .expect("Buffer not long enough");
         info!("Send message_1 and wait message_2");
         led_pin_p0_26.set_low();
-        let rcvd = common::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5), &mut led_pin_p1_10).await;
+        let rcvd =
+            common::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5), &mut led_pin_p1_10)
+                .await;
 
         match rcvd {
             Ok(pckt_2) => {
@@ -144,17 +163,14 @@ async fn main(spawner: Spawner) {
                 led_pin_p0_26.set_high();
                 // let message_2: EdhocMessageBuffer =
                 //     pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
-                let Ok(message_2) = 
-                    pckt_2.pdu[1..pckt_2.len].try_into() 
-                else {
+                let Ok(message_2) = pckt_2.pdu[1..pckt_2.len].try_into() else {
                     info!("Wrong length for EDHOC message_2");
                     radio.disable();
                     continue;
                 };
 
                 led_pin_p1_06.set_high();
-                let Ok((initiator, c_r, id_cred_r, ead_2)) = 
-                    initiator.parse_message_2(&message_2)
+                let Ok((initiator, c_r, id_cred_r, ead_2)) = initiator.parse_message_2(&message_2)
                 else {
                     info!("EDHOC error at parse_message_2");
                     radio.disable();
@@ -162,15 +178,14 @@ async fn main(spawner: Spawner) {
                 };
                 // let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
                 led_pin_p1_06.set_low();
-                
+
                 led_pin_p1_06.set_high();
-                let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
+                let valid_cred_r =
+                    credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
                 led_pin_p1_06.set_low();
 
                 led_pin_p1_06.set_high();
-                let Ok(initiator) = 
-                    initiator.verify_message_2(valid_cred_r)
-                else {
+                let Ok(initiator) = initiator.verify_message_2(valid_cred_r) else {
                     info!("EDHOC error at verify_message_2");
                     radio.disable();
                     continue;
@@ -187,7 +202,8 @@ async fn main(spawner: Spawner) {
 
                 led_pin_p1_08.set_high();
                 let (initiator, message_3, i_prk_out) = initiator
-                    .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
+                    .prepare_message_3(CredentialTransfer::ByReference, &None)
+                    .unwrap();
                 led_pin_p1_08.set_low();
                 info!("Send message_3");
                 led_pin_p0_26.set_low();
@@ -195,9 +211,10 @@ async fn main(spawner: Spawner) {
                     &mut radio,
                     common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
                         .unwrap(),
-                    &mut led_pin_p1_14)
+                    &mut led_pin_p1_14,
+                )
                 .await;
-                
+
                 info!("Handshake completed. prk_out = {:X}", i_prk_out);
                 led_pin_p1_04.set_low();
                 Timer::after(Duration::from_secs(1)).await;
@@ -206,7 +223,7 @@ async fn main(spawner: Spawner) {
             // Added to measure time. Otherwise revert to up.
             Err(_) => {
                 info!("Hanshake failed. Continue to next iteration. Parsing error");
-                Timer::after(Duration::from_secs(1)).await; 
+                Timer::after(Duration::from_secs(1)).await;
                 radio.disable();
                 led_pin_p1_04.set_low();
                 continue;
@@ -217,4 +234,3 @@ async fn main(spawner: Spawner) {
     // info!("start time: {:?} and elapsed time in ms: {:?}", start, duration.as_millis());
     // info!("duration of one handshake in ms: {:?}", duration.as_millis()/100);
 }
-

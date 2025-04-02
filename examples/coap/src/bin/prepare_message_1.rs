@@ -16,7 +16,6 @@ fn main() {
 }
 
 fn client_handshake() -> Result<(), EDHOCError> {
-
     let cred: Credential = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
     println!("cred_psk: {:?}", cred);
 
@@ -30,7 +29,6 @@ fn client_handshake() -> Result<(), EDHOCError> {
     initiator.set_identity(cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     println!("message_1 len = {}", message_1.len);
-    
+
     Ok(())
 }
-
