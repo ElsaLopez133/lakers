@@ -1,0 +1,15 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = "probe-rs run --chip STM32WBA55CG"
+
+[build]
+target = "thumbv8m.main-none-eabihf"
+
+[target.thumbv8m.main-none-eabihf]
+rustflags = [
+     "-C", "link-arg=-T/home/elopezpe/lakers/examples/lakers-stm32wba/device.x",
+     "-C", "link-arg=-Tlink.x",
+     "-C", "link-arg=-Tdefmt.x",
+]
+
+[env]
+DEFMT_LOG = "info"

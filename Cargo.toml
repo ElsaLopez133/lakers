@@ -3,15 +3,19 @@
 members = [
   "lib",
   "ead/lakers-ead-authz",
+  "ead/lakers-stm32wba-like",
   "crypto",
   "crypto/lakers-crypto-psa",
   "crypto/lakers-crypto-rustcrypto",
+  "crypto/lakers-crypto-rustcrypto-stm",
   "crypto/lakers-crypto-cryptocell310-sys",
   "examples/coap",
   "examples/lakers-no_std",
   "examples/lakers-nrf52840",
+  "examples/lakers-stm32wba",
   "lakers-c",
   "lakers-python",
+  "examples/lakers-nrf52840-like"
 ]
 
 # reduced "default-members", should include only packages that can be built and
@@ -31,7 +35,7 @@ default-members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.8.0"
+version = "0.6.2"
 repository = "https://github.com/openwsn-berkeley/lakers/"
 license = "BSD-3-Clause"
 readme = "shared/README.md"
@@ -40,16 +44,19 @@ categories = [ "no-std::no-alloc", "network-programming", "embedded" ]
 
 [workspace.dependencies]
 
-lakers-shared = { package = "lakers-shared", path = "shared/", version = "^0.8.0" }
+lakers-shared = { package = "lakers-shared", path = "shared/", version = "^0.6.2" }
 
-lakers-ead-authz = { package = "lakers-ead-authz", path = "ead/lakers-ead-authz/", version = "^0.8.0" }
+lakers-ead-authz = { package = "lakers-ead-authz", path = "ead/lakers-ead-authz/", version = "^0.6.2" }
+
+lakers-stm32wba-like = { package = "lakers-stm32wba-like", path = "ead/lakers-stm32wba-like/", version = "^0.6.2" }
 
 lakers-crypto = { path = "crypto/" }
 lakers-crypto-cryptocell310 = { path = "crypto/lakers-crypto-cryptocell310-sys/" }
 lakers-crypto-psa = { path = "crypto/lakers-crypto-psa/" }
-lakers-crypto-rustcrypto = { package = "lakers-crypto-rustcrypto", path = "crypto/lakers-crypto-rustcrypto/", version = "^0.8.0" }
+lakers-crypto-rustcrypto = { package = "lakers-crypto-rustcrypto", path = "crypto/lakers-crypto-rustcrypto/", version = "^0.6.2" }
+lakers-crypto-rustcrypto-stm = { path = "crypto/lakers-crypto-rustcrypto-stm/" }
 
-lakers = { package = "lakers", path = "lib/", version = "^0.8.0", default-features = false }
+lakers = { package = "lakers", path = "lib/", version = "^0.6.2", default-features = false }
 
 [patch.crates-io]
 psa-crypto = { git = "https://github.com/malishav/rust-psa-crypto", branch = "baremetal" }

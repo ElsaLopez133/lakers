@@ -12,7 +12,7 @@ readme.workspace = true
 lakers-shared = { package = "lakers-shared", path = "../shared", default-features = false }
 
 # psa
-lakers-crypto-psa = { workspace = true, default-features = false, optional = true }
+lakers-crypto-psa = { workspace = true, optional = true }
 
 # cryptocell for nrf52840
 lakers-crypto-cryptocell310 = { workspace = true, optional = true }
@@ -21,12 +21,22 @@ lakers-crypto-cryptocell310 = { workspace = true, optional = true }
 lakers-crypto-rustcrypto = { workspace = true, optional = true }
 rand_core = { version = "0.6.4", optional = true, default-features = false }
 
+# software implementations from rustcrypto-stm
+lakers-crypto-rustcrypto-stm = { workspace = true, optional = true }
+
+# defmt
+defmt = "0.3"
+defmt-rtt = "0.4"
+
+stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55", "defmt"] }
+
 [dev-dependencies]
 hexlit = "0.5.3"
 rstest = "0.11.0"
 
 [features]
-default = [  ]
+default = [ "defmt" ]
+defmt = [ ]
 psa = [ "lakers-crypto-psa" ]
 psa-baremetal = [ "psa", "lakers-crypto-psa/baremetal" ]
 cryptocell310 = [ "lakers-crypto-cryptocell310" ]
@@ -35,3 +45,4 @@ cryptocell310 = [ "lakers-crypto-cryptocell310" ]
 # lakers-crypto-rustcrypto on their own, and combine it with an entropy choice
 # of their avail.
 rustcrypto = [ "lakers-crypto-rustcrypto", "rand_core/getrandom" ]
+rustcrypto-stm = [ "lakers-crypto-rustcrypto-stm"]

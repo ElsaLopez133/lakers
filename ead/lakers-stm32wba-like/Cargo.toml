@@ -1,0 +1,15 @@
+[package]
+name = "lakers-stm32wba-like"
+version.workspace = true
+edition = "2021"
+authors = ["Elsa Lopez Perez <elsa.lopez-perez@inria.fr>"]
+license.workspace = true
+description = "EDHOC LIKE"
+repository.workspace = true
+
+[dependencies]
+lakers-shared.workspace = true
+
+[dev-dependencies]
+lakers-crypto.workspace = true
+hexlit = "0.5.3"

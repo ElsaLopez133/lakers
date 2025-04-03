@@ -1,0 +1,52 @@
+[package]
+name = "lakers-stm32wba"
+version.workspace = true
+edition = "2021"
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# getrandom = { version = "0.2", default-features = false, features = ["custom"] }
+
+# embassy dependencies
+# NOTE: this version says it does not have feature stm32wba55cg even though it is in the cargo.toml
+# Could it be sth with the stm320metadata pac they are calling?
+# embassy-stm32 = { version = "0.1.0", features = ["defmt", "stm32wba55cg", "time-driver-any", "memory-x", "exti"] }
+# embassy-executor = { version = "0.6.3", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread"] }
+# embassy-time = { version = "0.3.2", features = ["defmt", "defmt-timestamp-uptime",  "tick-hz-32_768"] }
+
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-sync", branch = "main", features = ["defmt"] }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-time", branch = "main", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-executor", branch = "main", features = ["arch-cortex-m", "executor-thread", "defmt"] }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", package = "embassy-stm32", branch = "main", features = ["defmt", "stm32wba55cg", "time-driver-any", "memory-x", "exti"] }
+
+# Cortex-M dependencies
+cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
+cortex-m-rt = { version = "0.7.3", optional = false }
+embedded-hal = "0.2.6"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+heapless = { version = "0.8", default-features = false }
+static_cell = "2"
+
+# Optional allocator support
+embedded-alloc = "0.5.0"
+
+# defmt
+defmt = "0.3"
+defmt-rtt = "0.4"
+
+stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55"] }
+
+# lakers
+lakers = { package = "lakers", path = "../../lib", default-features = false }
+lakers-crypto = { path = "../../crypto", default-features = false }
+lakers-crypto-rustcrypto-stm = { path = "../../crypto/lakers-crypto-rustcrypto-stm", default-features = false }
+lakers-shared.workspace = true
+
+[features]
+default = ["crypto-rustcrypto-stm", "ead-none", "defmt"]
+crypto-rustcrypto-stm = ["lakers-crypto/rustcrypto-stm"]
+ead-none = []
+defmt = [] 

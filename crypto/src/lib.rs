@@ -9,6 +9,17 @@
 /// Convenience re-export
 pub use lakers_shared::Crypto as CryptoTrait;
 
+#[cfg(feature = "rustcrypto-stm")]
+pub type Crypto<'a>  = lakers_crypto_rustcrypto_stm::Crypto<'a> ;
+
+#[cfg(feature = "rustcrypto-stm")]
+pub fn default_crypto<'a>(
+    p: &'a stm32wba::stm32wba55::Peripherals, 
+    hash: &'a stm32wba::stm32wba55::HASH,
+    pka: &'a stm32wba::stm32wba55::PKA ) -> Crypto<'a> {
+    lakers_crypto_rustcrypto_stm::Crypto::new(p, hash, pka)
+}
+
 #[cfg(any(feature = "psa", feature = "psa-rust",))]
 pub type Crypto = lakers_crypto_psa::Crypto;
 
