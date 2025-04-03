@@ -19,37 +19,91 @@ use stm32wba::stm32wba55::PKA as PKA;
 use stm32wba::stm32wba55::HASH as HASH;
 use stm32wba::stm32wba55::RCC as RCC;
 
-
-
 type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
 
-/// A type representing cryptographic operations through various RustCrypto crates (eg. [aes],
-/// [ccm], [p256]).
-///
-/// Its size depends on the implementation of Rng passed in at creation.
-
-pub struct Crypto {
-    p: peripherals,
-    hash: HASH,
-    // pka: peripherals::PKA,
+pub struct Crypto<'a> {
+    p: &'a peripherals,
+    hash: &'a HASH,
+    pka: &'a PKA,
 }
 
-impl Crypto {
-    pub const fn new(p: peripherals, hash: HASH) -> Self {
-        Self { p, hash }
+impl<'a> Crypto<'a> {
+    pub fn new(p: &'a peripherals, hash: &'a HASH, pka: &'a PKA) -> Self {
+        Self { p, hash, pka }
     }
 
     pub fn lakers_crypto_rustcrypto_stm_init(&self) {
 
-        let rcc = Self::stm32wba_init_rcc(self);
+        // let rcc = Self::stm32wba_init_rcc(self);
         let hash = Self::stm32wba_init_hash(self);
         let pka = Self::stm32wba_init_pka(self);
         
     }
 
     fn stm32wba_init_pka(&self) -> &PKA {
+        let clock = &self.p.RCC;
+        let rng = &self.p.RNG;
 
-        // TODO
+        // Enable HSI as a stable clock source
+        clock.rcc_cr().modify(|_, w| w
+        .hseon().set_bit()
+        );
+        while clock.rcc_cr().read().hserdy().bit_is_clear() {
+            asm::nop();
+        }
+
+        // Enable RNG clock. Select the source clock
+        clock.rcc_ccipr2().write(|w| w.rngsel().b_0x2());
+        // Enable RNG clock. Select the AHB clock
+        clock.rcc_ahb2enr().modify(|_, w| w.rngen().set_bit());
+        while clock.rcc_ahb2enr().read().rngen().bit_is_clear() {
+            asm::nop();
+        }
+
+        // Configure RNG
+        // To configure, CONDRST bit is set to 1 in the same access and CONFIGLOCK remains at 0
+        rng.rng_cr().write(|w| w
+            .rngen().clear_bit()
+            .condrst().set_bit()
+            .configlock().clear_bit()
+            .nistc().clear_bit()   // Hardware default values for NIST compliant RNG
+            .ced().clear_bit()     // Clock error detection enabled
+        );
+
+        // First clear CONDRST while keeping RNGEN disabled
+        rng.rng_cr().modify(|_, w| w
+            .condrst().clear_bit()
+        );
+
+        // Then enable RNG in a separate step
+        rng.rng_cr().modify(|_, w| w
+            .rngen().set_bit()
+            .ie().set_bit()
+        );
+
+        while rng.rng_sr().read().drdy().bit_is_clear() {
+            asm::nop();
+        }
+
+        // Enable PKA peripheral clock via RCC_AHB2ENR register
+        clock.rcc_ahb2enr().modify(|_, w| w.pkaen().set_bit());
+
+        // Reset PKA before enabling (sometimes helps with initialization)
+        self.pka.pka_cr().modify(|_, w| w.en().clear_bit());
+        for _ in 0..10 {
+            asm::nop();
+        }
+
+        // Enable PKA peripheral
+        self.pka.pka_cr().write(|w| w
+            .en().set_bit()
+        );
+    
+        // Wait for PKA to initialize
+        while self.pka.pka_sr().read().initok().bit_is_clear() {
+            asm::nop();
+        }
+        
         &self.p.PKA
     }
 
@@ -58,7 +112,6 @@ impl Crypto {
         // Enable HASH peripheral clock via RCC_AHB2ENR register
         // HASH peripheral is located on AHB2
         let clock = &self.p.RCC;
-        // let hash = &self.p.HASH;
 
         clock.rcc_ahb2enr().modify(|_, w| w.hashen().set_bit());
 
@@ -89,7 +142,7 @@ impl Crypto {
     }
 }
 
-impl core::fmt::Debug for Crypto {
+impl core::fmt::Debug for Crypto<'_>  {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         f.debug_struct("lakers_crypto_rustcrypto::Crypto")
             // Exclude the rng field from Debug output
@@ -97,7 +150,7 @@ impl core::fmt::Debug for Crypto {
     }
 }
 
-impl CryptoTrait for Crypto {
+impl CryptoTrait for Crypto<'_>  {
    
     fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
 
@@ -130,7 +183,13 @@ impl CryptoTrait for Crypto {
             self.hash.hash_hr7().read().bits(),
         ];
 
-        [0u8;32]
+         // Convert `[u32; 8]` → `[u8; 32]`
+        let mut final_hash: [u8; 32] = [0; 32];
+        for (i, word) in hash_result.iter().enumerate() {
+            final_hash[i * 4..(i + 1) * 4].copy_from_slice(&word.to_be_bytes()); 
+        }
+
+        final_hash
 
     }
 
