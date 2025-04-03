@@ -39,7 +39,23 @@ unsafe fn main() -> ! {
     // Print the hash (using defmt)
     info!("SHA-256 Digest: {:x}", hash_output);
 
+    // Define a test message
+    let test_message = b"abc!";  // Example test data
+    let message_len = test_message.len();  
+
+    // Convert message to `BytesMaxBuffer`
+    let mut message_buffer = [0u8; MAX_BUFFER_LEN];
+    message_buffer[..message_len].copy_from_slice(test_message);
+
+    // Call `sha256_digest()`
+    let hash_output = crypto.sha256_digest(&message_buffer, message_len);
+
+    // Print the hash (using defmt)
+    info!("SHA-256 Digest: {:x}", hash_output);
+
     // call lakers prepare_ead_1
+
+
     // call lakers prepare_message_1
 
     loop {}

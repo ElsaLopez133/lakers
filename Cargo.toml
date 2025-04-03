@@ -3,6 +3,7 @@
 members = [
   "lib",
   "ead/lakers-ead-authz",
+  "ead/lakers-stm32wba-like",
   "crypto",
   "crypto/lakers-crypto-psa",
   "crypto/lakers-crypto-rustcrypto",
@@ -46,6 +47,8 @@ categories = [ "no-std::no-alloc", "network-programming", "embedded" ]
 lakers-shared = { package = "lakers-shared", path = "shared/", version = "^0.6.2" }
 
 lakers-ead-authz = { package = "lakers-ead-authz", path = "ead/lakers-ead-authz/", version = "^0.6.2" }
+
+lakers-stm32wba-like = { package = "lakers-stm32wba-like", path = "ead/lakers-stm32wba-like/", version = "^0.6.2" }
 
 lakers-crypto = { path = "crypto/" }
 lakers-crypto-cryptocell310 = { path = "crypto/lakers-crypto-cryptocell310-sys/" }
