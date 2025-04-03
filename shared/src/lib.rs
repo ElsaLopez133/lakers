@@ -168,6 +168,95 @@ pub type BytesMac = [u8; MAC_LENGTH];
 pub type BytesEncodedVoucher = [u8; ENCODED_VOUCHER_LEN];
 pub type EADMessageBuffer = EdhocMessageBuffer; // TODO: make it of size MAX_EAD_SIZE_LEN
 
+
+// consts for PKA
+pub const MODE: u8 = 0x20;
+pub const BASE: usize = 0x520C_2000;
+pub const PKA_RAM_OFFSET: usize = 0x400; 
+pub const RAM_BASE: usize = BASE + PKA_RAM_OFFSET;
+pub const RAM_NUM_DW: usize = 667;
+
+// PKA RAM locations for ECC multiplication
+pub const PRIME_LENGTH_OFFSET: usize = BASE + 0x400;
+pub const MODULUS_LENGTH_OFFSET: usize = BASE + 0x408;
+pub const COEF_A_SIGN_OFFSET: usize = BASE + 0x410;
+pub const COEF_A_OFFSET: usize = BASE + 0x418;
+pub const COEF_B_OFFSET: usize = BASE + 0x520;
+pub const MODULUS_OFFSET: usize = BASE + 0x1088;
+pub const SCALAR_OFFSET: usize = BASE + 0x12A0;
+pub const POINT_X_OFFSET: usize = BASE + 0x578;
+pub const POINT_Y_OFFSET: usize = BASE + 0x470;
+pub const PRIME_OFFSET: usize = BASE + 0xF88;
+
+pub const RESULT_X_OFFSET: usize = BASE + 0x578;
+pub const RESULT_Y_OFFSET: usize = BASE + 0x5D0;
+pub const RESULT_ERROR_OFFSET: usize = BASE + 0x680;
+
+pub const OPERAND_LENGTH: u32 = 8 * 32;
+pub const WORD_LENGTH: usize = (OPERAND_LENGTH as usize)/32;  
+
+// PKA RAM locations for ECC addition
+pub const MODULUS_OFFSET_ADD: usize = BASE + 0x470;
+pub const POINT_P_X: usize = BASE + 0x628;
+pub const POINT_P_Y: usize = BASE + 0x680;
+pub const POINT_P_Z: usize = BASE + 0x6D8;
+pub const POINT_Q_X: usize = BASE + 0x730;
+pub const POINT_Q_Y: usize = BASE + 0x788;
+pub const POINT_Q_Z: usize = BASE + 0x7E0;
+
+pub const RESULT_X: usize = BASE + 0xD60;
+pub const RESULT_Y: usize = BASE + 0xDB8;
+pub const RESULT_Z: usize = BASE + 0xE10;
+
+// PKA RAm locations for projective to affine
+pub const MODULUS_OFFSET_PTA: usize = BASE + 0x470;
+pub const POINT_P_X_PTA: usize = BASE + 0xD60;
+pub const POINT_P_Y_PTA: usize = BASE + 0xDB8;
+pub const POINT_P_Z_PTA: usize = BASE + 0xE10;
+pub const MONTGOMERY_PTA: usize = BASE + 0xE10;
+
+pub const RESULT_X_PTA: usize = BASE + 0x578;
+pub const RESULT_Y_PTA: usize = BASE + 0x5D0;
+pub const RESULT_ERROR_PTA: usize = BASE + 0x680;
+
+pub const A_SIGN: u32 = 0x1;
+pub const A: [u32; 8] = [
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+    0x00000000, 0x00000000, 0x00000000, 0x00000003,
+];
+pub const N: [u32; 8] = [
+    0xffffffff, 0x00000001, 0x00000000, 0x00000000, 
+    0x00000000, 0xffffffff, 0xffffffff, 0xffffffff,
+];
+
+pub const B: [u32; 8] = [
+    0x5ac635d8, 0xaa3a93e7, 0xb3ebbd55, 0x769886bc,
+    0x651d06b0, 0xcc53b0f6, 0x3bce3c3e, 0x27d2604b
+];
+
+pub const BASE_POINT_X: [u32; 8] = [
+    0x6b17d1f2, 0xe12c4247, 0xf8bce6e5, 0x63a440f2, 
+    0x77037d81, 0x2deb33a0, 0xf4a13945, 0xd898c296,
+];
+
+pub const BASE_POINT_Y: [u32; 8] = [
+    0x4fe342e2, 0xfe1a7f9b, 0x8ee7eb4a, 0x7c0f9e16, 
+    0x2bce3357, 0x6b315ece, 0xcbb64068, 0x37bf51f5,
+];
+
+pub const PRIME_ORDER: [u32; 8] = [
+    0xffffffff, 0x00000000, 0xffffffff, 0xffffffff, 
+    0xbce6faad, 0xa7179e84, 0xf3b9cac2, 0xfc632551,
+];
+
+pub const R2MODN: [u32; 8] = [
+    0x00000002, 0x00000000, 0xFFFFFFFA, 0x00000004, 
+    0xFFFFFFFB, 0xFFFFFFFF, 0x00000008, 0xFFFFFFFC
+];
+
+pub const SCALAR: [u32; 8] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2];
+
+// consts for SoK
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BytesP256AuthPubKey {
     pub pk1: [u8; 32], // X-coordinate of the P-256 public key

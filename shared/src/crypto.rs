@@ -72,4 +72,28 @@ pub trait Crypto: core::fmt::Debug {
     ) -> BytesP256ElemLen;
     fn get_random_byte(&mut self) -> u8;
     fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen);
+    unsafe fn sok_log_eq(
+        &mut self,
+        x: BytesP256ElemLen,
+        i: BytesP256ElemLen,
+        g_x: &BytesP256ElemLen,
+        h_g_y: &BytesP256ElemLen,
+        h_g_r: &BytesP256ElemLen,
+        message: Option<&[u8]>,
+    ) -> SokLogEqProof;
+    unsafe fn pka_ecc_mult_scalar(&mut self, point_x: BytesP256ElemLen, point_y: BytesP256ElemLen, scalar: BytesP256ElemLen) -> (BytesP256ElemLen, BytesP256ElemLen);
+    fn bytes_to_point(&self, bytes: &[u8]) -> ([u8; 32], [u8; 32]);
+    unsafe fn pka_ecc_point_add(
+        &mut self, 
+        point_a_x: BytesP256ElemLen, 
+        point_a_y: BytesP256ElemLen, 
+        point_b_x: BytesP256ElemLen, 
+        point_b_y: BytesP256ElemLen
+    ) -> (BytesP256ElemLen, BytesP256ElemLen, BytesP256ElemLen);
+    unsafe fn pka_ecc_projective_to_affine(
+        &mut self, 
+        point_a_x: BytesP256ElemLen, 
+        point_a_y: BytesP256ElemLen,
+        point_a_z: BytesP256ElemLen,
+    ) -> (BytesP256ElemLen, BytesP256ElemLen );
 }

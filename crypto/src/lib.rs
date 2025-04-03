@@ -16,8 +16,10 @@ pub type Crypto<'a>  = lakers_crypto_rustcrypto_stm::Crypto<'a> ;
 pub fn default_crypto<'a>(
     p: &'a stm32wba::stm32wba55::Peripherals, 
     hash: &'a stm32wba::stm32wba55::HASH,
-    pka: &'a stm32wba::stm32wba55::PKA ) -> Crypto<'a> {
-    lakers_crypto_rustcrypto_stm::Crypto::new(p, hash, pka)
+    pka: &'a stm32wba::stm32wba55::PKA,
+    rng: &'a stm32wba::stm32wba55::RNG
+ ) -> Crypto<'a> {
+    lakers_crypto_rustcrypto_stm::Crypto::new(p, hash, pka, rng)
 }
 
 #[cfg(any(feature = "psa", feature = "psa-rust",))]
