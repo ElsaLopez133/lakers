@@ -195,7 +195,31 @@ pub const RESULT_ERROR_OFFSET: usize = BASE + 0x680;
 pub const OPERAND_LENGTH: u32 = 8 * 32;
 pub const WORD_LENGTH: usize = (OPERAND_LENGTH as usize)/32;  
 
+// PKA RAM locations for modular subtraction
+pub const OPERAND_LENGTH_SUB: usize = BASE +  0x408 ;
+pub const OPERAND_A_SUB: usize = BASE +  0xA50;
+pub const OPERAND_B_SUB: usize = BASE +  0xC68;
+pub const MODULUS_SUB: usize = BASE +  0x1088;
+pub const RESULT_SUB: usize = BASE +  0xE78;
+
+// PKA RAM locations for multiplication
+pub const OPERAND_LENGTH_REDUC: usize = BASE + 0x400 ;
+pub const OPERAND_A_REDUC: usize = BASE + 0xA50;
+pub const MODULUS_REDUC: usize = BASE + 0xC68;
+pub const RESULT_REDUC: usize = BASE + 0xE78;
+
+// PKA RAM locations for arithmetic multiplication
+pub const OPERAND_LENGTH_MULT: usize = BASE + 0x408 ;
+pub const OPERAND_A_ARITHEMTIC_MULT: usize = BASE + 0xA50;
+pub const OPERAND_B_ARITHEMTIC_MULT: usize = BASE + 0xC68;
+pub const RESULT_ARITHMETIC_MULT: usize = BASE + 0xE78;
+
 // PKA RAM locations for ECC addition
+pub const PRIME_LENGTH_OFFSET_ADD: usize = BASE + 0x400;
+pub const MODULUS_LENGTH_OFFSET_ADD: usize = BASE + 0x408;
+pub const COEF_A_SIGN_OFFSET_ADD: usize = BASE + 0x410;
+pub const COEF_A_OFFSET_ADD: usize = BASE + 0x418;
+pub const COEF_B_OFFSET_ADD: usize = BASE + 0x520;
 pub const MODULUS_OFFSET_ADD: usize = BASE + 0x470;
 pub const POINT_P_X: usize = BASE + 0x628;
 pub const POINT_P_Y: usize = BASE + 0x680;
@@ -203,17 +227,22 @@ pub const POINT_P_Z: usize = BASE + 0x6D8;
 pub const POINT_Q_X: usize = BASE + 0x730;
 pub const POINT_Q_Y: usize = BASE + 0x788;
 pub const POINT_Q_Z: usize = BASE + 0x7E0;
+pub const SCALAR_K_ADD: usize = BASE + 0x520;
+pub const SCALAR_M_ADD: usize = BASE + 0x578;
 
-pub const RESULT_X: usize = BASE + 0xD60;
-pub const RESULT_Y: usize = BASE + 0xDB8;
-pub const RESULT_Z: usize = BASE + 0xE10;
+pub const RESULT_X_ADD: usize = BASE + 0x578;
+pub const RESULT_Y_ADD: usize = BASE + 0x5D0;
+pub const RESULT_ERROR_ADD: usize = BASE + 0x520;
+
+pub const Z_COORDINATE: [u32; 8] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1];
+
 
 // PKA RAm locations for projective to affine
 pub const MODULUS_OFFSET_PTA: usize = BASE + 0x470;
 pub const POINT_P_X_PTA: usize = BASE + 0xD60;
 pub const POINT_P_Y_PTA: usize = BASE + 0xDB8;
 pub const POINT_P_Z_PTA: usize = BASE + 0xE10;
-pub const MONTGOMERY_PTA: usize = BASE + 0xE10;
+pub const MONTGOMERY_PTA: usize = BASE + 0x4C8;
 
 pub const RESULT_X_PTA: usize = BASE + 0x578;
 pub const RESULT_Y_PTA: usize = BASE + 0x5D0;

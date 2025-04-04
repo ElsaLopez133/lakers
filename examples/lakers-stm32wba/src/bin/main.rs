@@ -35,23 +35,19 @@ unsafe fn main() -> ! {
 
     crypto.lakers_crypto_rustcrypto_stm_init();
 
-    let (x , y) = crypto.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), u32_to_u8(&SCALAR) );
-    info!("x: {:#X}, y:{:#X}", u8_to_u32(&x), u8_to_u32(&y));
+    // let (x , y) = crypto.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &u32_to_u8(&SCALAR) );
+    // info!("x: {:#X}, y:{:#X}", u8_to_u32(&x), u8_to_u32(&y));
     
     let (g_x_x, g_x_y) = crypto.bytes_to_point(&X_COORDINATE_BYTES);
     info!("g_x: {:#X}  g_y: {:#X}", g_x_x, g_x_y);
-    // // Define a test message
-    // let test_message = b"Hello, Lakers!";  // Example test data
-    // let message_len = test_message.len();  
 
-    // // Convert message to `BytesMaxBuffer`
-    // let mut message_buffer = [0u8; MAX_BUFFER_LEN];
-    // message_buffer[..message_len].copy_from_slice(test_message);
+    let (x,y) = crypto.pka_ecc_point_add(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y));
+    info!("x: {:#X}   y:{:#X} ", x, y);
 
-    // // Call `sha256_digest()`
-    // let hash_output_1 = crypto.sha256_digest(&message_buffer, message_len);
+    let (x,y) = crypto.pka_ecc_point_add(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), x, y);
+    info!("x: {:#X}   y:{:#X} ", x, y);
 
-    // info!("SHA-256 Digest 2: {:x}", hash_output_2);
+    // let proof = crypto.sok_log_eq()
 
     // call lakers prepare_ead_1
 

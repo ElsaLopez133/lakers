@@ -1,10 +1,14 @@
 #![no_std]
 
-use lakers_shared::{MODE, BASE, PKA_RAM_OFFSET, RAM_BASE, RAM_NUM_DW, PRIME_LENGTH_OFFSET, MODULUS_LENGTH_OFFSET, COEF_A_SIGN_OFFSET,
-COEF_A_OFFSET, COEF_B_OFFSET, MODULUS_OFFSET, SCALAR_OFFSET, POINT_X_OFFSET, POINT_Y_OFFSET, PRIME_OFFSET, RESULT_X_OFFSET, RESULT_Y_OFFSET, RESULT_ERROR_OFFSET, A_SIGN, A, B,
-N, BASE_POINT_X, BASE_POINT_Y, PRIME_ORDER, WORD_LENGTH, OPERAND_LENGTH, MODULUS_OFFSET_ADD, POINT_P_X, POINT_P_Y, POINT_P_Z,
-POINT_Q_X, POINT_Q_Y, POINT_Q_Z, RESULT_Y, RESULT_Z, RESULT_X, R2MODN, MODULUS_OFFSET_PTA, POINT_P_X_PTA, POINT_P_Y_PTA, POINT_P_Z_PTA, MONTGOMERY_PTA, 
-RESULT_ERROR_PTA, RESULT_X_PTA, RESULT_Y_PTA};
+use lakers_shared::{MODE, BASE, PKA_RAM_OFFSET, RAM_BASE, RAM_NUM_DW, 
+    PRIME_LENGTH_OFFSET, MODULUS_LENGTH_OFFSET, COEF_A_SIGN_OFFSET, COEF_A_OFFSET, COEF_B_OFFSET, MODULUS_OFFSET, SCALAR_OFFSET, POINT_X_OFFSET, POINT_Y_OFFSET, PRIME_OFFSET, RESULT_X_OFFSET, RESULT_Y_OFFSET, RESULT_ERROR_OFFSET, A_SIGN, A, B,
+    N, BASE_POINT_X, BASE_POINT_Y, PRIME_ORDER, WORD_LENGTH, OPERAND_LENGTH, 
+    MODULUS_OFFSET_ADD, MODULUS_LENGTH_OFFSET_ADD, PRIME_LENGTH_OFFSET_ADD, COEF_A_OFFSET_ADD, COEF_A_SIGN_OFFSET_ADD, Z_COORDINATE, SCALAR_K_ADD, SCALAR_M_ADD, POINT_P_X, POINT_P_Y, POINT_P_Z, POINT_Q_X, POINT_Q_Y, POINT_Q_Z, RESULT_Y_ADD, RESULT_X_ADD, RESULT_ERROR_ADD, R2MODN, 
+    MODULUS_OFFSET_PTA, POINT_P_X_PTA, POINT_P_Y_PTA, POINT_P_Z_PTA, MONTGOMERY_PTA, RESULT_ERROR_PTA, RESULT_X_PTA, RESULT_Y_PTA, 
+    OPERAND_LENGTH_MULT, OPERAND_A_ARITHEMTIC_MULT, OPERAND_B_ARITHEMTIC_MULT, RESULT_ARITHMETIC_MULT, 
+    OPERAND_LENGTH_REDUC, OPERAND_A_REDUC, MODULUS_REDUC, RESULT_REDUC, 
+    OPERAND_LENGTH_SUB, OPERAND_A_SUB, OPERAND_B_SUB, MODULUS_SUB, RESULT_SUB 
+};
 
 use lakers_shared::{
     BufferCiphertext3, BufferPlaintext3, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen,
@@ -161,48 +165,6 @@ impl<'a> Crypto<'a> {
     fn stm32wba_init_pka(&self) -> &PKA {
         let clock = &self.p.RCC;
 
-        // let rng = &self.p.RNG;
-        // // Enable HSI as a stable clock source
-        // clock.rcc_cr().modify(|_, w| w
-        // .hseon().set_bit()
-        // );
-        // while clock.rcc_cr().read().hserdy().bit_is_clear() {
-        //     asm::nop();
-        // }
-
-        // // Enable RNG clock. Select the source clock
-        // clock.rcc_ccipr2().write(|w| w.rngsel().b_0x2());
-        // // Enable RNG clock. Select the AHB clock
-        // clock.rcc_ahb2enr().modify(|_, w| w.rngen().set_bit());
-        // while clock.rcc_ahb2enr().read().rngen().bit_is_clear() {
-        //     asm::nop();
-        // }
-
-        // // Configure RNG
-        // // To configure, CONDRST bit is set to 1 in the same access and CONFIGLOCK remains at 0
-        // rng.rng_cr().write(|w| w
-        //     .rngen().clear_bit()
-        //     .condrst().set_bit()
-        //     .configlock().clear_bit()
-        //     .nistc().clear_bit()   // Hardware default values for NIST compliant RNG
-        //     .ced().clear_bit()     // Clock error detection enabled
-        // );
-
-        // // First clear CONDRST while keeping RNGEN disabled
-        // rng.rng_cr().modify(|_, w| w
-        //     .condrst().clear_bit()
-        // );
-
-        // // Then enable RNG in a separate step
-        // rng.rng_cr().modify(|_, w| w
-        //     .rngen().set_bit()
-        //     .ie().set_bit()
-        // );
-
-        // while rng.rng_sr().read().drdy().bit_is_clear() {
-        //     asm::nop();
-        // }
-
         // Enable PKA peripheral clock via RCC_AHB2ENR register
         clock.rcc_ahb2enr().modify(|_, w| w.pkaen().set_bit());
 
@@ -277,6 +239,8 @@ impl CryptoTrait for Crypto<'_>  {
         point_a_z: BytesP256ElemLen,
     ) -> (BytesP256ElemLen, BytesP256ElemLen ) {
 
+        // FIXME: It always return zero even though there is no error flag
+        
         self.stm32wba_init_pka();
 
         // Convert points to the right format
@@ -333,7 +297,7 @@ impl CryptoTrait for Crypto<'_>  {
         point_a_y: BytesP256ElemLen, 
         point_b_x: BytesP256ElemLen, 
         point_b_y: BytesP256ElemLen
-    ) -> (BytesP256ElemLen, BytesP256ElemLen, BytesP256ElemLen ) {
+    ) -> (BytesP256ElemLen, BytesP256ElemLen) {
 
         self.stm32wba_init_pka();
         //  Perform PQ where P and W are points of the curve (in ECC notation this is P + Q
@@ -346,23 +310,27 @@ impl CryptoTrait for Crypto<'_>  {
 
         zero_ram();
         // constant values for P-256 curve
-        write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
-        write_ram(COEF_A_SIGN_OFFSET, &[A_SIGN]);
-        write_ram(COEF_A_OFFSET, &A);
-        write_ram(COEF_B_OFFSET, &B);
+        write_ram(MODULUS_LENGTH_OFFSET_ADD, &[OPERAND_LENGTH]);
+        write_ram(PRIME_LENGTH_OFFSET_ADD, &[OPERAND_LENGTH]);
+        write_ram(COEF_A_SIGN_OFFSET_ADD, &[A_SIGN]);
+        write_ram(COEF_A_OFFSET_ADD, &A);
+        // write_ram(COEF_B_OFFSET, &B);
         write_ram(MODULUS_OFFSET_ADD, &N);
 
         write_ram(POINT_P_X, &point_a_x_u32);
         write_ram(POINT_P_Y, &point_a_y_u32);
-        write_ram(POINT_P_Z, &[1]);
+        write_ram(POINT_P_Z, &Z_COORDINATE);
 
         write_ram(POINT_Q_X, &point_b_x_u32);
         write_ram(POINT_Q_Y, &point_b_y_u32);
-        write_ram(POINT_Q_Z, &[1]);
+        write_ram(POINT_Q_Z, &Z_COORDINATE);
+
+        write_ram(SCALAR_K_ADD, &[1]);
+        write_ram(SCALAR_M_ADD, &[1]);
 
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x23)
+            .mode().bits(0x27)
             .start().set_bit()
         );
 
@@ -374,16 +342,15 @@ impl CryptoTrait for Crypto<'_>  {
         // Read the result
         let mut result_x = [0u32; 8];
         let mut result_y = [0u32; 8];
-        let mut result_z = [0u32; 8];
-        
-        read_ram(RESULT_X, &mut result_x);
-        read_ram(RESULT_Y, &mut result_y);
-        read_ram(RESULT_Z, &mut result_z);
+
+        read_ram(RESULT_X_ADD, &mut result_x);
+        read_ram(RESULT_Y_ADD, &mut result_y);
 
         // Clear the completion flag
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
 
-        (u32_to_u8(&result_x), u32_to_u8(&result_y), u32_to_u8(&result_z))
+        
+        (u32_to_u8(&result_x), u32_to_u8(&result_y))
 
     }
 
@@ -391,7 +358,7 @@ impl CryptoTrait for Crypto<'_>  {
         &mut self, 
         point_x: BytesP256ElemLen, 
         point_y: BytesP256ElemLen, 
-        scalar: BytesP256ElemLen
+        scalar: &BytesP256ElemLen
     ) -> (BytesP256ElemLen, BytesP256ElemLen) {
 
         self.stm32wba_init_pka();
@@ -448,6 +415,111 @@ impl CryptoTrait for Crypto<'_>  {
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
 
         (u32_to_u8(&result_x), u32_to_u8(&result_y))
+    }
+
+    unsafe fn pka_mod_mult(
+        &mut self, 
+        a: &BytesP256ElemLen, 
+        b: &BytesP256ElemLen, 
+    ) -> BytesP256ElemLen {
+
+        self.stm32wba_init_pka();
+
+        // Convert points to the right format
+        let a_u32 = u8_to_u32(&a);
+        let b_u32 = u8_to_u32(&b);
+        
+        zero_ram();
+        // constant values for P-256 curve
+        write_ram(OPERAND_LENGTH_MULT, &[OPERAND_LENGTH]);
+        write_ram(OPERAND_A_ARITHEMTIC_MULT, &a_u32);
+        write_ram(OPERAND_B_ARITHEMTIC_MULT, &b_u32);    
+        
+        // Configure PKA operation mode and start
+        self.pka.pka_cr().modify(|_, w| w
+            .mode().bits(0x0B)
+            .start().set_bit()
+        );
+
+        // Wait for processing to complete - PROCENDF is 1 when done
+        while self.pka.pka_sr().read().procendf().bit_is_clear() {
+            asm::nop();
+        }
+
+        // Read the result
+        let mut result = [0u32; 8];
+        read_ram(RESULT_ARITHMETIC_MULT, &mut result);
+                
+        // Clear the completion flag
+        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
+
+        // We now reduce the value mod n
+        self.stm32wba_init_pka();
+
+        zero_ram();
+        write_ram(OPERAND_LENGTH_REDUC, &[OPERAND_LENGTH]);
+        write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
+        write_ram(OPERAND_A_REDUC, &A);
+        write_ram(MODULUS_REDUC, &N);
+
+        // Configure PKA operation mode and start
+        self.pka.pka_cr().modify(|_, w| w
+            .mode().bits(0x0D)
+            .start().set_bit()
+        );
+
+        // Wait for processing to complete - PROCENDF is 1 when done
+        while self.pka.pka_sr().read().procendf().bit_is_clear() {
+            asm::nop();
+        }
+
+        // Read the result
+        let mut result_reduc = [0u32; 8];
+        read_ram(RESULT_REDUC, &mut result_reduc);
+                
+        // Clear the completion flag
+        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
+
+        u32_to_u8(&result_reduc)
+    }
+
+    unsafe fn pka_mod_sub(
+        &mut self, 
+        a: &BytesP256ElemLen, 
+        b: &BytesP256ElemLen, 
+    ) -> BytesP256ElemLen {
+
+        self.stm32wba_init_pka();
+
+        // Convert points to the right format
+        let a_u32 = u8_to_u32(&a);
+        let b_u32 = u8_to_u32(&b);
+        
+        zero_ram();
+        // constant values for P-256 curve
+        write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
+        write_ram(OPERAND_A_SUB, &a_u32);
+        write_ram(OPERAND_B_SUB, &b_u32);    
+        
+        // Configure PKA operation mode and start
+        self.pka.pka_cr().modify(|_, w| w
+            .mode().bits(0x0f)
+            .start().set_bit()
+        );
+
+        // Wait for processing to complete - PROCENDF is 1 when done
+        while self.pka.pka_sr().read().procendf().bit_is_clear() {
+            asm::nop();
+        }
+
+        // Read the result
+        let mut result = [0u32; 8];
+        read_ram(RESULT_SUB, &mut result);
+                
+        // Clear the completion flag
+        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
+
+        u32_to_u8(&result)
     }
    
     fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
@@ -604,25 +676,6 @@ impl CryptoTrait for Crypto<'_>  {
         ([0u8; P256_ELEM_LEN], [0u8; P256_ELEM_LEN])
     }
 
-    // fn build_hash_input(
-    //     r_bytes: &[u8],
-    //     h: &[u8],
-    //     message: Option<&[u8]>,
-    // ) -> Vec<u8> {
-    //     let mut hash_input = Vec::with_capacity(r_bytes.len() + h.len() + message.map_or(0, |m| m.len()));
-    //     hash_input.extend_from_slice(r_bytes);
-    //     hash_input.extend_from_slice(h);
-    //     if let Some(msg) = message {
-    //         hash_input.extend_from_slice(msg);
-    //     }
-    //     hash_input
-    // }
-
-    // fn bytes_to_scalar(&self, bytes: &[u8]) -> p256::NonZeroScalar {
-    //     let scalar = p256::Scalar::from_bytes_reduced(bytes.into());
-    //     p256::NonZeroScalar::new(scalar).expect("Invalid scalar: must not be zero")
-    // }
-
     fn bytes_to_point(&self, bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
         // Create an EncodedPoint from the compressed bytes
         let mut compressed_point: [u8; 33] = [0; 33];    
@@ -696,24 +749,31 @@ impl CryptoTrait for Crypto<'_>  {
 
     unsafe fn sok_log_eq(
         &mut self,
-        x: BytesP256ElemLen,
-        i: BytesP256ElemLen,
-        g_x: &BytesP256ElemLen,
-        h_g_y: &BytesP256ElemLen,
-        h_g_r: &BytesP256ElemLen,
+        h: &BytesP256ElemLen,
+        g_r: &BytesP256ElemLen, 
+        g_x: &BytesP256ElemLen, 
+        g_y: &BytesP256ElemLen, 
+        x: &BytesP256ElemLen, 
+        i: &BytesP256ElemLen,
         message: Option<&[u8]>,
     ) -> SokLogEqProof {
 
+        let (h_point_x, h_point_y) = self.bytes_to_point(h);
+        let (g_y_point_x, g_y_point_y) = self.bytes_to_point(g_y);
+        let (g_r_point_x, g_r_point_y) = self.bytes_to_point(g_r);
+
         // Compute H_I^1 = (h_I * g^y)^x
-        // let h_g_y = h_point + g_y_point;
-        // let h_1 = h_g_y * x;
+        let (h_g_y_point_x, h_g_y_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_y_point_x, g_y_point_y );
+        // let (h_g_y_point_x_proj, h_g_y_point_y_proj, h_g_y_point_z_proj) = self.pka_ecc_point_add(h_point_x, h_point_y, g_y_point_x, g_y_point_y );
+        // let (h_g_y_point_x, h_g_y_point_y) = self.pka_ecc_projective_to_affine(h_g_y_point_x_proj, h_g_y_point_y_proj, h_g_y_point_z_proj);
+        let (h_1_point_x, h_1_point_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, x);
         // let h_bytes_1 = h_1.to_affine().x().to_bytes();
 
-        // // Compute H_I^2 = (h_I * g^r)^x
-        // let h_point_1 = self.bytes_to_point(h);
-        // let g_r_point = self.bytes_to_point(g_r);
-        // let h_g_r = h_point + g_r_point;
-        // let h_2 = h_g_r * x;
+        // Compute H_I^2 = (h_I * g^r)^x
+        let (h_g_r_point_x, h_g_r_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_r_point_x, g_r_point_y );
+        // let (h_g_r_point_x_proj, h_g_r_point_y_proj, h_g_r_point_z_proj) = self.pka_ecc_point_add(h_point_x, h_point_y, g_r_point_x, g_r_point_y );
+        // let (h_g_r_point_x, h_g_r_point_y) = self.pka_ecc_projective_to_affine(h_g_r_point_x_proj, h_g_r_point_y_proj, h_g_r_point_z_proj);
+        let (h_2_point_x, h_2_point_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, x);
         // let h_bytes_2 = h_2.to_affine().x().to_bytes();
 
         // // Generate proof pi
@@ -726,218 +786,64 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Convert byte arrays to points
         // Maybe this function can handle as well the point addition, so we compute here ECC h + g^y
-        let (h_g_y_point_x, h_g_y_point_y) = self.bytes_to_point(h_g_y);
-        let (h_g_r_point_x, h_g_r_point_y) = self.bytes_to_point(h_g_r);
+        // let (h_g_y_point_x, h_g_y_point_y) = self.bytes_to_point(h_g_y);
+        // let (h_g_r_point_x, h_g_r_point_y) = self.bytes_to_point(h_g_r);
         
         // Compute I_1 = g^r_I
-        let (I_1, _) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), r);
+        let (I_1_x, I_1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
         
         // Compute I_2 = (h_I g^y)^r
-        let (I_2, _) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, r);
+        let (I_2_x, I_2_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &r);
 
         // Compute I_3 = (h_I g^r)^r
-        let (I_3, _) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, r);
+        let (I_3_x, I_3_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, &r);
 
         // Compute I_4 = g^s
-        let (I_4, _) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), s);
+        let (I_4_x, I_4_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &s);
 
         // Compute I_5 = (h_I g^y)^s
-        let (I_5, _) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, s);
+        let (I_5_x, I_5_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &s);
         
         // Create the hash input (I_1, I_2, I_3, I_4, I_5, message)
-        // let inputs = [I_1, I_2, I_3, I_4, I_5, message.unwrap_or(&[])];
-        // let hash_input = build_hash_input(&inputs);
-        
-        // // Compute alpha = H(I_1, I_2, I_3, I_4, I_5, message)
-        // let alpha = self.hash_to_scalar(&hash_input);
-        
-        // // Compute beta = r - x*alpha
-        // let beta = r - (x * alpha);
+        // we need to add I_1 + I_2 + I_3 + I_4 + I_5
+        let (sum_x, sum_y) = self.pka_ecc_point_add(I_1_x, I_1_y, I_2_x, I_2_y);
+        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_3_x, I_3_y);
+        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_4_x, I_4_y);
+        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_5_x, I_5_y);
 
-        // // Compute gamma = s - i*alpha
-        // let gamma = s - (i * alpha);
-        
-        // // Return the proof (alpha, beta, gamma)
-        // let mut proof = SokLogEqProof::default();
-        // proof.pi1.copy_from_slice(&alpha);
-        // proof.pi2.copy_from_slice(&beta.to_bytes());
-        // proof.pi3.copy_from_slice(&gamma.to_bytes());
-        
-        // proof
+        // let inputs = [I_1 + I_2 + I_3 + I_4 + I_5 || message.unwrap_or(&[])];
+        let mut hash_input = [0u8; MAX_BUFFER_LEN];
 
+        // Copy sum_x into hash_input
+        hash_input[..P256_ELEM_LEN].copy_from_slice(&sum_x);
+        let mut hash_len = P256_ELEM_LEN;
+        
+        // Copy message if it exists
+        if let Some(message_bytes) = message {
+            hash_input[P256_ELEM_LEN..P256_ELEM_LEN + message_bytes.len()]
+                .copy_from_slice(message_bytes);
+            hash_len = hash_len + message_bytes.len()
+        }        
+
+        // Compute alpha = H(I_1, I_2, I_3, I_4, I_5, message)
+        let alpha = self.sha256_digest(&hash_input, hash_len);
+        
+        // Compute beta = r - x*alpha
+        let mut beta = self.pka_mod_mult(x, &alpha);
+        let beta = self.pka_mod_sub(&r, &beta);
+
+        // Compute gamma = s - i*alpha
+        let gamma = self.pka_mod_mult(i, &alpha);
+        let gamma = self.pka_mod_sub(&s, &gamma);
+        
+        // Return the proof (alpha, beta, gamma)
         let mut proof = SokLogEqProof::default();
+        proof.pi1.copy_from_slice(&alpha);
+        proof.pi2.copy_from_slice(&beta);
+        proof.pi3.copy_from_slice(&gamma);
 
         proof
     }
     
-    // fn vok_log_eq(
-    //     &mut self,
-    //     g1: &BytesP256ElemLen,
-    //     g2: &BytesP256ElemLen,
-    //     h1: &BytesP256ElemLen,
-    //     h2: &BytesP256ElemLen,
-    //     pi: &SokLogEqProof,
-    //     message: Option<&[u8]>,
-    // ) -> bool {
-    //     // Convert byte arrays to points and scalars
-    //     let g1_point = self.bytes_to_point(g1);
-    //     let g2_point = self.bytes_to_point(g2);
-    //     let h1_point = self.bytes_to_point(h1);
-    //     let h2_point = self.bytes_to_point(h2);
-    //     let r1_point = self.bytes_to_point(&pi.pi1);
-    //     let r2_point = self.bytes_to_point(&pi.pi2);
-    //     let z = match self.bytes_to_scalar(&pi.pi3) {
-    //         Some(z) => z,
-    //         None => return false,
-    //     };
-        
-    //     // Create the hash input (R1, R2, g1, g2, h1, h2, message)
-    //     let inputs = [&r1_bytes[..], &r2_bytes[..], g1, g2, h1, h2, message.unwrap_or(&[])];
-    //     let let hash_input = build_hash_input(&inputs);
-
-    //     // let mut hash_input = Vec::with_capacity(
-    //     //     pi.pi1.len() + pi.pi2.len() + g1.len() + g2.len() + h1.len() + h2.len() + 
-    //     //     message.map_or(0, |m| m.len())
-    //     // );
-    //     // hash_input.extend_from_slice(&pi.pi1);
-    //     // hash_input.extend_from_slice(&pi.pi2);
-    //     // hash_input.extend_from_slice(g1);
-    //     // hash_input.extend_from_slice(g2);
-    //     // hash_input.extend_from_slice(h1);
-    //     // hash_input.extend_from_slice(h2);
-    //     // if let Some(msg) = message {
-    //     //     hash_input.extend_from_slice(msg);
-    //     // }
-        
-    //     // Compute c = H(R1, R2, g1, g2, h1, h2, message)
-    //     let c = self.hash_to_scalar(&hash_input);
-        
-    //     // Verify: g1^z == R1 * h1^c and g2^z == R2 * h2^c
-    //     let g1_z = g1_point * z;
-    //     let h1_c = h1_point * c;
-    //     let expected1 = r1_point + h1_c;
-        
-    //     let g2_z = g2_point * z;
-    //     let h2_c = h2_point * c;
-    //     let expected2 = r2_point + h2_c;
-        
-    //     g1_z == expected1 && g2_z == expected2
-    // }
-
-    // fn precomp(
-    //     &mut self,
-    //     pk_aut: &[BytesP256AuthPubKey],
-    //     pk: &BytesP256ElemLen,
-    //     // id_cred: &IdCred,
-    //     id_cred: EdhocBuffer<16>,
-    // ) -> (BytesP256ElemLen, BytesHashLen) {
-    //     // Verify all authority keys
-    //     for pk in pk_aut {
-    //         if !self.vok_log(&pk.pk1, &pk.pk2, None) {
-    //             panic!("Error: authority keys invalid");
-    //         }
-    //     }
-        
-    //     // Compute h as the product of all authority public keys
-    //     let mut h_point = self.bytes_to_point(&pk_aut[0].pk1);
-    //     for i in 1..pk_aut.len() {
-    //         let pk_point = self.bytes_to_point(&pk_aut[i].pk1);
-    //         h_point = h_point + pk_point;
-    //     }
-
-    //     // Compute w as concatenation of authority public keys and hash of peer identity
-    //     let mut w = Vec::new();
-        
-    //     // Add all authority public keys to the concatenation
-    //     for auth_pk in pk_aut {
-    //         w.extend_from_slice(&auth_pk.pk1);
-    //     }
-        
-    //     // Add hash of id_cred
-    //     let peer_id_hash = self.sha256_digest(id_cred);
-    //     w.extend_from_slice(&peer_id_hash);
-        
-    //     // Return the computed values
-    //     (h_point.to_bytes(), w)
-
-    // }
-
-    // fn initiator_sok(
-    //     &mut self,
-    //     h: &BytesP256ElemLen,
-    //     g_r: &BytesP256ElemLen, 
-    //     g_x: &BytesP256ElemLen, 
-    //     g_y: &BytesP256ElemLen, 
-    //     x: &BytesP256ElemLen, 
-    //     i: &BytesP256ElemLen,
-    //     w: &BytesHashLen, 
-    // ) -> () {
-    //     // Compute H_I^1 = (h_I * g^y)^x
-    //     let h_point_1 = self.bytes_to_point(h);
-    //     let g_y_point = self.bytes_to_point(g_y);
-    //     let h_g_y = h_point + g_y_point;
-    //     let h_1 = h_g_y * x;
-    //     let h_bytes_1 = h_1.to_affine().x().to_bytes();
-
-    //     // Compute H_I^2 = (h_I * g^r)^x
-    //     let h_point_1 = self.bytes_to_point(h);
-    //     let g_r_point = self.bytes_to_point(g_r);
-    //     let h_g_r = h_point + g_r_point;
-    //     let h_2 = h_g_r * x;
-    //     let h_bytes_2 = h_2.to_affine().x().to_bytes();
-
-    //     // Generate proof pi
-    //     let h_g_y_bytes = h_g_y.to_affine().x().to_bytes();
-    //     let h_g_r_bytes = h_g_r.to_affine().x().to_bytes();
-        
-    //     let pi = self.sok_log_eq(
-    //         x,
-    //         &g_x,
-    //         &h_g_y_bytes.into(),
-    //         &h_g_r_bytes.into(),
-    //         Some(w),
-    //     );
-    // }
-
-    // fn responder_sok(
-    //     &mut self,
-    //     h: &BytesP256ElemLen,
-    //     g_i: &BytesP256ElemLen, 
-    //     g_y: &BytesP256ElemLen, 
-    //     g_x: &BytesP256ElemLen, 
-    //     y: &BytesP256ElemLen, 
-    //     r: &BytesP256ElemLen,
-    //     w: &BytesHashLen, 
-    // ) -> () {
-    //     // Compute Y = g^y
-    //     // let y_point = p256::ProjectivePoint::generator() * y;
-    //     // let y_bytes = x_point.to_affine().x().to_bytes();
-
-    //     // Compute H1 = (h_R * g^x)^y
-    //     let h_point_1 = self.bytes_to_point(h);
-    //     let g_x_point = self.bytes_to_point(g_x);
-    //     let h_g_x = h_point + g_x_point;
-    //     let h_1 = h_g_x * y;
-    //     let h_bytes_1 = h_1.to_affine().x().to_bytes();
-
-    //     // Compute H2 = (h_R * g^i)^y
-    //     let h_point_1 = self.bytes_to_point(h);
-    //     let g_i_point = self.bytes_to_point(g_i);
-    //     let h_g_i = h_point + g_i_point;
-    //     let h_2 = h_g_i * y;
-    //     let h_bytes_2 = h_2.to_affine().x().to_bytes();
-
-    //     // Generate proof pi
-    //     let h_g_x_bytes = h_g_x.to_affine().x().to_bytes();
-    //     let h_g_i_bytes = h_g_i.to_affine().x().to_bytes();
-        
-    //     let pi = self.sok_log_eq(
-    //         y,
-    //         &g_y,
-    //         &h_g_x_bytes.into(),
-    //         &h_g_i_bytes.into(),
-    //         Some(w),
-    //     );
-    // }
 }
 

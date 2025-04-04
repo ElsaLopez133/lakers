@@ -40,33 +40,17 @@ impl InitiaitorSoK {
         w: &BytesHashLen, 
     ) -> (InitiaitorSoKWaitEAD2, EADItem) {
 
-        // Compute H_I^1 = (h_I * g^y)^x
-        // let h_g_y = h_point + g_y_point;
-        // let h_1 = h_g_y * x;
-        // let h_bytes_1 = h_1.to_affine().x().to_bytes();
+        let pi = crypto.sok_log_eq(
+            h: h,
+            g_r: g_r,
+            g_x: g_x,
+            g_y: g_y,
+            x: x,
+            i: i,
+            message: Some(w),
+        )
 
-        // // Compute H_I^2 = (h_I * g^r)^x
-        // let h_point_1 = self.bytes_to_point(h);
-        // let g_r_point = self.bytes_to_point(g_r);
-        // let h_g_r = h_point + g_r_point;
-        // let h_2 = h_g_r * x;
-        // let h_bytes_2 = h_2.to_affine().x().to_bytes();
-
-        // // Generate proof pi
-        // let h_g_y_bytes = h_g_y.to_affine().x().to_bytes();
-        // let h_g_r_bytes = h_g_r.to_affine().x().to_bytes();
-        
-        // let pi = self.sok_log_eq(
-        //     x,
-        //     &g_x,
-        //     &h_g_y_bytes.into(),
-        //     &h_g_r_bytes.into(),
-        //     Some(w),
-        // );
-
-        // Compute the hash for the message
-        let hash_output = crypto.sha256_digest(&self.msg, self.message_len);
-        let value = Some(encode_ead_1_value(&self.loc_w, &enc_id));
+        let value = Some(pi);
 
         let ead_1 = EADItem {
             label: EAD_SOK_LABEL,
