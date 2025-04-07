@@ -26,3 +26,4 @@ cortex-m-rt = { version = "0.7.3", optional = false }
 # defmt
 defmt = "0.3"
 defmt-rtt = "0.4"
+hexlit = "0.5.3"

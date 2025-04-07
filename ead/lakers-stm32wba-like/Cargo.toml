@@ -12,4 +12,3 @@ lakers-shared.workspace = true
 
 [dev-dependencies]
 lakers-crypto.workspace = true
-hexlit = "0.5.3"

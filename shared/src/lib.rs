@@ -17,6 +17,7 @@ pub use helpers::*;
 
 use core::num::NonZeroI16;
 use defmt_or_log::trace;
+use defmt::info;
 
 mod crypto;
 pub use crypto::*;
@@ -289,7 +290,7 @@ pub const SCALAR: [u32; 8] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2];
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BytesP256AuthPubKey {
     pub pk1: [u8; 32], // X-coordinate of the P-256 public key
-    pub pk2: [u8; 32], // Proof of knowledge
+    pub pk2: SokLogProof, // Proof of knowledge
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -604,6 +605,7 @@ pub struct ProcessingM1 {
 #[repr(C)]
 pub struct WaitM2 {
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
+    pub g_x: BytesP256ElemLen, // ephemeral public key of the initiator
     pub h_message_1: BytesHashLen,
 }
 
@@ -621,6 +623,7 @@ pub struct ProcessingM2 {
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
+    pub g_x: BytesP256ElemLen, // ephemeral public key of the initiator
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: EdhocMessageBuffer,
     pub c_r: ConnId,
@@ -1003,12 +1006,16 @@ mod edhoc_parser {
 
         // message_2 consists of 1 bstr element; this element in turn contains the concatenation of g_y and ciphertext_2
         let decoded = decoder.bytes()?;
+        // info!("decoded: {:#X}", decoded);
+
         if decoder.finished() {
             if let Some(key) = decoded.get(0..P256_ELEM_LEN) {
                 let mut g_y: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
                 g_y.copy_from_slice(key);
+                // info!("g_y parse_message_2: {:#X}", g_y);
                 if let Some(c2) = decoded.get(P256_ELEM_LEN..) {
                     if ciphertext_2.fill_with_slice(c2).is_ok() {
+                        // info!("ciphertext_2: {:#X}", ciphertext_2.content[..ciphertext_2.len]);
                         Ok((g_y, ciphertext_2))
                     } else {
                         Err(EDHOCError::ParsingError)

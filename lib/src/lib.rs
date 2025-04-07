@@ -43,7 +43,7 @@ pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
 
 #[derive(Debug)]
 pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
-    state: ProcessingM2, // opaque state
+    pub state: ProcessingM2, // opaque state
     i: Option<BytesP256ElemLen>,
     cred_i: Option<Credential>,
     crypto: Crypto,
@@ -321,6 +321,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
             Some(c_i) => c_i,
             None => generate_connection_identifier_cbor(&mut self.crypto),
         };
+        // trace!("c_i: {:?}", c_i.as_slice());
 
         match i_prepare_message_1(&self.state, &mut self.crypto, c_i, ead_1) {
             Ok((state, message_1)) => Ok((

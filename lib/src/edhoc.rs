@@ -1,3 +1,5 @@
+// use defmt_or_log::info;
+use defmt::info;
 use lakers_shared::{Crypto as CryptoTrait, *};
 
 pub fn edhoc_exporter(
@@ -288,6 +290,8 @@ pub fn i_prepare_message_1(
     ead_1: &Option<EADItem>, // FIXME: make it a list of EADItem
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
+    // info!("g_x i_preapre_message_1: {:#X}", state.g_x);
+    // info!("x i_preapre_message_1: {:#X}", state.x);
     let message_1 = encode_message_1(state.method, &state.suites_i, &state.g_x, c_i, ead_1)?;
 
     let mut message_1_buf: BytesMaxBuffer = [0x00; MAX_BUFFER_LEN];
@@ -295,9 +299,17 @@ pub fn i_prepare_message_1(
 
     // hash message_1 here to avoid saving the whole message in the state
     let h_message_1 = crypto.sha256_digest(&message_1_buf, message_1.len);
+    // let h_message_1 = [
+    //     0xca, 0x02, 0xca, 0xbd, 0xa5, 0xa8, 0x90, 0x27,
+    //     0x49, 0xb4, 0x2f, 0x71, 0x10, 0x50, 0xbb, 0x4d,
+    //     0xbd, 0x52, 0x15, 0x3e, 0x87, 0x52, 0x75, 0x94,
+    //     0xb3, 0x9f, 0x50, 0xcd, 0xf0, 0x19, 0x88, 0x8c,
+    // ];
+    // info!("hash_message_1 initiator: {:#X}", h_message_1);
 
     Ok((
         WaitM2 {
+            g_x: state.g_x,
             x: state.x,
             h_message_1,
         },
@@ -314,11 +326,15 @@ pub fn i_parse_message_2<'a>(
     let res = parse_message_2(message_2);
     if let Ok((g_y, ciphertext_2)) = res {
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
+        // info!("state.h_message_1: {:#X}", state.h_message_1);
+        // info!("th_2: {:#X}", th_2);
 
         // compute prk_2e
         let prk_2e = compute_prk_2e(crypto, &state.x, &g_y, &th_2);
+        // info!("prk_2e: {:#X}", prk_2e);
 
         let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
+        // info!("plaintext_2: {:#X}", plaintext_2.content[..plaintext_2.len]);
 
         // decode plaintext_2
         let plaintext_2_decoded = decode_plaintext_2(&plaintext_2);
@@ -329,6 +345,7 @@ pub fn i_parse_message_2<'a>(
                 prk_2e,
                 th_2,
                 x: state.x,
+                g_x: state.g_x,
                 g_y,
                 plaintext_2: plaintext_2,
                 c_r: c_r_2,
@@ -341,6 +358,7 @@ pub fn i_parse_message_2<'a>(
             Err(EDHOCError::ParsingError)
         }
     } else {
+        info!("error parseing res");
         Err(res.unwrap_err())
     }
 }
@@ -353,6 +371,7 @@ pub fn i_verify_message_2(
 ) -> Result<ProcessedM2, EDHOCError> {
     // verify mac_2
     let salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
+    // info!("salt_3e2m: {:#X}", salt_3e2m);
 
     let prk_3e2m = match valid_cred_r.key {
         CredentialKey::EC2Compact(public_key) => {
@@ -360,6 +379,7 @@ pub fn i_verify_message_2(
         }
         CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
     };
+    // info!("prk_3e2m: {:#X}", prk_3e2m);
 
     let expected_mac_2 = compute_mac_2(
         crypto,
@@ -370,6 +390,11 @@ pub fn i_verify_message_2(
         &state.th_2,
         &state.ead_2,
     );
+    // info!("th_2: {:#X}", state.th_2);
+    // info!("cred_r: {:#X}", valid_cred_r.bytes.as_slice());
+    // info!("c_r: {:#X}", state.c_r.as_slice());
+    // info!("state.id_cred_r: {:#X}", state.id_cred_r.as_full_value());
+    // info!("expected_mac_2: {:#X}", expected_mac_2);
 
     if state.mac_2 == expected_mac_2 {
         // step is actually from processing of message_3
@@ -666,8 +691,11 @@ fn edhoc_kdf(
     length: usize,
 ) -> BytesMaxBuffer {
     let (info, info_len) = encode_info(label, context, context_len, length);
+    // info!("edhoc_kdf info mac_2: {:#X}", info[..info_len]);
+    // info!("edhoc_kdf info_len: {:#X}", info_len);
 
     crypto.hkdf_expand(prk, &info, info_len, length)
+
 }
 
 fn encode_plaintext_3(
@@ -1010,6 +1038,8 @@ fn compute_mac_2(
 ) -> BytesMac2 {
     // compute MAC_2
     let (context, context_len) = encode_kdf_context(Some(c_r), id_cred_r, th_2, cred_r, ead_2);
+    // info!("compute_mac_2 context: {:#X}", context[..context_len]);
+    // info!("compute_mac_2 context_len : {:#X}  {:?}", context_len, context_len);
 
     // MAC_2 = EDHOC-KDF( PRK_3e2m, 2, context_2, mac_length_2 )
     let mut mac_2: BytesMac2 = [0x00; MAC_LENGTH_2];

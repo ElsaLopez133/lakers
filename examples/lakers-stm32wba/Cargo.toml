@@ -36,14 +36,18 @@ embedded-alloc = "0.5.0"
 # defmt
 defmt = "0.3"
 defmt-rtt = "0.4"
+hexlit = "0.5.3"
+defmt-or-log = { version = "0.2.1", default-features = false }
 
 stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55"] }
+stm32-metapac = { version = "16.0.0", features = ["metadata", "stm32wba55cg"] }
 
 # lakers
 lakers = { package = "lakers", path = "../../lib", default-features = false }
 lakers-crypto = { path = "../../crypto", default-features = false }
 lakers-crypto-rustcrypto-stm = { path = "../../crypto/lakers-crypto-rustcrypto-stm", default-features = false }
 lakers-shared.workspace = true
+lakers-stm32wba-like = { package = "lakers-stm32wba-like", path = "../../ead/lakers-stm32wba-like/", version = "^0.6.2" }
 
 [features]
 default = ["crypto-rustcrypto-stm", "ead-none", "defmt"]

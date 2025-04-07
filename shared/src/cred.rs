@@ -229,10 +229,12 @@ impl Credential {
                 8 => {
                     if decoder.map()? != 1 {
                         // cnf is always single-item'd
+                        info!("error 1");
                         return Err(EDHOCError::ParsingError);
                     }
 
                     if decoder.u8()? != 1 {
+                        info!("error 2");
                         // Unexpected cnf
                         return Err(EDHOCError::ParsingError);
                     }
@@ -240,6 +242,7 @@ impl Credential {
                     x_kid = Some(Self::parse_cosekey(&mut decoder)?);
                 }
                 _ => {
+                    info!("error 3");
                     return Err(EDHOCError::ParsingError);
                 }
             }

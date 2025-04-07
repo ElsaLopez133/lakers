@@ -1,9 +1,8 @@
 #![no_std]
 
 mod device;
-mod shared;
 
-pub use device::{InitiaitorSoK};
+pub use device::InitiatorSoK;
 
 pub mod consts {
     pub const EAD_SOK_LABEL: u8 = 0x2;
