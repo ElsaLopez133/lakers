@@ -115,7 +115,7 @@ pub trait Crypto: core::fmt::Debug {
     unsafe fn sok_log(
         &mut self, 
         x: BytesP256ElemLen, 
-        h: &BytesP256ElemLen, 
+        h: (BytesP256ElemLen, BytesP256ElemLen), 
         message: Option<&[u8]>
     ) -> SokLogProof ;
     unsafe fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen);
@@ -124,5 +124,11 @@ pub trait Crypto: core::fmt::Debug {
         pk_aut: &[BytesP256AuthPubKey],
         id_cred_i: &[u8],
     ) -> (BytesP256ElemLen, BytesHashLen);
+    unsafe fn vok_log(
+        &mut self, 
+        h: (BytesP256ElemLen, BytesP256ElemLen), 
+        pi: &SokLogProof, 
+        message: Option<&[u8]>
+    ) -> bool;
 
 }

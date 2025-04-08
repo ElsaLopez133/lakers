@@ -76,8 +76,8 @@ unsafe fn main() -> ! {
 
     // To follow the example, c_i= 37
     trace!("INITIATOR MESSAGE_1");
-    let c_i = ConnId::from_int_raw(0x37);
-    // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto(&p, hash, pka, rng));
+    // let c_i = ConnId::from_int_raw(0x37);
+    let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto(&p, hash, pka, rng));
     // info!("c_i: {:#X}", c_i.as_slice());
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
     info!("message_1: {:#X}", message_1.content[..message_1.len]);

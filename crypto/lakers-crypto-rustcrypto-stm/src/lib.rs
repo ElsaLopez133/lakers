@@ -29,12 +29,15 @@ use p256::elliptic_curve::point::AffineCoordinates;
 use p256::elliptic_curve::point::DecompressPoint;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::elliptic_curve::sec1::FromEncodedPoint;
+use p256::elliptic_curve::Field;
+use p256::elliptic_curve::PrimeField;
 use p256::{
     PublicKey,
     EncodedPoint,
     AffinePoint,
     ProjectivePoint,
     FieldBytes,
+    Scalar,
 };
 use sha2::Digest;
 use cortex_m::asm;
@@ -490,7 +493,7 @@ impl CryptoTrait for Crypto<'_>  {
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
 
         // We now reduce the value mod n
-        self.stm32wba_init_pka();
+        // self.stm32wba_init_pka();
 
         zero_ram();
         write_ram(OPERAND_LENGTH_REDUC, &[OPERAND_LENGTH]);
@@ -597,89 +600,89 @@ impl CryptoTrait for Crypto<'_>  {
         u32_to_u8(&result)
     }
    
-    fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
-        // Reset HASH peripheral
-        self.hash.hash_cr().write(|w| w.init().set_bit());
-        while self.hash.hash_cr().read().init().bit_is_set() {
-            asm::nop();
-        }
-
-        // Configure for SHA-256 mode with byte-swapping
-        unsafe {
-            self.hash.hash_cr().write(|w| w
-                .algo().bits(0b11)      // SHA-256 algorithm
-                .mode().bit(false)      // Hash mode (not HMAC)
-                .datatype().bits(0b10)  // 8-bit data with byte swapping
-                .dmae().clear_bit()     // No DMA
-                .init().set_bit()     
-            );
-        }
-
-        // // Pack bytes into a word (big-endian for SHA-256)
-        // let mut word = 0u32;
-        // for (i, &byte) in message[..message_len].iter().enumerate() {
-        //     // Shift existing bits and add new byte
-        //     word |= u32::from(byte) << (8 * (3 - (i % 4)));
-            
-        //     // Write word when we have 4 bytes or at the end of the message
-        //     if ((i + 1) % 4 == 0) || (i == message_len - 1) {
-        //         // If it's the last word and not a full 4-byte word, add padding
-        //         if i == message_len - 1 && message_len % 4 != 0 {
-        //             word |= 0x80 >> (8 * (i % 4 + 1));
-        //         }
-                
-        //         unsafe { 
-        //             self.hash.hash_din().write(|w| w.bits(word));
-        //         }
-        //         word = 0;
-        //     }
-        // }
-
-        // Set NBLW to original message length
-        unsafe {
-            for chunk in message[..message_len].chunks_exact(4) {
-                let word = u32::from_le_bytes(chunk.try_into().unwrap());
-                self.hash.hash_din().write(|w| w.bits(word));
-            }
-            self.hash.hash_str().write(|w| w.nblw().bits(message_len as u8));
-        }
-
-        // Start padding and digest computation
-
-        self.hash.hash_str().write(|w| w.dcal().set_bit());
-
-        // Wait for digest calculation to complete
-        while self.hash.hash_sr().read().busy().bit_is_set() {
-            asm::nop();
-        }
-
-        // Read final hash
-        let hash_result = [
-            self.hash.hash_hr0().read().bits(),
-            self.hash.hash_hr1().read().bits(),
-            self.hash.hash_hr2().read().bits(),
-            self.hash.hash_hr3().read().bits(),
-            self.hash.hash_hr4().read().bits(),
-            self.hash.hash_hr5().read().bits(),
-            self.hash.hash_hr6().read().bits(),
-            self.hash.hash_hr7().read().bits(),
-        ];
-
-         // Convert `[u32; 8]` → `[u8; 32]`
-        let mut final_hash: [u8; 32] = [0; 32];
-        for (i, word) in hash_result.iter().enumerate() {
-            final_hash[i * 4..(i + 1) * 4].copy_from_slice(&word.to_be_bytes()); 
-        }
-
-        final_hash
-
-    }
-
     // fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
-    //     let mut hasher = sha2::Sha256::new();
-    //     hasher.update(&message[..message_len]);
-    //     hasher.finalize().into()
+    //     // Reset HASH peripheral
+    //     self.hash.hash_cr().write(|w| w.init().set_bit());
+    //     while self.hash.hash_cr().read().init().bit_is_set() {
+    //         asm::nop();
+    //     }
+
+    //     // Configure for SHA-256 mode with byte-swapping
+    //     unsafe {
+    //         self.hash.hash_cr().write(|w| w
+    //             .algo().bits(0b11)      // SHA-256 algorithm
+    //             .mode().bit(false)      // Hash mode (not HMAC)
+    //             .datatype().bits(0b10)  // 8-bit data with byte swapping
+    //             .dmae().clear_bit()     // No DMA
+    //             .init().set_bit()     
+    //         );
+    //     }
+
+    //     // // Pack bytes into a word (big-endian for SHA-256)
+    //     // let mut word = 0u32;
+    //     // for (i, &byte) in message[..message_len].iter().enumerate() {
+    //     //     // Shift existing bits and add new byte
+    //     //     word |= u32::from(byte) << (8 * (3 - (i % 4)));
+            
+    //     //     // Write word when we have 4 bytes or at the end of the message
+    //     //     if ((i + 1) % 4 == 0) || (i == message_len - 1) {
+    //     //         // If it's the last word and not a full 4-byte word, add padding
+    //     //         if i == message_len - 1 && message_len % 4 != 0 {
+    //     //             word |= 0x80 >> (8 * (i % 4 + 1));
+    //     //         }
+                
+    //     //         unsafe { 
+    //     //             self.hash.hash_din().write(|w| w.bits(word));
+    //     //         }
+    //     //         word = 0;
+    //     //     }
+    //     // }
+
+    //     // Set NBLW to original message length
+    //     unsafe {
+    //         for chunk in message[..message_len].chunks_exact(4) {
+    //             let word = u32::from_le_bytes(chunk.try_into().unwrap());
+    //             self.hash.hash_din().write(|w| w.bits(word));
+    //         }
+    //         self.hash.hash_str().write(|w| w.nblw().bits(message_len as u8));
+    //     }
+
+    //     // Start padding and digest computation
+
+    //     self.hash.hash_str().write(|w| w.dcal().set_bit());
+
+    //     // Wait for digest calculation to complete
+    //     while self.hash.hash_sr().read().busy().bit_is_set() {
+    //         asm::nop();
+    //     }
+
+    //     // Read final hash
+    //     let hash_result = [
+    //         self.hash.hash_hr0().read().bits(),
+    //         self.hash.hash_hr1().read().bits(),
+    //         self.hash.hash_hr2().read().bits(),
+    //         self.hash.hash_hr3().read().bits(),
+    //         self.hash.hash_hr4().read().bits(),
+    //         self.hash.hash_hr5().read().bits(),
+    //         self.hash.hash_hr6().read().bits(),
+    //         self.hash.hash_hr7().read().bits(),
+    //     ];
+
+    //      // Convert `[u32; 8]` → `[u8; 32]`
+    //     let mut final_hash: [u8; 32] = [0; 32];
+    //     for (i, word) in hash_result.iter().enumerate() {
+    //         final_hash[i * 4..(i + 1) * 4].copy_from_slice(&word.to_be_bytes()); 
+    //     }
+
+    //     final_hash
+
     // }
+
+    fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(&message[..message_len]);
+        hasher.finalize().into()
+    }
 
     fn hkdf_expand(
         &mut self,
@@ -785,15 +788,15 @@ impl CryptoTrait for Crypto<'_>  {
     ) -> (BytesP256ElemLen, BytesHashLen) {
         // // Verify all authority keys
         // for pk in pk_aut {
-        //     if !self.vok_log(&pk.pk1, &pk.pk2, None) {
+        //     if !self.vok_log(pk.pk1, &pk.pk2, None) {
         //         panic!("Error: authority keys invalid");
         //     }
         // }
         
         // Compute h as the product of all authority public keys
-        let (mut h_point_x, mut h_point_y) = self.bytes_to_point(&pk_aut[0].pk1);
+        let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
         for i in 1..pk_aut.len() {
-            let (pk_point_x, pk_point_y) = self.bytes_to_point(&pk_aut[i].pk1);
+            let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
             (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
         }
         
@@ -807,7 +810,8 @@ impl CryptoTrait for Crypto<'_>  {
     
         // Add pk_aut[i].pk1
         for authority in pk_aut {
-            hash_input[offset..offset + P256_ELEM_LEN].copy_from_slice(&authority.pk1);
+            let (pk1_x, pk1_y) = authority.pk1;
+            hash_input[offset..offset + P256_ELEM_LEN].copy_from_slice(&pk1_x);
             offset += P256_ELEM_LEN;
         }
 
@@ -842,14 +846,64 @@ impl CryptoTrait for Crypto<'_>  {
         (x_bytes, y_bytes)
     }
 
+    // FIXME
+    unsafe fn vok_log(
+        &mut self, 
+        h:(BytesP256ElemLen, BytesP256ElemLen), 
+        pi: &SokLogProof, 
+        message: Option<&[u8]>
+    ) -> bool {
+        // let (h_point_x, h_point_y) = self.bytes_to_point(h);
+        let (h_point_x, h_point_y) = h;
+        info!("vok_log h_point_x: {:#X}   h_point_y: {:#X}", h_point_x, h_point_y);
+
+        let (g_r_x, g_r_y) = pi.pi1;
+        info!("vok_log g_r_x: {:#X}   g_r_y: {:#X}", g_r_x, g_r_y);
+
+        let z = pi.pi2;
+        info!("vok_log z: {:#X}", z);
+
+        // Create the hash input (R, h, message)
+        let mut hash_input = [0u8; MAX_BUFFER_LEN];
+        let mut hash_len = 0;
+
+        // Copy sum_x into hash_input
+        hash_input[..P256_ELEM_LEN].copy_from_slice(&g_r_x);
+        let mut hash_len = hash_len + P256_ELEM_LEN;
+        hash_input[P256_ELEM_LEN..P256_ELEM_LEN + P256_ELEM_LEN].copy_from_slice(&h_point_x);
+        let mut hash_len = hash_len + P256_ELEM_LEN;
+
+        // Copy message if it exists
+        if let Some(message_bytes) = message {
+            hash_input[P256_ELEM_LEN + P256_ELEM_LEN ..P256_ELEM_LEN + P256_ELEM_LEN + message_bytes.len()]
+                .copy_from_slice(message_bytes);
+            hash_len = hash_len + message_bytes.len()
+        }       
+        
+        // Compute c = H(R, h, message)
+        let c = self.sha256_digest(&hash_input, hash_len);
+        info!("vok_log hash: {:#X}", c);
+        
+        // Verify: g^z == R * h^c
+        let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &z);
+        let (h_c_x, h_c_y) = self.pka_ecc_mult_scalar(h_point_x, h_point_y, &c);
+        let (expected_x, expected_y) = self.pka_ecc_point_add(g_r_x, g_r_y, h_c_x, h_c_y);
+        info!("h_c_x: {:#X}   h_c_y: {:#X}", h_c_x, h_c_y);
+        info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_x);
+
+        g_z_x == expected_x
+    }
+
     unsafe fn sok_log(
         &mut self, 
         x: BytesP256ElemLen, 
-        h: &BytesP256ElemLen, 
+        h: (BytesP256ElemLen, BytesP256ElemLen), 
         message: Option<&[u8]>
     ) -> SokLogProof {
 
-        let (h_point_x, h_point_y) = self.bytes_to_point(h);
+        // let (h_point_x, h_point_y) = self.bytes_to_point(h);
+        let (h_point_x, h_point_y) = h;
+        info!("sok_log h_point_x: {:#X}   h_point_y: {:#X}", h_point_x, h_point_y);
 
         // Generate random value r
         // let r = p256::NonZeroScalar::random(&mut self.rng);
@@ -857,14 +911,17 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute R = g^r
         let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
-        
+        info!("sok_log g_r_x: {:#X}   g_r_y: {:#X}", g_r_x, g_r_y);
+
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
+        let mut hash_len = 0;
 
         // Copy sum_x into hash_input
         hash_input[..P256_ELEM_LEN].copy_from_slice(&g_r_x);
-        let mut hash_len = P256_ELEM_LEN;
+        let mut hash_len = hash_len + P256_ELEM_LEN;
         hash_input[P256_ELEM_LEN..P256_ELEM_LEN + P256_ELEM_LEN].copy_from_slice(&h_point_x);
+        let mut hash_len = hash_len + P256_ELEM_LEN;
 
         // Copy message if it exists
         if let Some(message_bytes) = message {
@@ -875,15 +932,49 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute c = H(R, h, message)
         let hash = self.sha256_digest(&hash_input, hash_len);
+        info!("sok_log hash: {:#X}", hash);
         
         // Compute z = r + x*c
-        let z = self.pka_mod_mult(&x, &hash);
-        let z = self.pka_mod_add(&r, &z);
+        // Convert your existing values to FieldElement
+        let x_scalar = Scalar::from_repr(x.into()).unwrap();
+        let r_scalar = Scalar::from_repr(r.into()).unwrap();
+        let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
+
+        let temp = x_scalar * hash_scalar; // Modular multiplication 
+        let z_scalar = r_scalar + temp;    // Modular addition
+
+        // Store intermediate representations
+        let x_repr = x_scalar.to_repr();
+        let r_repr = r_scalar.to_repr();
+        let hash_repr = hash_scalar.to_repr();
+        let temp_repr = temp.to_repr();
+        let z_repr = z_scalar.to_repr();
+
+        // Then get references for logging or further use
+        let x_bytes = x_repr.as_ref();
+        let r_bytes = r_repr.as_ref();
+        let hash_bytes = hash_repr.as_ref();
+        let temp_bytes = temp_repr.as_ref();
+        let z_bytes = z_repr.as_ref();
+
+        // Log values
+        info!("sok_log x: {=[u8]:#X}", x_bytes);
+        info!("sok_log r: {=[u8]:#X}", r_bytes);
+        info!("sok_log hash: {=[u8]:#X}", hash_bytes);
+        info!("sok_log temp: {=[u8]:#X}", temp_bytes);
+        info!("sok_log z: {=[u8]:#X}", z_bytes);
+
+        // let temp = self.pka_mod_mult(&x, &hash);
+        // let z = self.pka_mod_add(&r, &temp);
+        // info!("sok_log temp: {:#X}", temp);
+        // info!("sok_log x: {:#X}", x);
+        // info!("sok_log r: {:#X}", r);
+        // info!("sok_log z: {:#X}", z);
         
         // Return the proof (R, z)
         let mut proof = SokLogProof::default();
-        proof.pi1.copy_from_slice(&r);
-        proof.pi2.copy_from_slice(&z);
+        proof.pi1 = (g_r_x, g_r_y);
+        proof.pi2.copy_from_slice(&z_bytes);
         proof
     }
 
@@ -892,16 +983,19 @@ impl CryptoTrait for Crypto<'_>  {
         // Generate random secret key
         // let sk = p256::NonZeroScalar::random(&mut self.rng);
         // For now we replace it with a hard coded constant SK
+        info!("SK: {:#X}", SK);
 
         // pk1 = g^sk (g is the generator point in P256)
         let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &SK);
-        
+        info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
+
         // Create proof of knowledge of sk
-        let pk2 = self.sok_log(SK, &pk1_x, None);
+        // FIX: Should we pass both coordinates? How to make sure is always the 0x2 for y-coordinate?
+        let pk2 = self.sok_log(SK, (pk1_x, pk1_y), None);
         
         // Create the authority public key structure
         let mut pk = BytesP256AuthPubKey::default();
-        pk.pk1.copy_from_slice(&pk1_x);
+        pk.pk1 = (pk1_x, pk1_y);
         pk.pk2 = pk2;
         
         // Return (pk, sk)

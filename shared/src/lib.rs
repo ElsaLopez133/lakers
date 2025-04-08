@@ -289,13 +289,13 @@ pub const SCALAR: [u32; 8] = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2];
 // consts for SoK
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BytesP256AuthPubKey {
-    pub pk1: [u8; 32], // X-coordinate of the P-256 public key
+    pub pk1: ([u8; 32], [u8; 32]), // X-coordinate of the P-256 public key
     pub pk2: SokLogProof, // Proof of knowledge
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SokLogProof {
-    pub pi1: [u8; 32], // Commitment (R), likely the x-coordinate of an elliptic curve point
+    pub pi1: ([u8; 32], [u8; 32]), // Commitment (R), likely the x-coordinate of an elliptic curve point
     pub pi2: [u8; 32], // Response (z), a scalar
 }
 
