@@ -28,7 +28,7 @@ pub use cred::*;
 mod buffer;
 pub use buffer::*;
 
-use stm32wba::stm32wba55;
+use embassy_nrf::gpio;
 
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
@@ -308,101 +308,11 @@ pub struct SokLogEqProof {
     pub pi3: [u8; 32], 
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct GpioPin<'a> {
-    port: &'a stm32wba55::GPIOA,
+    port: &'a embassy_nrf::gpio::Output<'a>,
     pin: u8,
 }
-
-
-impl<'a> GpioPin<'a> {
-    /// Initialize a GPIO pin as push-pull output
-    pub fn new(p: &'a stm32wba55::Peripherals, pin: u8) -> Self {
-        // Enable GPIOA clock
-        p.RCC.rcc_ahb2enr().modify(|_, w| w.gpioaen().set_bit());
-
-        // Set pin to output mode (01)
-        match pin {
-            15 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode15().bits(0b01) }),
-            9 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode9().bits(0b01) }),
-            12 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode12().bits(0b01) }),
-            7 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode7().bits(0b01) }),
-            2 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode2().bits(0b01) }),
-            // Add other pins as needed
-            _ => panic!("Unsupported pin number"),
-        };
-
-        // Set output type to push-pull
-        match pin {
-            15 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot15().clear_bit()),
-            9 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot9().clear_bit()),
-            12 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot12().clear_bit()),
-            7 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot7().clear_bit()),
-            2 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot2().clear_bit()),
-            // Add other pins as needed
-            _ => panic!("Unsupported pin number"),
-        };
-
-        // Set speed to low
-        match pin {
-            15 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed15().bits(0b00) }),
-            9 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed9().bits(0b00) }),
-            12 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed12().bits(0b00) }),
-            7 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed7().bits(0b00) }),
-            2 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed2().bits(0b00) }),
-            // Add other pins as needed
-            _ => panic!("Unsupported pin number"),
-        };
-
-        // No pull-up/pull-down
-        match pin {
-            15 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd15().bits(0b00) }),
-            9 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd9().bits(0b00) }),
-            12 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd12().bits(0b00) }),
-            7 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd7().bits(0b00) }),
-            2 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd2().bits(0b00) }),
-            // Add other pins as needed
-            _ => panic!("Unsupported pin number"),
-        };
-
-        let gpio = GpioPin {
-            port: &p.GPIOA,
-            pin,
-        };
-        
-        // Set initial state to low
-        gpio.set_low();
-        
-        gpio
-    }
-
-    /// Set pin high
-    pub fn set_high(&self) {
-        match self.pin {
-            15 => self.port.gpioa_bsrr().write(|w| w.bs15().set_bit()),
-            9 => self.port.gpioa_bsrr().write(|w| w.bs9().set_bit()),
-            12 => self.port.gpioa_bsrr().write(|w| w.bs12().set_bit()),
-            7 => self.port.gpioa_bsrr().write(|w| w.bs7().set_bit()),
-            2 => self.port.gpioa_bsrr().write(|w| w.bs2().set_bit()),
-            // Add other pins as needed
-            _ => panic!("Unsupported pin number"),
-        };
-    }
-
-    /// Set pin low
-    pub fn set_low(&self) {
-        match self.pin {
-            15 => self.port.gpioa_bsrr().write(|w| w.br15().set_bit()),
-            9 => self.port.gpioa_bsrr().write(|w| w.br9().set_bit()),
-            12 => self.port.gpioa_bsrr().write(|w| w.br12().set_bit()),
-            7 => self.port.gpioa_bsrr().write(|w| w.br7().set_bit()),
-            2 => self.port.gpioa_bsrr().write(|w| w.br2().set_bit()),
-            // Add other pins as needed
-            _ => panic!("Unsupported pin number"),
-        };
-    }
-}
-
 
 /// Value of C_R or C_I, as chosen by ourself or the peer.
 ///

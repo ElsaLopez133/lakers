@@ -82,36 +82,6 @@ pub trait Crypto: core::fmt::Debug {
         i: BytesP256ElemLen,
         message: Option<&[u8]>,
     ) -> SokLogEqProof;
-    unsafe fn pka_ecc_mult_scalar(&mut self, point_x: BytesP256ElemLen, point_y: BytesP256ElemLen, scalar: &BytesP256ElemLen) -> (BytesP256ElemLen, BytesP256ElemLen);
-    fn bytes_to_point(&self, bytes: &[u8]) -> ([u8; 32], [u8; 32]);
-    unsafe fn pka_ecc_point_add(
-        &mut self, 
-        point_a_x: BytesP256ElemLen, 
-        point_a_y: BytesP256ElemLen, 
-        point_b_x: BytesP256ElemLen, 
-        point_b_y: BytesP256ElemLen
-    ) -> (BytesP256ElemLen, BytesP256ElemLen);
-    unsafe fn pka_ecc_projective_to_affine(
-        &mut self, 
-        point_a_x: BytesP256ElemLen, 
-        point_a_y: BytesP256ElemLen,
-        point_a_z: BytesP256ElemLen,
-    ) -> (BytesP256ElemLen, BytesP256ElemLen );
-    unsafe fn pka_mod_mult(
-        &mut self, 
-        a: &BytesP256ElemLen, 
-        b: &BytesP256ElemLen, 
-    ) -> BytesP256ElemLen;
-    unsafe fn pka_mod_sub(
-        &mut self, 
-        a: &BytesP256ElemLen, 
-        b: &BytesP256ElemLen, 
-    ) -> BytesP256ElemLen;
-    unsafe fn pka_mod_add(
-        &mut self, 
-        a: &BytesP256ElemLen, 
-        b: &BytesP256ElemLen, 
-    ) -> BytesP256ElemLen ;
     unsafe fn sok_log(
         &mut self, 
         x: BytesP256ElemLen, 
@@ -131,5 +101,4 @@ pub trait Crypto: core::fmt::Debug {
         pi: &SokLogProof, 
         message: Option<&[u8]>
     ) -> bool;
-
 }

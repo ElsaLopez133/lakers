@@ -35,12 +35,6 @@ use p256::{
 };
 use sha2::Digest;
 use cortex_m::asm;
-use stm32wba::stm32wba55::{self, GPIOA, USART1};
-use stm32wba::stm32wba55::Peripherals as peripherals;
-use stm32wba::stm32wba55::PKA as PKA;
-use stm32wba::stm32wba55::HASH as HASH;
-use stm32wba::stm32wba55::RCC as RCC;
-use stm32wba::stm32wba55::RNG as RNG;
 use defmt::{info, trace};
 use hexlit::hex;
 
@@ -53,12 +47,29 @@ pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322
 pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
 pub const SK: [u8; 32] = hex!("5c4172aca8b82b5a62e66f722216f5a10f72aa69f42c1d1cd3ccd7bfd29ca4e9");
 
-unsafe fn write_ram(offset: usize, buf: &[u32]) {
-    debug_assert_eq!(offset % 4, 0);
-    debug_assert!(offset + buf.len() * size_of::<u32>() < 0x520C_33FF);
-    buf.iter().rev().enumerate().for_each(|(idx, &dw)| {
-        write_volatile((offset + idx * size_of::<u32>()) as *mut u32, dw)
-    });
+fn bytes_to_point(bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
+    // Create an EncodedPoint from the compressed bytes
+    let mut compressed_point: [u8; 33] = [0; 33];    
+    compressed_point[0] = 0x02;        
+    compressed_point[1..].copy_from_slice(bytes);
+
+    let encoded_point = EncodedPoint::from_bytes(&compressed_point).expect("Invalid encoded point");
+    
+    // Convert to PublicKey
+    let public_key = PublicKey::from_encoded_point(&encoded_point)
+        .expect("Invalid point encoding");
+    
+    // Get the point in affine coordinates
+    let point = public_key.as_affine();
+    
+    // Convert to uncompressed EncodedPoint to access coordinates
+    let uncompressed = point.to_encoded_point(false);
+    
+    // Extract the x and y coordinates as byte arrays
+    let x_bytes: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let y_bytes: [u8; 32] = uncompressed.y().unwrap().clone().into();
+    
+    (x_bytes, y_bytes)
 }
 
 fn coordinates_to_projective_point(
@@ -86,6 +97,25 @@ fn coordinates_to_projective_point(
     point_proj
 }
 
+fn projective_to_coordinates(
+    h: ProjectivePoint
+) -> ([u8; 32], [u8; 32]) {
+    let h_affine = h.to_affine();
+    let uncompressed = h_affine.to_encoded_point(false);
+    let h_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let h_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
+
+    (h_x, h_y)
+}
+
+fn ecc_generator_mult_projective(
+    r: Scalar
+) -> ProjectivePoint {
+
+    let g_r = p256::ProjectivePoint::generator() * r;
+    g_r
+}
+
 fn ecc_generator_mult(
     r: Scalar
 ) -> ([u8; 32], [u8; 32]) {
@@ -99,201 +129,40 @@ fn ecc_generator_mult(
     (g_r_x, g_r_y)
 }
 
-unsafe fn read_ram(offset: usize, buf: &mut [u32]) {
-    debug_assert_eq!(offset % 4, 0);
-    debug_assert!(offset + buf.len() * size_of::<u32>() < 0x520C_33FF);
-    buf.iter_mut().rev().enumerate().for_each(|(idx, dw)| {
-        *dw = read_volatile((offset + idx * size_of::<u32>()) as *const u32);
-    });
+fn ecc_mult_scalar(
+    h: BytesP256ElemLen,
+    r: Scalar
+) -> ([u8; 32], [u8; 32]) {
+
+    let (h_point_x, h_point_y) = bytes_to_point(&h);
+    let h_proj_point = coordinates_to_projective_point(h_point_x, h_point_y);
+    let h_r = h_proj_point * r;
+    let h_r_affine = h_r.to_affine();
+    let uncompressed = h_r_affine.to_encoded_point(false);
+    let h_r_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let h_r_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
+
+    (h_r_x, h_r_y)
 }
 
-unsafe fn zero_ram() {
-    (0..RAM_NUM_DW)
-        .into_iter()
-        .for_each(|dw| unsafe { write_volatile((dw * 4 + RAM_BASE) as *mut u32, 0) });
+
+
+pub struct Crypto {
+    // TODO
 }
 
-pub fn u32_to_u8(arr: &[u32; 8]) -> [u8; 32] {
-    let mut result = [0u8; 32];
-    for (i, &val) in arr.iter().enumerate() {
-        result[i * 4..(i + 1) * 4].copy_from_slice(&val.to_le_bytes());
+impl Crypto {
+    pub fn new() -> Self {
+        Self { }
     }
-    result
-}
-
-pub fn u8_to_u32(arr: &[u8; 32]) -> [u32; 8] {
-    let mut result = [0u32; 8];
-    for i in 0..8 {
-        let bytes = &arr[i * 4..(i + 1) * 4];
-        result[i] = u32::from_le_bytes(bytes.try_into().unwrap());
-    }
-    result
-}
-
-pub fn int_to_u8_array(r: u32) -> [u8; 32] {
-    let mut result = [0u8; 32]; // Create a 32-byte array
-    let bytes = r.to_be_bytes(); // Convert the integer to bytes (big-endian)
-    
-    // Copy the bytes of r into the array starting from the last bytes
-    result[32 - bytes.len()..].copy_from_slice(&bytes);
-
-    result
-}
-
-pub struct Crypto<'a> {
-    p: &'a peripherals,
-    hash: &'a HASH,
-    pka: &'a PKA,
-    rng: &'a RNG,
-}
-
-impl<'a> Crypto<'a> {
-    pub fn new(p: &'a peripherals, hash: &'a HASH, pka: &'a PKA, rng: &'a RNG) -> Self {
-        Self { p, hash, pka, rng }
-    }
-
-    // pub unsafe fn stm32wba_init_uart(&self) -> &USART1 {
-    //     let p = stm32wba55::Peripherals::take().unwrap();
-    //     let rcc = &p.RCC;
-    //     let uart = &p.USART1;
-
-    //     // Enable HSI as a stable clock source
-    //     rcc.rcc_cr().modify(|_, w| w
-    //         .hseon().set_bit()
-    //     );
-    //     while rcc.rcc_cr().read().hserdy().bit_is_clear() {
-    //         asm::nop();
-    //     }
-    //     // rcc.rcc_ccipr1().modify(|_, w| w.usart1sel().bits(clk as u8));
-
-    //     // let freq: u32 = uart. clock_hz(rcc);
-    //     let freq = 1;
-
-    //     // only for oversampling of 16 (default), change for oversampling of 8
-    //     let baud = 115_200;
-    //     let br: u16 = (freq / baud) as u16;
-    //     uart.usart_brr().write(|w| w.brr().bits(br));
-    //     uart.usart_cr1().write(|w| w.ue().set_bit().fifoen().set_bit());
-
-    //     &uart
-    // }
 
     pub fn lakers_crypto_rustcrypto_stm_init(&self) {
-
-        let rng = Self::stm32wba_init_rng(self);
-        let hash = Self::stm32wba_init_hash(self);
-        let pka = Self::stm32wba_init_pka(self);
         
     }
 
-    fn stm32wba_init_rng(&self) -> &RNG {
-        let clock = &self.p.RCC;
-
-        // Enable HSE as a stable clock source. HSE when using PKA and HASH
-        clock.rcc_cr().modify(|_, w| w
-            .hsion().set_bit()
-        );
-        while clock.rcc_cr().read().hsirdy().bit_is_clear() {
-            asm::nop();
-        }
-    
-        // Enable RNG clock. Select the source clock
-        clock.rcc_ccipr2().write(|w| w.rngsel().b_0x2());
-        // Enable RNG clock. Select the AHB clock
-        clock.rcc_ahb2enr().modify(|_, w| w.rngen().set_bit());
-        while clock.rcc_ahb2enr().read().rngen().bit_is_clear() {
-            asm::nop();
-        }
-    
-        // Configure RNG
-        // To configure, CONDRST bit is set to 1 in the same access and CONFIGLOCK remains at 0
-        self.rng.rng_cr().write(|w| w
-            .rngen().clear_bit()
-            .condrst().set_bit()
-            .configlock().clear_bit()
-            .nistc().clear_bit()   // Hardware default values for NIST compliant RNG
-            .ced().clear_bit()     // Clock error detection enabled
-        );
-    
-        // First clear CONDRST while keeping RNGEN disabled
-        self.rng.rng_cr().modify(|_, w| w
-            .condrst().clear_bit()
-        );
-    
-        // Then enable RNG in a separate step
-        self.rng.rng_cr().modify(|_, w| w
-            .rngen().set_bit()
-            .ie().set_bit()
-        );
-        
-        while self.rng.rng_sr().read().drdy().bit_is_clear() {
-            asm::nop();
-        }
-
-        &self.rng
-    }
-
-    fn stm32wba_init_pka(&self) -> &PKA {
-        let clock = &self.p.RCC;
-
-        // Enable PKA peripheral clock via RCC_AHB2ENR register
-        clock.rcc_ahb2enr().modify(|_, w| w.pkaen().set_bit());
-
-        // Reset PKA before enabling (sometimes helps with initialization)
-        self.pka.pka_cr().modify(|_, w| w.en().clear_bit());
-        for _ in 0..10 {
-            asm::nop();
-        }
-
-        // Enable PKA peripheral
-        self.pka.pka_cr().write(|w| w
-            .en().set_bit()
-        );
-    
-        // Wait for PKA to initialize
-        while self.pka.pka_sr().read().initok().bit_is_clear() {
-            asm::nop();
-        }
-        
-        &self.pka
-    }
-
-    fn stm32wba_init_hash(&self) -> &HASH {
-
-        // Enable HASH peripheral clock via RCC_AHB2ENR register
-        // HASH peripheral is located on AHB2
-        let clock = &self.p.RCC;
-
-        clock.rcc_ahb2enr().modify(|_, w| w.hashen().set_bit());
-
-        // Reset HASH peripheral
-        self.hash.hash_cr().write(|w| w.init().set_bit());
-        while self.hash.hash_cr().read().init().bit_is_set() {
-            asm::nop();
-        }
-
-        // Configure for SHA-256 mode with byte-swapping
-        unsafe {
-            self.hash.hash_cr().write(|w| w
-                .algo().bits(0b11)      // SHA-256 algorithm
-                .mode().bit(false)      // Hash mode (not HMAC)
-                .datatype().bits(0b10)  // 8-bit data with byte swapping
-                .dmae().clear_bit()     // No DMA
-                .init().set_bit()     
-            );
-        }
-
-        // TODO
-        &self.hash
-    }
-
-    fn stm32wba_init_rcc(&self) -> &RCC {
-        // TODO
-        &self.p.RCC
-    }
 }
 
-impl core::fmt::Debug for Crypto<'_>  {
+impl core::fmt::Debug for Crypto  {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         f.debug_struct("lakers_crypto_rustcrypto::Crypto")
             // Exclude the rng field from Debug output
@@ -301,414 +170,7 @@ impl core::fmt::Debug for Crypto<'_>  {
     }
 }
 
-impl CryptoTrait for Crypto<'_>  {
-
-    unsafe fn pka_ecc_projective_to_affine(
-        &mut self, 
-        point_a_x: BytesP256ElemLen, 
-        point_a_y: BytesP256ElemLen,
-        point_a_z: BytesP256ElemLen,
-    ) -> (BytesP256ElemLen, BytesP256ElemLen ) {
-
-        // FIXME: It always return zero even though there is no error flag
-        
-        self.stm32wba_init_pka();
-
-        // Convert points to the right format
-        let point_a_x_u32 = u8_to_u32(&point_a_x);
-        let point_a_y_u32 = u8_to_u32(&point_a_y);
-        let point_a_z_u32 = u8_to_u32(&point_a_z);
-
-        zero_ram();
-        // constant values for P-256 curve
-        write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
-        write_ram(MONTGOMERY_PTA, &R2MODN);
-        write_ram(MODULUS_OFFSET_PTA, &N);
-
-        write_ram(POINT_P_X_PTA, &point_a_x_u32);
-        write_ram(POINT_P_Y_PTA, &point_a_y_u32);
-        write_ram(POINT_P_Z_PTA, &point_a_z_u32);
-
-        // Configure PKA operation mode and start
-        self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x2F)
-            .start().set_bit()
-        );
-
-        // Wait for processing to complete - PROCENDF is 1 when done
-        while self.pka.pka_sr().read().procendf().bit_is_clear() {
-            asm::nop();
-        }
-
-        // Read the result
-        let mut result = [0u32; 1];
-        let mut result_x = [0u32; 8];
-        let mut result_y = [0u32; 8];
-        read_ram(RESULT_ERROR_PTA, &mut result);
-        if result[0] == 0xD60D {
-            // info!("No errors: {:#X}", result[0]);
-            read_ram(RESULT_X_PTA, &mut result_x);
-            read_ram(RESULT_Y_PTA, &mut result_y);
-            // info!("POINT (X, Y): ({:#X}, {:#X})", result_x, result_y);
-        }
-        if result[0] == 0xA3B7 {
-            // info!("Error in computation: {:#X}", result);
-        }
-                
-        // Clear the completion flag
-        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
-
-        (u32_to_u8(&result_x), u32_to_u8(&result_y))
-
-    }
-
-    unsafe fn pka_ecc_point_add(
-        &mut self, 
-        point_a_x: BytesP256ElemLen, 
-        point_a_y: BytesP256ElemLen, 
-        point_b_x: BytesP256ElemLen, 
-        point_b_y: BytesP256ElemLen
-    ) -> (BytesP256ElemLen, BytesP256ElemLen) {
-
-        self.stm32wba_init_pka();
-        //  Perform PQ where P and W are points of the curve (in ECC notation this is P + Q
-
-        // Convert points to the right format
-        let point_a_x_u32 = u8_to_u32(&point_a_x);
-        let point_a_y_u32 = u8_to_u32(&point_a_y);
-        let point_b_x_u32 = u8_to_u32(&point_b_x);
-        let point_b_y_u32 = u8_to_u32(&point_b_y);
-
-        zero_ram();
-        // constant values for P-256 curve
-        write_ram(MODULUS_LENGTH_OFFSET_ADD, &[OPERAND_LENGTH]);
-        write_ram(PRIME_LENGTH_OFFSET_ADD, &[OPERAND_LENGTH]);
-        write_ram(COEF_A_SIGN_OFFSET_ADD, &[A_SIGN]);
-        write_ram(COEF_A_OFFSET_ADD, &A);
-        // write_ram(COEF_B_OFFSET, &B);
-        write_ram(MODULUS_OFFSET_ADD, &N);
-
-        write_ram(POINT_P_X, &point_a_x_u32);
-        write_ram(POINT_P_Y, &point_a_y_u32);
-        write_ram(POINT_P_Z, &Z_COORDINATE);
-
-        write_ram(POINT_Q_X, &point_b_x_u32);
-        write_ram(POINT_Q_Y, &point_b_y_u32);
-        write_ram(POINT_Q_Z, &Z_COORDINATE);
-
-        write_ram(SCALAR_K_ADD, &[1]);
-        write_ram(SCALAR_M_ADD, &[1]);
-
-        // Configure PKA operation mode and start
-        self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x27)
-            .start().set_bit()
-        );
-
-        // Wait for processing to complete - PROCENDF is 1 when done
-        while self.pka.pka_sr().read().procendf().bit_is_clear() {
-            asm::nop();
-        }
-
-        // Read the result
-        let mut result_x = [0u32; 8];
-        let mut result_y = [0u32; 8];
-
-        read_ram(RESULT_X_ADD, &mut result_x);
-        read_ram(RESULT_Y_ADD, &mut result_y);
-
-        // Clear the completion flag
-        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
-
-        
-        (u32_to_u8(&result_x), u32_to_u8(&result_y))
-
-    }
-
-    unsafe fn pka_ecc_mult_scalar(
-        &mut self, 
-        point_x: BytesP256ElemLen, 
-        point_y: BytesP256ElemLen, 
-        scalar: &BytesP256ElemLen
-    ) -> (BytesP256ElemLen, BytesP256ElemLen) {
-
-        self.stm32wba_init_pka();
-        //  Perform g^r where g is a point of the curve and r a scalar (in ECC notation this is g * r)
-        // Because stm32wba_init_pka has been called before, pka is already initialized in self.pka
-
-        // Convert points to the right format
-        let point_x_u32 = u8_to_u32(&point_x);
-        let point_y_u32 = u8_to_u32(&point_y);
-        let scalar_u32 = u8_to_u32(&scalar);
-        
-        zero_ram();
-        // constant values for P-256 curve
-        write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
-        write_ram(PRIME_LENGTH_OFFSET, &[OPERAND_LENGTH]);
-        write_ram(COEF_A_SIGN_OFFSET, &[A_SIGN]);
-        write_ram(COEF_A_OFFSET, &A);
-        write_ram(COEF_B_OFFSET, &B);
-        write_ram(MODULUS_OFFSET, &N);
-        write_ram(PRIME_OFFSET, &PRIME_ORDER);
-
-        write_ram(POINT_X_OFFSET, &point_x_u32);
-        write_ram(POINT_Y_OFFSET, &point_y_u32);
-        write_ram(SCALAR_OFFSET, &scalar_u32);
-    
-        
-        // Configure PKA operation mode and start
-        self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x20)
-            .start().set_bit()
-        );
-
-        // Wait for processing to complete - PROCENDF is 1 when done
-        while self.pka.pka_sr().read().procendf().bit_is_clear() {
-            asm::nop();
-        }
-
-        // Read the result
-        let mut result = [0u32; 1];
-        let mut result_x = [0u32; 8];
-        let mut result_y = [0u32; 8];
-        read_ram(RESULT_ERROR_OFFSET, &mut result);
-        if result[0] == 0xD60D {
-            // info!("No errors: {:#X}", result[0]);
-            read_ram(RESULT_X_OFFSET, &mut result_x);
-            read_ram(RESULT_Y_OFFSET, &mut result_y);
-            // info!("POINT (X, Y): ({:#X}, {:#X})", result_x, result_y);
-        }
-        if result[0] == 0xCBC9 {
-            // info!("Error in computation: {:#X}", result);
-        }
-                
-        // Clear the completion flag
-        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
-
-        (u32_to_u8(&result_x), u32_to_u8(&result_y))
-    }
-
-    unsafe fn pka_mod_mult(
-        &mut self, 
-        a: &BytesP256ElemLen, 
-        b: &BytesP256ElemLen, 
-    ) -> BytesP256ElemLen {
-
-        self.stm32wba_init_pka();
-
-        // Convert points to the right format
-        let a_u32 = u8_to_u32(&a);
-        let b_u32 = u8_to_u32(&b);
-        
-        zero_ram();
-        // constant values for P-256 curve
-        write_ram(OPERAND_LENGTH_MULT, &[OPERAND_LENGTH]);
-        write_ram(OPERAND_A_ARITHEMTIC_MULT, &a_u32);
-        write_ram(OPERAND_B_ARITHEMTIC_MULT, &b_u32);    
-        
-        // Configure PKA operation mode and start
-        self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x0B)
-            .start().set_bit()
-        );
-
-        // Wait for processing to complete - PROCENDF is 1 when done
-        while self.pka.pka_sr().read().procendf().bit_is_clear() {
-            asm::nop();
-        }
-
-        // Read the result
-        let mut result = [0u32; 8];
-        read_ram(RESULT_ARITHMETIC_MULT, &mut result);
-                
-        // Clear the completion flag
-        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
-
-        // We now reduce the value mod n
-        // self.stm32wba_init_pka();
-
-        zero_ram();
-        write_ram(OPERAND_LENGTH_REDUC, &[OPERAND_LENGTH]);
-        write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
-        write_ram(OPERAND_A_REDUC, &A);
-        write_ram(MODULUS_REDUC, &N);
-
-        // Configure PKA operation mode and start
-        self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x0D)
-            .start().set_bit()
-        );
-
-        // Wait for processing to complete - PROCENDF is 1 when done
-        while self.pka.pka_sr().read().procendf().bit_is_clear() {
-            asm::nop();
-        }
-
-        // Read the result
-        let mut result_reduc = [0u32; 8];
-        read_ram(RESULT_REDUC, &mut result_reduc);
-                
-        // Clear the completion flag
-        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
-
-        u32_to_u8(&result_reduc)
-    }
-
-    unsafe fn pka_mod_sub(
-        &mut self, 
-        a: &BytesP256ElemLen, 
-        b: &BytesP256ElemLen, 
-    ) -> BytesP256ElemLen {
-
-        self.stm32wba_init_pka();
-
-        // Convert points to the right format
-        let a_u32 = u8_to_u32(&a);
-        let b_u32 = u8_to_u32(&b);
-        
-        zero_ram();
-        // constant values for P-256 curve
-        write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
-        write_ram(OPERAND_A_SUB, &a_u32);
-        write_ram(OPERAND_B_SUB, &b_u32);    
-        
-        // Configure PKA operation mode and start
-        self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x0f)
-            .start().set_bit()
-        );
-
-        // Wait for processing to complete - PROCENDF is 1 when done
-        while self.pka.pka_sr().read().procendf().bit_is_clear() {
-            asm::nop();
-        }
-
-        // Read the result
-        let mut result = [0u32; 8];
-        read_ram(RESULT_SUB, &mut result);
-                
-        // Clear the completion flag
-        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
-
-        u32_to_u8(&result)
-    }
-
-    unsafe fn pka_mod_add(
-        &mut self, 
-        a: &BytesP256ElemLen, 
-        b: &BytesP256ElemLen, 
-    ) -> BytesP256ElemLen {
-
-        self.stm32wba_init_pka();
-
-        // Convert points to the right format
-        let a_u32 = u8_to_u32(&a);
-        let b_u32 = u8_to_u32(&b);
-        
-        zero_ram();
-        // constant values for P-256 curve
-        write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
-        write_ram(OPERAND_A_SUB, &a_u32);
-        write_ram(OPERAND_B_SUB, &b_u32);    
-        
-        // Configure PKA operation mode and start
-        self.pka.pka_cr().modify(|_, w| w
-            .mode().bits(0x0e)
-            .start().set_bit()
-        );
-
-        // Wait for processing to complete - PROCENDF is 1 when done
-        while self.pka.pka_sr().read().procendf().bit_is_clear() {
-            asm::nop();
-        }
-
-        // Read the result
-        let mut result = [0u32; 8];
-        read_ram(RESULT_SUB, &mut result);
-                
-        // Clear the completion flag
-        self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
-
-        u32_to_u8(&result)
-    }
-   
-    // fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
-    //     // Reset HASH peripheral
-    //     self.hash.hash_cr().write(|w| w.init().set_bit());
-    //     while self.hash.hash_cr().read().init().bit_is_set() {
-    //         asm::nop();
-    //     }
-
-    //     // Configure for SHA-256 mode with byte-swapping
-    //     unsafe {
-    //         self.hash.hash_cr().write(|w| w
-    //             .algo().bits(0b11)      // SHA-256 algorithm
-    //             .mode().bit(false)      // Hash mode (not HMAC)
-    //             .datatype().bits(0b10)  // 8-bit data with byte swapping
-    //             .dmae().clear_bit()     // No DMA
-    //             .init().set_bit()     
-    //         );
-    //     }
-
-    //     // // Pack bytes into a word (big-endian for SHA-256)
-    //     // let mut word = 0u32;
-    //     // for (i, &byte) in message[..message_len].iter().enumerate() {
-    //     //     // Shift existing bits and add new byte
-    //     //     word |= u32::from(byte) << (8 * (3 - (i % 4)));
-            
-    //     //     // Write word when we have 4 bytes or at the end of the message
-    //     //     if ((i + 1) % 4 == 0) || (i == message_len - 1) {
-    //     //         // If it's the last word and not a full 4-byte word, add padding
-    //     //         if i == message_len - 1 && message_len % 4 != 0 {
-    //     //             word |= 0x80 >> (8 * (i % 4 + 1));
-    //     //         }
-                
-    //     //         unsafe { 
-    //     //             self.hash.hash_din().write(|w| w.bits(word));
-    //     //         }
-    //     //         word = 0;
-    //     //     }
-    //     // }
-
-    //     // Set NBLW to original message length
-    //     unsafe {
-    //         for chunk in message[..message_len].chunks_exact(4) {
-    //             let word = u32::from_le_bytes(chunk.try_into().unwrap());
-    //             self.hash.hash_din().write(|w| w.bits(word));
-    //         }
-    //         self.hash.hash_str().write(|w| w.nblw().bits(message_len as u8));
-    //     }
-
-    //     // Start padding and digest computation
-
-    //     self.hash.hash_str().write(|w| w.dcal().set_bit());
-
-    //     // Wait for digest calculation to complete
-    //     while self.hash.hash_sr().read().busy().bit_is_set() {
-    //         asm::nop();
-    //     }
-
-    //     // Read final hash
-    //     let hash_result = [
-    //         self.hash.hash_hr0().read().bits(),
-    //         self.hash.hash_hr1().read().bits(),
-    //         self.hash.hash_hr2().read().bits(),
-    //         self.hash.hash_hr3().read().bits(),
-    //         self.hash.hash_hr4().read().bits(),
-    //         self.hash.hash_hr5().read().bits(),
-    //         self.hash.hash_hr6().read().bits(),
-    //         self.hash.hash_hr7().read().bits(),
-    //     ];
-
-    //      // Convert `[u32; 8]` → `[u8; 32]`
-    //     let mut final_hash: [u8; 32] = [0; 32];
-    //     for (i, word) in hash_result.iter().enumerate() {
-    //         final_hash[i * 4..(i + 1) * 4].copy_from_slice(&word.to_be_bytes()); 
-    //     }
-
-    //     final_hash
-
-    // }
+impl CryptoTrait for Crypto  {
 
     fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
         let mut hasher = sha2::Sha256::new();
@@ -823,26 +285,28 @@ impl CryptoTrait for Crypto<'_>  {
 
         trace!("Verify authorities keys");
         // Verify all authority keys
-        gpio.set_high();
+        // gpio.set_high();
         for pk in pk_aut {
             if !self.vok_log(pk.pk1, &pk.pk2, None) {
                 panic!("Error: authority keys invalid");
             }
         }
-        gpio.set_low();
+        // gpio.set_low();
         
         // Compute h as the product of all authority public keys
         trace!("Computation of h");
-        gpio.set_high();
+        // gpio.set_high();
         let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
+        let mut h = coordinates_to_projective_point(h_point_x, h_point_y);
         for i in 1..pk_aut.len() {
             let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
-            (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
+            let pk_proj = coordinates_to_projective_point(pk_point_x, pk_point_y);
+            h = h + pk_proj;
         }
-        gpio.set_low();
+        // gpio.set_low();
         
         trace!("Computation of w");
-        gpio.set_high();
+        // gpio.set_high();
         // Create the tuple for hashing (pk_A, pk_aut[0].pk1, pk_aut[1].pk1, ...)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
         let mut offset = 0;
@@ -859,35 +323,10 @@ impl CryptoTrait for Crypto<'_>  {
         }
 
         let w = self.sha256_digest(&hash_input, offset);
-        gpio.set_low();
+        // gpio.set_low();
 
         // Return (h, w)        
         (h_point_x, w)
-    }
-
-    fn bytes_to_point(&self, bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
-        // Create an EncodedPoint from the compressed bytes
-        let mut compressed_point: [u8; 33] = [0; 33];    
-        compressed_point[0] = 0x02;        
-        compressed_point[1..].copy_from_slice(bytes);
-
-        let encoded_point = EncodedPoint::from_bytes(&compressed_point).expect("Invalid encoded point");
-        
-        // Convert to PublicKey
-        let public_key = PublicKey::from_encoded_point(&encoded_point)
-            .expect("Invalid point encoding");
-        
-        // Get the point in affine coordinates
-        let point = public_key.as_affine();
-        
-        // Convert to uncompressed EncodedPoint to access coordinates
-        let uncompressed = point.to_encoded_point(false);
-        
-        // Extract the x and y coordinates as byte arrays
-        let x_bytes: [u8; 32] = uncompressed.x().unwrap().clone().into();
-        let y_bytes: [u8; 32] = uncompressed.y().unwrap().clone().into();
-        
-        (x_bytes, y_bytes)
     }
 
     // Authority key generation function
@@ -900,24 +339,23 @@ impl CryptoTrait for Crypto<'_>  {
         let sk_scalar = Scalar::from_repr(SK.into()).unwrap();
 
         // pk1 = g^sk (g is the generator point in P256)
-        gpio.set_high();
+        // gpio.set_high();
         let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
-        gpio.set_low();
-        // let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &SK);
+        // gpio.set_low();
         // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
 
         // Create proof of knowledge of sk
         // FIX: Should we pass both coordinates? How to make sure is always the 0x2 for y-coordinate?
-        gpio.set_high();
+        // gpio.set_high();
         let pk2 = self.sok_log(SK, (pk1_x, pk1_y), None);
-        gpio.set_low();
+        // gpio.set_low();
 
         // Create the authority public key structure
-        gpio.set_high();
+        // gpio.set_high();
         let mut pk = BytesP256AuthPubKey::default();
         pk.pk1 = (pk1_x, pk1_y);
         pk.pk2 = pk2;
-        gpio.set_low();
+        // gpio.set_low();
 
         // Return (pk, sk)
         (pk, SK)
@@ -939,7 +377,6 @@ impl CryptoTrait for Crypto<'_>  {
         let r_scalar = Scalar::from_repr(r.into()).unwrap();
 
         // Compute R = g^r
-        // let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
         let (g_r_x, g_r_y) = ecc_generator_mult(r_scalar);
 
         // Create the hash input (R, h, message)
@@ -963,9 +400,6 @@ impl CryptoTrait for Crypto<'_>  {
         let hash = self.sha256_digest(&hash_input, hash_len);
         
         // Compute z = r + x*c
-        // let temp = self.pka_mod_mult(&x, &hash);
-        // let z = self.pka_mod_add(&r, &temp);
-
         let x_scalar = Scalar::from_repr(x.into()).unwrap();
         let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
 
@@ -1037,11 +471,6 @@ impl CryptoTrait for Crypto<'_>  {
         let uncompressed = expected_point_affine.to_encoded_point(false);
         let expected_point_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
         let expected_point_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
-
-        // let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &z);
-        // let (h_c_x, h_c_y) = self.pka_ecc_mult_scalar(h_point_x, h_point_y, &c);
-        // let (expected_x, expected_y) = self.pka_ecc_point_add(g_r_x, g_r_y, h_c_x, h_c_y);
-
         // info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
 
         g_z_x == expected_point_x
@@ -1059,17 +488,24 @@ impl CryptoTrait for Crypto<'_>  {
     ) -> SokLogEqProof {
         trace!("Sok Log equality");
 
-        let (h_point_x, h_point_y) = self.bytes_to_point(&h);
-        let (g_y_point_x, g_y_point_y) = self.bytes_to_point(&g_y);
-        let (g_r_point_x, g_r_point_y) = self.bytes_to_point(&g_r);
+        let (h_point_x, h_point_y) = bytes_to_point(&h);
+        let h_proj_point = coordinates_to_projective_point(h_point_x, h_point_y);
+
+        let (g_y_point_x, g_y_point_y) = bytes_to_point(&g_y);
+        let g_y_proj_point = coordinates_to_projective_point(g_y_point_x, g_y_point_y);
+
+        let (g_r_point_x, g_r_point_y) = bytes_to_point(&g_r);
+        let g_r_proj_point = coordinates_to_projective_point(g_r_point_x, g_r_point_x);
+
+        let x_scalar = Scalar::from_repr(x.into()).unwrap();
 
         // Compute H_I^1 = (h_I * g^y)^x
-        let (h_g_y_point_x, h_g_y_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_y_point_x, g_y_point_y );
-        let (h_1_point_x, h_1_point_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &x);
+        let h_i_1_temp = h_proj_point + g_y_proj_point;
+        let h_i_1 = h_i_1_temp * x_scalar;
 
         // Compute H_I^2 = (h_I * g^r)^x
-        let (h_g_r_point_x, h_g_r_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_r_point_x, g_r_point_y );
-        let (h_2_point_x, h_2_point_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, &x);
+        let h_i_2_temp = h_proj_point + g_r_proj_point;
+        let h_i_1 = h_i_2_temp * x_scalar;
 
         // Generate proof pi
         // Generate random value r_I, s_I
@@ -1079,26 +515,24 @@ impl CryptoTrait for Crypto<'_>  {
         let s_scalar = Scalar::from_repr(s.into()).unwrap();
 
         // Compute I_1 = g^r_I
-        let (I_1_x, I_1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
+        let i_1 = ecc_generator_mult_projective(r_scalar);
         
         // Compute I_2 = (h_I g^y)^r
-        let (I_2_x, I_2_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &r);
+        let i_2 = h_i_1_temp * r_scalar;
 
         // Compute I_3 = (h_I g^r)^r
-        let (I_3_x, I_3_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, &r);
+        let i_3 = h_i_2_temp * r_scalar;
 
         // Compute I_4 = g^s
-        let (I_4_x, I_4_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &s);
+        let i_4 = ecc_generator_mult_projective(s_scalar);
 
         // Compute I_5 = (h_I g^y)^s
-        let (I_5_x, I_5_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &s);
-        
+        let i_5 = h_i_1_temp * s_scalar;
+
         // Create the hash input (I_1, I_2, I_3, I_4, I_5, message)
         // we need to add I_1 + I_2 + I_3 + I_4 + I_5
-        let (sum_x, sum_y) = self.pka_ecc_point_add(I_1_x, I_1_y, I_2_x, I_2_y);
-        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_3_x, I_3_y);
-        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_4_x, I_4_y);
-        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_5_x, I_5_y);
+        let sum = i_1 + i_2 + i_3 + i_4 + i_5;
+        let (sum_x, sum_y) = projective_to_coordinates(sum);
 
         // let inputs = [I_1 + I_2 + I_3 + I_4 + I_5 || message.unwrap_or(&[])];
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1119,16 +553,12 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute beta = r - x*alpha
         // Convert the bytes to FieldElement values
-        let x_scalar = Scalar::from_repr(x.into()).unwrap();
         let alpha_scalar = Scalar::from_repr(alpha.into()).unwrap();
 
         let temp = x_scalar * alpha_scalar;
         let beta_scalar = r_scalar + temp;
         let beta_repr  = beta_scalar.to_repr();
         let beta = beta_repr.as_ref();
-
-        // let mut beta = self.pka_mod_mult(x, &alpha);
-        // let beta = self.pka_mod_sub(&r, &beta);
 
         // Compute gamma = s - i*alpha
         let i_scalar = Scalar::from_repr(i.into()).unwrap();
@@ -1137,9 +567,6 @@ impl CryptoTrait for Crypto<'_>  {
         let gamma_scalar = s_scalar + temp;
         let gamma_repr= gamma_scalar.to_repr();
         let gamma = gamma_repr.as_ref();
-
-        // let gamma = self.pka_mod_mult(i, &alpha);
-        // let gamma = self.pka_mod_sub(&s, &gamma);
         
         // Return the proof (alpha, beta, gamma)
         let mut proof = SokLogEqProof::default();
