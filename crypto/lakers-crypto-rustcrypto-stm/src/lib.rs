@@ -31,6 +31,7 @@ use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::elliptic_curve::sec1::FromEncodedPoint;
 use p256::elliptic_curve::Field;
 use p256::elliptic_curve::PrimeField;
+use p256::elliptic_curve::Group;
 use p256::{
     PublicKey,
     EncodedPoint,
@@ -47,7 +48,7 @@ use stm32wba::stm32wba55::PKA as PKA;
 use stm32wba::stm32wba55::HASH as HASH;
 use stm32wba::stm32wba55::RCC as RCC;
 use stm32wba::stm32wba55::RNG as RNG;
-use defmt::info;
+use defmt::{info, trace};
 use hexlit::hex;
 
 type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
@@ -65,6 +66,44 @@ unsafe fn write_ram(offset: usize, buf: &[u32]) {
     buf.iter().rev().enumerate().for_each(|(idx, &dw)| {
         write_volatile((offset + idx * size_of::<u32>()) as *mut u32, dw)
     });
+}
+
+fn coordinates_to_projective_point(
+    x: BytesP256ElemLen,
+    y: BytesP256ElemLen
+) -> ProjectivePoint {
+    
+    // Convert h_x and h_y bytes into an AffinePoint
+    let x_scalar = p256::FieldBytes::from_slice(&x);
+    let y_scalar = p256::FieldBytes::from_slice(&y);
+
+    // Create an encoded point
+    let encoded_point = EncodedPoint::from_affine_coordinates(
+        x_scalar, 
+        y_scalar, 
+        false // Uncompressed form
+    );
+    // Parse into an actual curve point
+    let point = AffinePoint::from_encoded_point(&encoded_point)
+    .expect("Invalid curve point");
+
+    // Convert to projective for efficient operations
+    let point_proj = ProjectivePoint::from(point);
+
+    point_proj
+}
+
+fn ecc_generator_mult(
+    r: Scalar
+) -> ([u8; 32], [u8; 32]) {
+
+    let g_r = p256::ProjectivePoint::generator() * r;
+    let g_r_affine = g_r.to_affine();
+    let uncompressed = g_r_affine.to_encoded_point(false);
+    let g_r_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let g_r_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
+
+    (g_r_x, g_r_y)
 }
 
 unsafe fn read_ram(offset: usize, buf: &mut [u32]) {
@@ -786,20 +825,25 @@ impl CryptoTrait for Crypto<'_>  {
         pk_aut: &[BytesP256AuthPubKey],
         id_cred_i: &[u8],
     ) -> (BytesP256ElemLen, BytesHashLen) {
-        // // Verify all authority keys
-        // for pk in pk_aut {
-        //     if !self.vok_log(pk.pk1, &pk.pk2, None) {
-        //         panic!("Error: authority keys invalid");
-        //     }
-        // }
+        trace!("Precomputation phase");
+
+        trace!("Verify authorities keys");
+        // Verify all authority keys
+        for pk in pk_aut {
+            if !self.vok_log(pk.pk1, &pk.pk2, None) {
+                panic!("Error: authority keys invalid");
+            }
+        }
         
         // Compute h as the product of all authority public keys
+        trace!("Computation of h");
         let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
         for i in 1..pk_aut.len() {
             let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
             (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
         }
         
+        trace!("Computation of w");
         // Create the tuple for hashing (pk_A, pk_aut[0].pk1, pk_aut[1].pk1, ...)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
         let mut offset = 0;
@@ -846,52 +890,31 @@ impl CryptoTrait for Crypto<'_>  {
         (x_bytes, y_bytes)
     }
 
-    // FIXME
-    unsafe fn vok_log(
-        &mut self, 
-        h:(BytesP256ElemLen, BytesP256ElemLen), 
-        pi: &SokLogProof, 
-        message: Option<&[u8]>
-    ) -> bool {
-        // let (h_point_x, h_point_y) = self.bytes_to_point(h);
-        let (h_point_x, h_point_y) = h;
-        info!("vok_log h_point_x: {:#X}   h_point_y: {:#X}", h_point_x, h_point_y);
+    // Authority key generation function
+    unsafe fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen) {
+        trace!("KeyAuthGen");
+        // Generate random secret key
+        // let sk = p256::NonZeroScalar::random(&mut self.rng);
+        // For now we replace it with a hard coded constant SK
+        // info!("SK: {:#X}", SK);
+        let sk_scalar = Scalar::from_repr(SK.into()).unwrap();
 
-        let (g_r_x, g_r_y) = pi.pi1;
-        info!("vok_log g_r_x: {:#X}   g_r_y: {:#X}", g_r_x, g_r_y);
+        // pk1 = g^sk (g is the generator point in P256)
+        let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
+        // let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &SK);
+        // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
 
-        let z = pi.pi2;
-        info!("vok_log z: {:#X}", z);
-
-        // Create the hash input (R, h, message)
-        let mut hash_input = [0u8; MAX_BUFFER_LEN];
-        let mut hash_len = 0;
-
-        // Copy sum_x into hash_input
-        hash_input[..P256_ELEM_LEN].copy_from_slice(&g_r_x);
-        let mut hash_len = hash_len + P256_ELEM_LEN;
-        hash_input[P256_ELEM_LEN..P256_ELEM_LEN + P256_ELEM_LEN].copy_from_slice(&h_point_x);
-        let mut hash_len = hash_len + P256_ELEM_LEN;
-
-        // Copy message if it exists
-        if let Some(message_bytes) = message {
-            hash_input[P256_ELEM_LEN + P256_ELEM_LEN ..P256_ELEM_LEN + P256_ELEM_LEN + message_bytes.len()]
-                .copy_from_slice(message_bytes);
-            hash_len = hash_len + message_bytes.len()
-        }       
+        // Create proof of knowledge of sk
+        // FIX: Should we pass both coordinates? How to make sure is always the 0x2 for y-coordinate?
+        let pk2 = self.sok_log(SK, (pk1_x, pk1_y), None);
         
-        // Compute c = H(R, h, message)
-        let c = self.sha256_digest(&hash_input, hash_len);
-        info!("vok_log hash: {:#X}", c);
+        // Create the authority public key structure
+        let mut pk = BytesP256AuthPubKey::default();
+        pk.pk1 = (pk1_x, pk1_y);
+        pk.pk2 = pk2;
         
-        // Verify: g^z == R * h^c
-        let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &z);
-        let (h_c_x, h_c_y) = self.pka_ecc_mult_scalar(h_point_x, h_point_y, &c);
-        let (expected_x, expected_y) = self.pka_ecc_point_add(g_r_x, g_r_y, h_c_x, h_c_y);
-        info!("h_c_x: {:#X}   h_c_y: {:#X}", h_c_x, h_c_y);
-        info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_x);
-
-        g_z_x == expected_x
+        // Return (pk, sk)
+        (pk, SK)
     }
 
     unsafe fn sok_log(
@@ -900,18 +923,18 @@ impl CryptoTrait for Crypto<'_>  {
         h: (BytesP256ElemLen, BytesP256ElemLen), 
         message: Option<&[u8]>
     ) -> SokLogProof {
+        trace!("Sok Log");
 
-        // let (h_point_x, h_point_y) = self.bytes_to_point(h);
         let (h_point_x, h_point_y) = h;
-        info!("sok_log h_point_x: {:#X}   h_point_y: {:#X}", h_point_x, h_point_y);
 
         // Generate random value r
         // let r = p256::NonZeroScalar::random(&mut self.rng);
-        let r = int_to_u8_array(3);
-        
+        let r = hex!("d1f3a4c8b66e30f78a53e5b7896ab8a2ffefc0bde45a7a7e13347157956c8e2a");
+        let r_scalar = Scalar::from_repr(r.into()).unwrap();
+
         // Compute R = g^r
-        let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
-        info!("sok_log g_r_x: {:#X}   g_r_y: {:#X}", g_r_x, g_r_y);
+        // let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
+        let (g_r_x, g_r_y) = ecc_generator_mult(r_scalar);
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -932,103 +955,122 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute c = H(R, h, message)
         let hash = self.sha256_digest(&hash_input, hash_len);
-        info!("sok_log hash: {:#X}", hash);
         
         // Compute z = r + x*c
-        // Convert your existing values to FieldElement
+        // let temp = self.pka_mod_mult(&x, &hash);
+        // let z = self.pka_mod_add(&r, &temp);
+
         let x_scalar = Scalar::from_repr(x.into()).unwrap();
-        let r_scalar = Scalar::from_repr(r.into()).unwrap();
         let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
 
         let temp = x_scalar * hash_scalar; // Modular multiplication 
         let z_scalar = r_scalar + temp;    // Modular addition
 
         // Store intermediate representations
-        let x_repr = x_scalar.to_repr();
-        let r_repr = r_scalar.to_repr();
-        let hash_repr = hash_scalar.to_repr();
-        let temp_repr = temp.to_repr();
         let z_repr = z_scalar.to_repr();
 
         // Then get references for logging or further use
-        let x_bytes = x_repr.as_ref();
-        let r_bytes = r_repr.as_ref();
-        let hash_bytes = hash_repr.as_ref();
-        let temp_bytes = temp_repr.as_ref();
         let z_bytes = z_repr.as_ref();
+        // info!("sok_log z: {=[u8]:#X}", z_bytes);
 
-        // Log values
-        info!("sok_log x: {=[u8]:#X}", x_bytes);
-        info!("sok_log r: {=[u8]:#X}", r_bytes);
-        info!("sok_log hash: {=[u8]:#X}", hash_bytes);
-        info!("sok_log temp: {=[u8]:#X}", temp_bytes);
-        info!("sok_log z: {=[u8]:#X}", z_bytes);
-
-        // let temp = self.pka_mod_mult(&x, &hash);
-        // let z = self.pka_mod_add(&r, &temp);
-        // info!("sok_log temp: {:#X}", temp);
-        // info!("sok_log x: {:#X}", x);
-        // info!("sok_log r: {:#X}", r);
-        // info!("sok_log z: {:#X}", z);
-        
         // Return the proof (R, z)
         let mut proof = SokLogProof::default();
         proof.pi1 = (g_r_x, g_r_y);
         proof.pi2.copy_from_slice(&z_bytes);
         proof
+
     }
 
-    // Authority key generation function
-    unsafe fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen) {
-        // Generate random secret key
-        // let sk = p256::NonZeroScalar::random(&mut self.rng);
-        // For now we replace it with a hard coded constant SK
-        info!("SK: {:#X}", SK);
+    // FIXME
+    unsafe fn vok_log(
+        &mut self, 
+        h:(BytesP256ElemLen, BytesP256ElemLen), 
+        pi: &SokLogProof, 
+        message: Option<&[u8]>
+    ) -> bool {
+        trace!("VoK Log");
 
-        // pk1 = g^sk (g is the generator point in P256)
-        let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &SK);
-        info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
+        let (h_point_x, h_point_y) = h;
 
-        // Create proof of knowledge of sk
-        // FIX: Should we pass both coordinates? How to make sure is always the 0x2 for y-coordinate?
-        let pk2 = self.sok_log(SK, (pk1_x, pk1_y), None);
+        let (g_r_x, g_r_y) = pi.pi1;
+        let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
+
+        let z = pi.pi2;
+        let z_scalar = Scalar::from_repr(z.into()).unwrap();
+
+        // Create the hash input (R, h, message)
+        let mut hash_input = [0u8; MAX_BUFFER_LEN];
+        let mut hash_len = 0;
+
+        // Copy sum_x into hash_input
+        hash_input[..P256_ELEM_LEN].copy_from_slice(&g_r_x);
+        let mut hash_len = hash_len + P256_ELEM_LEN;
+        hash_input[P256_ELEM_LEN..P256_ELEM_LEN + P256_ELEM_LEN].copy_from_slice(&h_point_x);
+        let mut hash_len = hash_len + P256_ELEM_LEN;
+
+        // Copy message if it exists
+        if let Some(message_bytes) = message {
+            hash_input[P256_ELEM_LEN + P256_ELEM_LEN ..P256_ELEM_LEN + P256_ELEM_LEN + message_bytes.len()]
+                .copy_from_slice(message_bytes);
+            hash_len = hash_len + message_bytes.len()
+        }       
         
-        // Create the authority public key structure
-        let mut pk = BytesP256AuthPubKey::default();
-        pk.pk1 = (pk1_x, pk1_y);
-        pk.pk2 = pk2;
+        // Compute c = H(R, h, message)
+        let c = self.sha256_digest(&hash_input, hash_len);
+        let c_scalar = Scalar::from_repr(c.into()).unwrap();
         
-        // Return (pk, sk)
-        (pk, SK)
+        // Verify: g^z == R * h^c
+        let (g_z_x, g_z_y) = ecc_generator_mult(z_scalar);
+
+        // Convert h_x and h_y bytes into an AffinePoint
+        let h_point_proj = coordinates_to_projective_point(h_point_x, h_point_y);
+        let h_c = h_point_proj * c_scalar;
+        let expected_point = h_c + g_r_proj_point;
+
+        let expected_point_affine = expected_point.to_affine();
+        let uncompressed = expected_point_affine.to_encoded_point(false);
+        let expected_point_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
+        let expected_point_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
+
+        // let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &z);
+        // let (h_c_x, h_c_y) = self.pka_ecc_mult_scalar(h_point_x, h_point_y, &c);
+        // let (expected_x, expected_y) = self.pka_ecc_point_add(g_r_x, g_r_y, h_c_x, h_c_y);
+
+        // info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
+
+        g_z_x == expected_point_x
     }
 
     unsafe fn sok_log_eq(
         &mut self,
-        h: &BytesP256ElemLen,
-        g_r: &BytesP256ElemLen, 
-        g_x: &BytesP256ElemLen, 
-        g_y: &BytesP256ElemLen, 
-        x: &BytesP256ElemLen, 
-        i: &BytesP256ElemLen,
+        h: BytesP256ElemLen,
+        g_r: BytesP256ElemLen, 
+        g_x: BytesP256ElemLen, 
+        g_y: BytesP256ElemLen, 
+        x: BytesP256ElemLen, 
+        i: BytesP256ElemLen,
         message: Option<&[u8]>,
     ) -> SokLogEqProof {
+        trace!("Sok Log equality");
 
-        let (h_point_x, h_point_y) = self.bytes_to_point(h);
-        let (g_y_point_x, g_y_point_y) = self.bytes_to_point(g_y);
-        let (g_r_point_x, g_r_point_y) = self.bytes_to_point(g_r);
+        let (h_point_x, h_point_y) = self.bytes_to_point(&h);
+        let (g_y_point_x, g_y_point_y) = self.bytes_to_point(&g_y);
+        let (g_r_point_x, g_r_point_y) = self.bytes_to_point(&g_r);
 
         // Compute H_I^1 = (h_I * g^y)^x
         let (h_g_y_point_x, h_g_y_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_y_point_x, g_y_point_y );
-        let (h_1_point_x, h_1_point_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, x);
+        let (h_1_point_x, h_1_point_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &x);
 
         // Compute H_I^2 = (h_I * g^r)^x
         let (h_g_r_point_x, h_g_r_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_r_point_x, g_r_point_y );
-        let (h_2_point_x, h_2_point_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, x);
+        let (h_2_point_x, h_2_point_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, &x);
 
         // Generate proof pi
         // Generate random value r_I, s_I
-        let r = int_to_u8_array(2); //p256::NonZeroScalar::random(&mut self.rng);
-        let s = int_to_u8_array(3); //p256::NonZeroScalar::random(&mut self.rng);
+        let r = hex!("d1f3a4c8b66e30f78a53e5b7896ab8a2ffefc0bde45a7a7e13347157956c8e2a");
+        let r_scalar = Scalar::from_repr(r.into()).unwrap();
+        let s = hex!("5bfe2d83d8b44059f01b0e6efef7622ab0806e67dfed50d9d48f845e7f4b35a1");
+        let s_scalar = Scalar::from_repr(s.into()).unwrap();
 
         // Compute I_1 = g^r_I
         let (I_1_x, I_1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
@@ -1070,12 +1112,28 @@ impl CryptoTrait for Crypto<'_>  {
         let alpha = self.sha256_digest(&hash_input, hash_len);
         
         // Compute beta = r - x*alpha
-        let mut beta = self.pka_mod_mult(x, &alpha);
-        let beta = self.pka_mod_sub(&r, &beta);
+        // Convert the bytes to FieldElement values
+        let x_scalar = Scalar::from_repr(x.into()).unwrap();
+        let alpha_scalar = Scalar::from_repr(alpha.into()).unwrap();
+
+        let temp = x_scalar * alpha_scalar;
+        let beta_scalar = r_scalar + temp;
+        let beta_repr  = beta_scalar.to_repr();
+        let beta = beta_repr.as_ref();
+
+        // let mut beta = self.pka_mod_mult(x, &alpha);
+        // let beta = self.pka_mod_sub(&r, &beta);
 
         // Compute gamma = s - i*alpha
-        let gamma = self.pka_mod_mult(i, &alpha);
-        let gamma = self.pka_mod_sub(&s, &gamma);
+        let i_scalar = Scalar::from_repr(i.into()).unwrap();
+
+        let temp = i_scalar * alpha_scalar;
+        let gamma_scalar = s_scalar + temp;
+        let gamma_repr= gamma_scalar.to_repr();
+        let gamma = gamma_repr.as_ref();
+
+        // let gamma = self.pka_mod_mult(i, &alpha);
+        // let gamma = self.pka_mod_sub(&s, &gamma);
         
         // Return the proof (alpha, beta, gamma)
         let mut proof = SokLogEqProof::default();

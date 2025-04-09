@@ -34,23 +34,23 @@ impl<'a> InitiatorSoK<'a> {
     pub unsafe fn prepare_ead_3<Crypto: CryptoTrait>(
         &self,
         crypto: &mut Crypto,
-        h: &BytesP256ElemLen,
-        g_r: &BytesP256ElemLen, 
+        h: BytesP256ElemLen,
+        g_r: BytesP256ElemLen, 
         // g_x: &BytesP256ElemLen, 
         // g_y: &BytesP256ElemLen, 
         // x: &BytesP256ElemLen, 
-        i: &BytesP256ElemLen,
-        w: &BytesHashLen, 
+        i: BytesP256ElemLen,
+        w: BytesHashLen, 
     ) -> EADItem {
 
         let pi = crypto.sok_log_eq(
             h,
             g_r,
-            &self.state.g_x,
-            &self.state.g_y,
-            &self.state.x,
+            self.state.g_x,
+            self.state.g_y,
+            self.state.x,
             i,
-            Some(w),
+            Some(&w),
         );
 
         let mut value = EdhocMessageBuffer::new();

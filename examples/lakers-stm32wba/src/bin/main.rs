@@ -75,7 +75,7 @@ unsafe fn main() -> ! {
     // info!("pk.pk1: {:?}  sk: {:?}   h: {:?}   w: {:?}", pk.pk1, sk, h, w);
 
     // To follow the example, c_i= 37
-    trace!("INITIATOR MESSAGE_1");
+    trace!("------------Initiator message_1------------");
     // let c_i = ConnId::from_int_raw(0x37);
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto(&p, hash, pka, rng));
     // info!("c_i: {:#X}", c_i.as_slice());
@@ -83,14 +83,14 @@ unsafe fn main() -> ! {
     info!("message_1: {:#X}", message_1.content[..message_1.len]);
 
     // Repsonder parses message_1 and sends message_2
-    trace!("RESPONDER MESSAGE_2");
+    trace!("------------Responder message_2------------");
     let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
     let (responder, message_2) = responder
         .prepare_message_2(CredentialTransfer::ByReference, None, &None)
         .unwrap();    
     info!("message_2: {:#X}", message_2.content[..message_2.len]);
 
-    trace!("INITIATOR MESSAGE_3");
+    trace!("------------Initiator message_3------------");
     let (mut initiator, _c_r, id_cred_r, _ead_2) =
     initiator.parse_message_2(&message_2).unwrap();
     let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
@@ -102,14 +102,14 @@ unsafe fn main() -> ! {
         .unwrap(); // exposing own identity only after validating cred_r
 
     // Prepare ead_3
-    let i: &[u8; 32] = I.try_into().expect("h should be exactly 32 bytes");
-    let public_key = match &valid_cred_r.key {
+    let i: [u8; 32] = I.try_into().expect("h should be exactly 32 bytes");
+    let public_key = match valid_cred_r.key {
         CredentialKey::EC2Compact(public_key) => public_key,
         _ => panic!("Invalid key type. Expected EC2Compact."),
     };
     
-    let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, public_key);
-    let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, &h, public_key, i, &w);
+    let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &public_key);
+    let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, public_key, i, w);
     info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
     let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
@@ -118,7 +118,7 @@ unsafe fn main() -> ! {
         .unwrap();
     info!("message_3: {:#X}", message_3.content[..message_3.len]);
     
-    trace!("RESPONDER MESSAGE 4");
+    trace!("------------Responder message_4------------");
     let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
     let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
     let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();

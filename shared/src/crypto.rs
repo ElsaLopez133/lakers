@@ -74,12 +74,12 @@ pub trait Crypto: core::fmt::Debug {
     fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen);
     unsafe fn sok_log_eq(
         &mut self,
-        h: &BytesP256ElemLen,
-        g_r: &BytesP256ElemLen, 
-        g_x: &BytesP256ElemLen, 
-        g_y: &BytesP256ElemLen, 
-        x: &BytesP256ElemLen, 
-        i: &BytesP256ElemLen,
+        h: BytesP256ElemLen,
+        g_r: BytesP256ElemLen, 
+        g_x: BytesP256ElemLen, 
+        g_y: BytesP256ElemLen, 
+        x: BytesP256ElemLen, 
+        i: BytesP256ElemLen,
         message: Option<&[u8]>,
     ) -> SokLogEqProof;
     unsafe fn pka_ecc_mult_scalar(&mut self, point_x: BytesP256ElemLen, point_y: BytesP256ElemLen, scalar: &BytesP256ElemLen) -> (BytesP256ElemLen, BytesP256ElemLen);
