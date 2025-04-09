@@ -18,6 +18,7 @@ defmt-or-log = { version = "0.2.1", default-features = false }
 log = { version = "0.4", optional = true }
 # defmt = { version = "0.3", optional = true }
 defmt = "0.3"
+stm32wba = { git = "https://github.com/ElsaLopez133/stm32wba55-pac.git", version = "0.1.0", features = ["rt", "critical-section", "stm32wba55"] }
 
 [dev-dependencies]
 hexlit = "0.5.3"

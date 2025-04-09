@@ -3,13 +3,13 @@
 
 // Reference Manual: file:///C:/Users/elopezpe/OneDrive/Documentos/PhD/micro/stm32eba55cg/rm0493-multiprotocol-wireless-bluetooth-low-energy-and-ieee802154-stm32wba5xxx-arm-based-32-bit-mcus-stmicroelectronics-en.pdf
 
-use stm32wba::stm32wba55;
+use stm32wba::stm32wba55::{self, GPIOA};
 use {defmt_rtt as _, panic_probe as _};
 use cortex_m_rt::entry;
 use cortex_m::asm;
 use lakers::*;
 use lakers_shared::{Crypto as CryptoTrait, *};
-use lakers_shared::{BASE_POINT_X, BASE_POINT_Y, SCALAR};
+use lakers_shared::{GpioPin, BASE_POINT_X, BASE_POINT_Y, SCALAR};
 use lakers_crypto_rustcrypto_stm::Crypto;
 use lakers_crypto_rustcrypto_stm::{u32_to_u8, u8_to_u32};
 use defmt::info;
@@ -35,14 +35,116 @@ pub const G_R_Y_COORD: [u8; 32] = hex!("4519e257236b2a0ce2023f0931f1f386ca7afda6
 // pub const CRED_R: &[u8] = &hex!("A2026008A101A501020241322001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
 // pub const CRED_R: &[u8] = &hex!("a2026b6578616d706c652e65647508a101a5010241322001215820bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f02258204519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
 
+// pub struct GpioPin<'a> {
+//     port: &'a stm32wba55::GPIOA,
+//     pin: u8,
+// }
+
+// impl<'a> GpioPin<'a> {
+//     /// Initialize a GPIO pin as push-pull output
+//     pub fn new(p: &'a stm32wba55::Peripherals, pin: u8) -> Self {
+//         // Enable GPIOA clock
+//         p.RCC.rcc_ahb2enr().modify(|_, w| w.gpioaen().set_bit());
+
+//         // Set pin to output mode (01)
+//         match pin {
+//             15 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode15().bits(0b01) }),
+//             9 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode9().bits(0b01) }),
+//             12 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode12().bits(0b01) }),
+//             7 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode7().bits(0b01) }),
+//             2 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode2().bits(0b01) }),
+//             // Add other pins as needed
+//             _ => panic!("Unsupported pin number"),
+//         };
+
+//         // Set output type to push-pull
+//         match pin {
+//             15 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot15().clear_bit()),
+//             9 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot9().clear_bit()),
+//             12 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot12().clear_bit()),
+//             7 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot7().clear_bit()),
+//             2 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot2().clear_bit()),
+//             // Add other pins as needed
+//             _ => panic!("Unsupported pin number"),
+//         };
+
+//         // Set speed to low
+//         match pin {
+//             15 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed15().bits(0b00) }),
+//             9 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed9().bits(0b00) }),
+//             12 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed12().bits(0b00) }),
+//             7 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed7().bits(0b00) }),
+//             2 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed2().bits(0b00) }),
+//             // Add other pins as needed
+//             _ => panic!("Unsupported pin number"),
+//         };
+
+//         // No pull-up/pull-down
+//         match pin {
+//             15 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd15().bits(0b00) }),
+//             9 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd9().bits(0b00) }),
+//             12 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd12().bits(0b00) }),
+//             7 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd7().bits(0b00) }),
+//             2 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd2().bits(0b00) }),
+//             // Add other pins as needed
+//             _ => panic!("Unsupported pin number"),
+//         };
+
+//         let gpio = GpioPin {
+//             port: &p.GPIOA,
+//             pin,
+//         };
+        
+//         // Set initial state to low
+//         gpio.set_low();
+        
+//         gpio
+//     }
+
+//     /// Set pin high
+//     pub fn set_high(&self) {
+//         match self.pin {
+//             15 => self.port.gpioa_bsrr().write(|w| w.bs15().set_bit()),
+//             9 => self.port.gpioa_bsrr().write(|w| w.bs9().set_bit()),
+//             12 => self.port.gpioa_bsrr().write(|w| w.bs12().set_bit()),
+//             7 => self.port.gpioa_bsrr().write(|w| w.bs7().set_bit()),
+//             2 => self.port.gpioa_bsrr().write(|w| w.bs2().set_bit()),
+//             // Add other pins as needed
+//             _ => panic!("Unsupported pin number"),
+//         };
+//     }
+
+//     /// Set pin low
+//     pub fn set_low(&self) {
+//         match self.pin {
+//             15 => self.port.gpioa_bsrr().write(|w| w.br15().set_bit()),
+//             9 => self.port.gpioa_bsrr().write(|w| w.br9().set_bit()),
+//             12 => self.port.gpioa_bsrr().write(|w| w.br12().set_bit()),
+//             7 => self.port.gpioa_bsrr().write(|w| w.br7().set_bit()),
+//             2 => self.port.gpioa_bsrr().write(|w| w.br2().set_bit()),
+//             // Add other pins as needed
+//             _ => panic!("Unsupported pin number"),
+//         };
+//     }
+// }
+
 #[entry]
 unsafe fn main() -> ! {
+    // let p = embassy_stm32::init(Default::default());
+    // let mut led = Output::new(p.PA9, Level::High, Speed::Low);
+
     // Access peripherals via PAC
     let p = &stm32wba55::Peripherals::take().unwrap();
     let hash = &p.HASH;
     let pka = &p.PKA;
     let rng = &p.RNG;
     let rcc = &p.RCC;
+
+    let led9 = GpioPin::new(p, 9); //orange
+    let led15 = GpioPin::new(p, 15); // yellow
+    let led12 = GpioPin::new(p, 12); // blue
+    let led7 = GpioPin::new(p, 7); // red
+    let led2 = GpioPin::new(p, 2); // green
     
     // call lakers-crypto-rustcrypto-stm private init function
     let mut crypto = Crypto::new(&p, hash, pka, rng);
@@ -54,6 +156,8 @@ unsafe fn main() -> ! {
     let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
     trace!("Setting the initiator and the responder");
+    led7.set_high();
+
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(p, hash, pka, rng),
         EDHOCMethod::StatStat,
@@ -70,27 +174,38 @@ unsafe fn main() -> ! {
     // Precomputation phase. 
     // Keys of the authorities and compute h (product of pk of authorities) and w (hash with id_cred_i)
     // sk is the secret key and pk = (g^sk, ni)
-    let (pk, sk) = crypto.keygen_a();
-    let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value());
+    led9.set_high();
+    let (pk, sk) = crypto.keygen_a(led2);
+    led9.set_low();
+
+    led9.set_high();
+    let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value(), led2);
+    led9.set_low();
     // info!("pk.pk1: {:?}  sk: {:?}   h: {:?}   w: {:?}", pk.pk1, sk, h, w);
 
     // To follow the example, c_i= 37
     trace!("------------Initiator message_1------------");
+    led12.set_high();
+    led15.set_high();
     // let c_i = ConnId::from_int_raw(0x37);
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto(&p, hash, pka, rng));
     // info!("c_i: {:#X}", c_i.as_slice());
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
+    led12.set_low();
     info!("message_1: {:#X}", message_1.content[..message_1.len]);
 
     // Repsonder parses message_1 and sends message_2
     trace!("------------Responder message_2------------");
+    led12.set_high();
     let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
     let (responder, message_2) = responder
         .prepare_message_2(CredentialTransfer::ByReference, None, &None)
         .unwrap();    
+    led12.set_low();
     info!("message_2: {:#X}", message_2.content[..message_2.len]);
 
     trace!("------------Initiator message_3------------");
+    led12.set_high();
     let (mut initiator, _c_r, id_cred_r, _ead_2) =
     initiator.parse_message_2(&message_2).unwrap();
     let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
@@ -108,24 +223,35 @@ unsafe fn main() -> ! {
         _ => panic!("Invalid key type. Expected EC2Compact."),
     };
     
+    led9.set_high();
     let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &public_key);
     let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, public_key, i, w);
-    info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
+    led9.set_low();
+    // info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
     let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
     let (initiator, message_3, i_prk_out) = initiator
         .prepare_message_3(CredentialTransfer::ByReference, &Some(ead_3))
         .unwrap();
+    led12.set_low();
     info!("message_3: {:#X}", message_3.content[..message_3.len]);
     
     trace!("------------Responder message_4------------");
+    led12.set_high();
     let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
     let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
     let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+    led12.set_low();
 
+    // led7.set_low();
+    // led15.set_low();
+    led12.set_high();
     let mut initiator = initiator.completed_without_message_4().unwrap();
     let mut responder = responder.completed_without_message_4().unwrap();
-    
+    led12.set_low();
+    led7.set_low();
+    led15.set_low();
+
     // check that prk_out is equal at initiator and responder side
     assert_eq!(i_prk_out, r_prk_out);
     info!("Handshake completed");

@@ -1,13 +1,6 @@
 #![no_std]
 
-use lakers_shared::{MODE, BASE, PKA_RAM_OFFSET, RAM_BASE, RAM_NUM_DW, 
-    PRIME_LENGTH_OFFSET, MODULUS_LENGTH_OFFSET, COEF_A_SIGN_OFFSET, COEF_A_OFFSET, COEF_B_OFFSET, MODULUS_OFFSET, SCALAR_OFFSET, POINT_X_OFFSET, POINT_Y_OFFSET, PRIME_OFFSET, RESULT_X_OFFSET, RESULT_Y_OFFSET, RESULT_ERROR_OFFSET, A_SIGN, A, B,
-    N, BASE_POINT_X, BASE_POINT_Y, PRIME_ORDER, WORD_LENGTH, OPERAND_LENGTH, 
-    MODULUS_OFFSET_ADD, MODULUS_LENGTH_OFFSET_ADD, PRIME_LENGTH_OFFSET_ADD, COEF_A_OFFSET_ADD, COEF_A_SIGN_OFFSET_ADD, Z_COORDINATE, SCALAR_K_ADD, SCALAR_M_ADD, POINT_P_X, POINT_P_Y, POINT_P_Z, POINT_Q_X, POINT_Q_Y, POINT_Q_Z, RESULT_Y_ADD, RESULT_X_ADD, RESULT_ERROR_ADD, R2MODN, 
-    MODULUS_OFFSET_PTA, POINT_P_X_PTA, POINT_P_Y_PTA, POINT_P_Z_PTA, MONTGOMERY_PTA, RESULT_ERROR_PTA, RESULT_X_PTA, RESULT_Y_PTA, 
-    OPERAND_LENGTH_MULT, OPERAND_A_ARITHEMTIC_MULT, OPERAND_B_ARITHEMTIC_MULT, RESULT_ARITHMETIC_MULT, 
-    OPERAND_LENGTH_REDUC, OPERAND_A_REDUC, MODULUS_REDUC, RESULT_REDUC, 
-    OPERAND_LENGTH_SUB, OPERAND_A_SUB, OPERAND_B_SUB, MODULUS_SUB, RESULT_SUB 
+use lakers_shared::{GpioPin, A, A_SIGN, B, BASE, BASE_POINT_X, BASE_POINT_Y, COEF_A_OFFSET, COEF_A_OFFSET_ADD, COEF_A_SIGN_OFFSET, COEF_A_SIGN_OFFSET_ADD, COEF_B_OFFSET, MODE, MODULUS_LENGTH_OFFSET, MODULUS_LENGTH_OFFSET_ADD, MODULUS_OFFSET, MODULUS_OFFSET_ADD, MODULUS_OFFSET_PTA, MODULUS_REDUC, MODULUS_SUB, MONTGOMERY_PTA, N, OPERAND_A_ARITHEMTIC_MULT, OPERAND_A_REDUC, OPERAND_A_SUB, OPERAND_B_ARITHEMTIC_MULT, OPERAND_B_SUB, OPERAND_LENGTH, OPERAND_LENGTH_MULT, OPERAND_LENGTH_REDUC, OPERAND_LENGTH_SUB, PKA_RAM_OFFSET, POINT_P_X, POINT_P_X_PTA, POINT_P_Y, POINT_P_Y_PTA, POINT_P_Z, POINT_P_Z_PTA, POINT_Q_X, POINT_Q_Y, POINT_Q_Z, POINT_X_OFFSET, POINT_Y_OFFSET, PRIME_LENGTH_OFFSET, PRIME_LENGTH_OFFSET_ADD, PRIME_OFFSET, PRIME_ORDER, R2MODN, RAM_BASE, RAM_NUM_DW, RESULT_ARITHMETIC_MULT, RESULT_ERROR_ADD, RESULT_ERROR_OFFSET, RESULT_ERROR_PTA, RESULT_REDUC, RESULT_SUB, RESULT_X_ADD, RESULT_X_OFFSET, RESULT_X_PTA, RESULT_Y_ADD, RESULT_Y_OFFSET, RESULT_Y_PTA, SCALAR_K_ADD, SCALAR_M_ADD, SCALAR_OFFSET, WORD_LENGTH, Z_COORDINATE 
 };
 
 // use lakers::shared{X, G_X_X_COORD, G_X_Y_COORD, I, CRED_I};
@@ -42,7 +35,7 @@ use p256::{
 };
 use sha2::Digest;
 use cortex_m::asm;
-use stm32wba::stm32wba55::{self, USART1};
+use stm32wba::stm32wba55::{self, GPIOA, USART1};
 use stm32wba::stm32wba55::Peripherals as peripherals;
 use stm32wba::stm32wba55::PKA as PKA;
 use stm32wba::stm32wba55::HASH as HASH;
@@ -196,11 +189,11 @@ impl<'a> Crypto<'a> {
     fn stm32wba_init_rng(&self) -> &RNG {
         let clock = &self.p.RCC;
 
-        // Enable HSI as a stable clock source
+        // Enable HSE as a stable clock source. HSE when using PKA and HASH
         clock.rcc_cr().modify(|_, w| w
-            .hseon().set_bit()
+            .hsion().set_bit()
         );
-        while clock.rcc_cr().read().hserdy().bit_is_clear() {
+        while clock.rcc_cr().read().hsirdy().bit_is_clear() {
             asm::nop();
         }
     
@@ -824,26 +817,32 @@ impl CryptoTrait for Crypto<'_>  {
         &mut self,
         pk_aut: &[BytesP256AuthPubKey],
         id_cred_i: &[u8],
+        gpio: GpioPin,
     ) -> (BytesP256ElemLen, BytesHashLen) {
         trace!("Precomputation phase");
 
         trace!("Verify authorities keys");
         // Verify all authority keys
+        gpio.set_high();
         for pk in pk_aut {
             if !self.vok_log(pk.pk1, &pk.pk2, None) {
                 panic!("Error: authority keys invalid");
             }
         }
+        gpio.set_low();
         
         // Compute h as the product of all authority public keys
         trace!("Computation of h");
+        gpio.set_high();
         let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
         for i in 1..pk_aut.len() {
             let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
             (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
         }
+        gpio.set_low();
         
         trace!("Computation of w");
+        gpio.set_high();
         // Create the tuple for hashing (pk_A, pk_aut[0].pk1, pk_aut[1].pk1, ...)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
         let mut offset = 0;
@@ -860,7 +859,8 @@ impl CryptoTrait for Crypto<'_>  {
         }
 
         let w = self.sha256_digest(&hash_input, offset);
-        
+        gpio.set_low();
+
         // Return (h, w)        
         (h_point_x, w)
     }
@@ -891,7 +891,7 @@ impl CryptoTrait for Crypto<'_>  {
     }
 
     // Authority key generation function
-    unsafe fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen) {
+    unsafe fn keygen_a(&mut self, gpio: GpioPin) -> (BytesP256AuthPubKey, BytesP256ElemLen) {
         trace!("KeyAuthGen");
         // Generate random secret key
         // let sk = p256::NonZeroScalar::random(&mut self.rng);
@@ -900,19 +900,25 @@ impl CryptoTrait for Crypto<'_>  {
         let sk_scalar = Scalar::from_repr(SK.into()).unwrap();
 
         // pk1 = g^sk (g is the generator point in P256)
+        gpio.set_high();
         let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
+        gpio.set_low();
         // let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &SK);
         // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
 
         // Create proof of knowledge of sk
         // FIX: Should we pass both coordinates? How to make sure is always the 0x2 for y-coordinate?
+        gpio.set_high();
         let pk2 = self.sok_log(SK, (pk1_x, pk1_y), None);
-        
+        gpio.set_low();
+
         // Create the authority public key structure
+        gpio.set_high();
         let mut pk = BytesP256AuthPubKey::default();
         pk.pk1 = (pk1_x, pk1_y);
         pk.pk2 = pk2;
-        
+        gpio.set_low();
+
         // Return (pk, sk)
         (pk, SK)
     }
