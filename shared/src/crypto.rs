@@ -83,7 +83,6 @@ pub trait Crypto: core::fmt::Debug {
         message: Option<&[u8]>,
     ) -> SokLogEqProof;
     unsafe fn pka_ecc_mult_scalar(&mut self, point_x: BytesP256ElemLen, point_y: BytesP256ElemLen, scalar: &BytesP256ElemLen) -> (BytesP256ElemLen, BytesP256ElemLen);
-    fn bytes_to_point(&self, bytes: &[u8]) -> ([u8; 32], [u8; 32]);
     unsafe fn pka_ecc_point_add(
         &mut self, 
         point_a_x: BytesP256ElemLen, 

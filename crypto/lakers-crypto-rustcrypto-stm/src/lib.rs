@@ -53,12 +53,54 @@ pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322
 pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
 pub const SK: [u8; 32] = hex!("5c4172aca8b82b5a62e66f722216f5a10f72aa69f42c1d1cd3ccd7bfd29ca4e9");
 
-unsafe fn write_ram(offset: usize, buf: &[u32]) {
-    debug_assert_eq!(offset % 4, 0);
-    debug_assert!(offset + buf.len() * size_of::<u32>() < 0x520C_33FF);
-    buf.iter().rev().enumerate().for_each(|(idx, &dw)| {
-        write_volatile((offset + idx * size_of::<u32>()) as *mut u32, dw)
-    });
+fn bytes_to_point(bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
+    // Create an EncodedPoint from the compressed bytes
+    let mut compressed_point: [u8; 33] = [0; 33];    
+    compressed_point[0] = 0x02;        
+    compressed_point[1..].copy_from_slice(bytes);
+
+    let encoded_point = EncodedPoint::from_bytes(&compressed_point).expect("Invalid encoded point");
+    
+    // Convert to PublicKey
+    let public_key = PublicKey::from_encoded_point(&encoded_point)
+        .expect("Invalid point encoding");
+    
+    // Get the point in affine coordinates
+    let point = public_key.as_affine();
+    
+    // Convert to uncompressed EncodedPoint to access coordinates
+    let uncompressed = point.to_encoded_point(false);
+    
+    // Extract the x and y coordinates as byte arrays
+    let x_bytes: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let y_bytes: [u8; 32] = uncompressed.y().unwrap().clone().into();
+    
+    (x_bytes, y_bytes)
+}
+
+fn bytes_to_point_odd(bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
+    // Create an EncodedPoint from the compressed bytes
+    let mut compressed_point: [u8; 33] = [0; 33];    
+    compressed_point[0] = 0x03;        
+    compressed_point[1..].copy_from_slice(bytes);
+
+    let encoded_point = EncodedPoint::from_bytes(&compressed_point).expect("Invalid encoded point");
+    
+    // Convert to PublicKey
+    let public_key = PublicKey::from_encoded_point(&encoded_point)
+        .expect("Invalid point encoding");
+    
+    // Get the point in affine coordinates
+    let point = public_key.as_affine();
+    
+    // Convert to uncompressed EncodedPoint to access coordinates
+    let uncompressed = point.to_encoded_point(false);
+    
+    // Extract the x and y coordinates as byte arrays
+    let x_bytes: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let y_bytes: [u8; 32] = uncompressed.y().unwrap().clone().into();
+    
+    (x_bytes, y_bytes)
 }
 
 fn coordinates_to_projective_point(
@@ -86,6 +128,25 @@ fn coordinates_to_projective_point(
     point_proj
 }
 
+fn projective_to_coordinates(
+    h: ProjectivePoint
+) -> ([u8; 32], [u8; 32]) {
+    let h_affine = h.to_affine();
+    let uncompressed = h_affine.to_encoded_point(false);
+    let h_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let h_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
+
+    (h_x, h_y)
+}
+
+fn ecc_generator_mult_projective(
+    r: Scalar
+) -> ProjectivePoint {
+
+    let g_r = p256::ProjectivePoint::generator() * r;
+    g_r
+}
+
 fn ecc_generator_mult(
     r: Scalar
 ) -> ([u8; 32], [u8; 32]) {
@@ -97,6 +158,30 @@ fn ecc_generator_mult(
     let g_r_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
 
     (g_r_x, g_r_y)
+}
+
+fn ecc_mult_scalar(
+    h: BytesP256ElemLen,
+    r: Scalar
+) -> ([u8; 32], [u8; 32]) {
+
+    let (h_point_x, h_point_y) = bytes_to_point(&h);
+    let h_proj_point = coordinates_to_projective_point(h_point_x, h_point_y);
+    let h_r = h_proj_point * r;
+    let h_r_affine = h_r.to_affine();
+    let uncompressed = h_r_affine.to_encoded_point(false);
+    let h_r_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
+    let h_r_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
+
+    (h_r_x, h_r_y)
+}
+
+unsafe fn write_ram(offset: usize, buf: &[u32]) {
+    debug_assert_eq!(offset % 4, 0);
+    debug_assert!(offset + buf.len() * size_of::<u32>() < 0x520C_33FF);
+    buf.iter().rev().enumerate().for_each(|(idx, &dw)| {
+        write_volatile((offset + idx * size_of::<u32>()) as *mut u32, dw)
+    });
 }
 
 unsafe fn read_ram(offset: usize, buf: &mut [u32]) {
@@ -830,16 +915,26 @@ impl CryptoTrait for Crypto<'_>  {
             }
         }
         gpio.set_low();
-        
+
         // Compute h as the product of all authority public keys
         trace!("Computation of h");
         gpio.set_high();
         let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
+        let mut h = coordinates_to_projective_point(h_point_x, h_point_y);
         for i in 1..pk_aut.len() {
             let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
-            (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
+            let pk_proj = coordinates_to_projective_point(pk_point_x, pk_point_y);
+            h = h + pk_proj;
         }
         gpio.set_low();
+        
+        // // Compute h as the product of all authority public keys
+        // trace!("Computation of h");
+        // let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
+        // for i in 1..pk_aut.len() {
+        //     let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
+        //     (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
+        // }
         
         trace!("Computation of w");
         gpio.set_high();
@@ -863,31 +958,6 @@ impl CryptoTrait for Crypto<'_>  {
 
         // Return (h, w)        
         (h_point_x, w)
-    }
-
-    fn bytes_to_point(&self, bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
-        // Create an EncodedPoint from the compressed bytes
-        let mut compressed_point: [u8; 33] = [0; 33];    
-        compressed_point[0] = 0x02;        
-        compressed_point[1..].copy_from_slice(bytes);
-
-        let encoded_point = EncodedPoint::from_bytes(&compressed_point).expect("Invalid encoded point");
-        
-        // Convert to PublicKey
-        let public_key = PublicKey::from_encoded_point(&encoded_point)
-            .expect("Invalid point encoding");
-        
-        // Get the point in affine coordinates
-        let point = public_key.as_affine();
-        
-        // Convert to uncompressed EncodedPoint to access coordinates
-        let uncompressed = point.to_encoded_point(false);
-        
-        // Extract the x and y coordinates as byte arrays
-        let x_bytes: [u8; 32] = uncompressed.x().unwrap().clone().into();
-        let y_bytes: [u8; 32] = uncompressed.y().unwrap().clone().into();
-        
-        (x_bytes, y_bytes)
     }
 
     // Authority key generation function
@@ -1059,17 +1129,31 @@ impl CryptoTrait for Crypto<'_>  {
     ) -> SokLogEqProof {
         trace!("Sok Log equality");
 
-        let (h_point_x, h_point_y) = self.bytes_to_point(&h);
-        let (g_y_point_x, g_y_point_y) = self.bytes_to_point(&g_y);
-        let (g_r_point_x, g_r_point_y) = self.bytes_to_point(&g_r);
+        // let r= hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac");
+        // let r_scalar = Scalar::from_repr(r.into()).unwrap();
+        // let g_r_proj_point = p256::ProjectivePoint::generator() * r_scalar;
+        // let (g_r_x, g_r_y) = projective_to_coordinates(g_r_proj_point);
+        // info!("g_r_x: {:#X}   g_r_y: {:#X}", g_r_x, g_r_y);
+        // let g_r_proj = coordinates_to_projective_point(g_r_x, g_r_y);
+
+        let (h_point_x, h_point_y) = bytes_to_point(&h);
+        let h_proj_point = coordinates_to_projective_point(h_point_x, h_point_y);
+
+        let (g_y_point_x, g_y_point_y) = bytes_to_point(&g_y);
+        let g_y_proj_point = coordinates_to_projective_point(g_y_point_x, g_y_point_y);
+
+        let (g_r_point_x, g_r_point_y) = bytes_to_point(&g_r);
+        let g_r_proj_point = coordinates_to_projective_point(g_r_point_x, g_r_point_y);
+        
+        let x_scalar = Scalar::from_repr(x.into()).unwrap();
 
         // Compute H_I^1 = (h_I * g^y)^x
-        let (h_g_y_point_x, h_g_y_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_y_point_x, g_y_point_y );
-        let (h_1_point_x, h_1_point_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &x);
+        let h_i_1_temp = h_proj_point + g_y_proj_point;
+        let h_i_1 = h_i_1_temp * x_scalar;
 
         // Compute H_I^2 = (h_I * g^r)^x
-        let (h_g_r_point_x, h_g_r_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, g_r_point_x, g_r_point_y );
-        let (h_2_point_x, h_2_point_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, &x);
+        let h_i_2_temp = h_proj_point + g_r_proj_point;
+        let h_i_1 = h_i_2_temp * x_scalar;
 
         // Generate proof pi
         // Generate random value r_I, s_I
@@ -1079,26 +1163,24 @@ impl CryptoTrait for Crypto<'_>  {
         let s_scalar = Scalar::from_repr(s.into()).unwrap();
 
         // Compute I_1 = g^r_I
-        let (I_1_x, I_1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
+        let i_1 = ecc_generator_mult_projective(r_scalar);
         
         // Compute I_2 = (h_I g^y)^r
-        let (I_2_x, I_2_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &r);
+        let i_2 = h_i_1_temp * r_scalar;
 
         // Compute I_3 = (h_I g^r)^r
-        let (I_3_x, I_3_y) = self.pka_ecc_mult_scalar(h_g_r_point_x, h_g_r_point_y, &r);
+        let i_3 = h_i_2_temp * r_scalar;
 
         // Compute I_4 = g^s
-        let (I_4_x, I_4_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &s);
+        let i_4 = ecc_generator_mult_projective(s_scalar);
 
         // Compute I_5 = (h_I g^y)^s
-        let (I_5_x, I_5_y) = self.pka_ecc_mult_scalar(h_g_y_point_x, h_g_y_point_y, &s);
-        
+        let i_5 = h_i_1_temp * s_scalar;
+
         // Create the hash input (I_1, I_2, I_3, I_4, I_5, message)
         // we need to add I_1 + I_2 + I_3 + I_4 + I_5
-        let (sum_x, sum_y) = self.pka_ecc_point_add(I_1_x, I_1_y, I_2_x, I_2_y);
-        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_3_x, I_3_y);
-        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_4_x, I_4_y);
-        let (sum_x, sum_y) = self.pka_ecc_point_add(sum_x, sum_y, I_5_x, I_5_y);
+        let sum = i_1 + i_2 + i_3 + i_4 + i_5;
+        let (sum_x, sum_y) = projective_to_coordinates(sum);
 
         // let inputs = [I_1 + I_2 + I_3 + I_4 + I_5 || message.unwrap_or(&[])];
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1119,16 +1201,12 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute beta = r - x*alpha
         // Convert the bytes to FieldElement values
-        let x_scalar = Scalar::from_repr(x.into()).unwrap();
         let alpha_scalar = Scalar::from_repr(alpha.into()).unwrap();
 
         let temp = x_scalar * alpha_scalar;
         let beta_scalar = r_scalar + temp;
         let beta_repr  = beta_scalar.to_repr();
         let beta = beta_repr.as_ref();
-
-        // let mut beta = self.pka_mod_mult(x, &alpha);
-        // let beta = self.pka_mod_sub(&r, &beta);
 
         // Compute gamma = s - i*alpha
         let i_scalar = Scalar::from_repr(i.into()).unwrap();
@@ -1137,9 +1215,6 @@ impl CryptoTrait for Crypto<'_>  {
         let gamma_scalar = s_scalar + temp;
         let gamma_repr= gamma_scalar.to_repr();
         let gamma = gamma_repr.as_ref();
-
-        // let gamma = self.pka_mod_mult(i, &alpha);
-        // let gamma = self.pka_mod_sub(&s, &gamma);
         
         // Return the proof (alpha, beta, gamma)
         let mut proof = SokLogEqProof::default();

@@ -27,106 +27,10 @@ pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a95340
 
 pub const SK: [u8; 32] = hex!("5c4172aca8b82b5a62e66f722216f5a10f72aa69f42c1d1cd3ccd7bfd29ca4e9");
 pub const MESSAGE_2: [u8; 45] = hex!("582b419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d59862a1eef9e0e7e1886fcd");
-
 pub const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
 pub const R: &[u8] = &hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac");
 pub const G_R_X_COORD: [u8; 32] = hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
-pub const G_R_Y_COORD: [u8; 32] = hex!("4519e257236b2a0ce2023f0931f1f386ca7afda64fcd e0108c224c51eabf6072");
-// pub const CRED_R: &[u8] = &hex!("A2026008A101A501020241322001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
-// pub const CRED_R: &[u8] = &hex!("a2026b6578616d706c652e65647508a101a5010241322001215820bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f02258204519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
-
-// pub struct GpioPin<'a> {
-//     port: &'a stm32wba55::GPIOA,
-//     pin: u8,
-// }
-
-// impl<'a> GpioPin<'a> {
-//     /// Initialize a GPIO pin as push-pull output
-//     pub fn new(p: &'a stm32wba55::Peripherals, pin: u8) -> Self {
-//         // Enable GPIOA clock
-//         p.RCC.rcc_ahb2enr().modify(|_, w| w.gpioaen().set_bit());
-
-//         // Set pin to output mode (01)
-//         match pin {
-//             15 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode15().bits(0b01) }),
-//             9 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode9().bits(0b01) }),
-//             12 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode12().bits(0b01) }),
-//             7 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode7().bits(0b01) }),
-//             2 => p.GPIOA.gpioa_moder().modify(|_, w| unsafe { w.mode2().bits(0b01) }),
-//             // Add other pins as needed
-//             _ => panic!("Unsupported pin number"),
-//         };
-
-//         // Set output type to push-pull
-//         match pin {
-//             15 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot15().clear_bit()),
-//             9 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot9().clear_bit()),
-//             12 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot12().clear_bit()),
-//             7 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot7().clear_bit()),
-//             2 => p.GPIOA.gpioa_otyper().modify(|_, w| w.ot2().clear_bit()),
-//             // Add other pins as needed
-//             _ => panic!("Unsupported pin number"),
-//         };
-
-//         // Set speed to low
-//         match pin {
-//             15 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed15().bits(0b00) }),
-//             9 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed9().bits(0b00) }),
-//             12 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed12().bits(0b00) }),
-//             7 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed7().bits(0b00) }),
-//             2 => p.GPIOA.gpioa_ospeedr().modify(|_, w| unsafe { w.ospeed2().bits(0b00) }),
-//             // Add other pins as needed
-//             _ => panic!("Unsupported pin number"),
-//         };
-
-//         // No pull-up/pull-down
-//         match pin {
-//             15 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd15().bits(0b00) }),
-//             9 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd9().bits(0b00) }),
-//             12 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd12().bits(0b00) }),
-//             7 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd7().bits(0b00) }),
-//             2 => p.GPIOA.gpioa_pupdr().modify(|_, w| unsafe { w.pupd2().bits(0b00) }),
-//             // Add other pins as needed
-//             _ => panic!("Unsupported pin number"),
-//         };
-
-//         let gpio = GpioPin {
-//             port: &p.GPIOA,
-//             pin,
-//         };
-        
-//         // Set initial state to low
-//         gpio.set_low();
-        
-//         gpio
-//     }
-
-//     /// Set pin high
-//     pub fn set_high(&self) {
-//         match self.pin {
-//             15 => self.port.gpioa_bsrr().write(|w| w.bs15().set_bit()),
-//             9 => self.port.gpioa_bsrr().write(|w| w.bs9().set_bit()),
-//             12 => self.port.gpioa_bsrr().write(|w| w.bs12().set_bit()),
-//             7 => self.port.gpioa_bsrr().write(|w| w.bs7().set_bit()),
-//             2 => self.port.gpioa_bsrr().write(|w| w.bs2().set_bit()),
-//             // Add other pins as needed
-//             _ => panic!("Unsupported pin number"),
-//         };
-//     }
-
-//     /// Set pin low
-//     pub fn set_low(&self) {
-//         match self.pin {
-//             15 => self.port.gpioa_bsrr().write(|w| w.br15().set_bit()),
-//             9 => self.port.gpioa_bsrr().write(|w| w.br9().set_bit()),
-//             12 => self.port.gpioa_bsrr().write(|w| w.br12().set_bit()),
-//             7 => self.port.gpioa_bsrr().write(|w| w.br7().set_bit()),
-//             2 => self.port.gpioa_bsrr().write(|w| w.br2().set_bit()),
-//             // Add other pins as needed
-//             _ => panic!("Unsupported pin number"),
-//         };
-//     }
-// }
+pub const G_R_Y_COORD: [u8; 32] = hex!("4519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
 
 #[entry]
 unsafe fn main() -> ! {
@@ -217,15 +121,15 @@ unsafe fn main() -> ! {
         .unwrap(); // exposing own identity only after validating cred_r
 
     // Prepare ead_3
-    let i: [u8; 32] = I.try_into().expect("h should be exactly 32 bytes");
-    let public_key = match valid_cred_r.key {
-        CredentialKey::EC2Compact(public_key) => public_key,
-        _ => panic!("Invalid key type. Expected EC2Compact."),
-    };
+    let i: [u8; 32] = I.try_into().expect("I should be exactly 32 bytes");
+    // let public_key = match valid_cred_r.key {
+    //     CredentialKey::EC2Compact(public_key) => public_key,
+    //     _ => panic!("Invalid key type. Expected EC2Compact."),
+    // };
     
     led9.set_high();
-    let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &public_key);
-    let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, public_key, i, w);
+    let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &G_R_X_COORD);
+    let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, G_R_X_COORD, i, w);
     led9.set_low();
     // info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
