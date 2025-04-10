@@ -5,5 +5,12 @@ runner = "probe-rs run --chip nRF52840_xxAA"
 [build]
 target = "thumbv7em-none-eabihf"
 
+[target.thumbv7em-none-eabihf]
+rustflags = [
+     "-C", "link-arg=-T/home/elsa/lakers/examples/lakers-nrf52840-like/device.x",
+     "-C", "link-arg=-Tlink.x",
+     "-C", "link-arg=-Tdefmt.x"
+]
+
 [env]
 DEFMT_LOG = "trace"

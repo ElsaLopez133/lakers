@@ -17,9 +17,7 @@ hex = { version = "0.4.3", optional = true }
 defmt-or-log = { version = "0.2.1", default-features = false }
 log = { version = "0.4", optional = true }
 # defmt = { version = "0.3", optional = true }
-defmt = "0.3"
-
-embassy-nrf = { git =  "https://github.com/embassy-rs/embassy.git", branch = "main", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
+defmt = "0.3"  
 
 [dev-dependencies]
 hexlit = "0.5.3"

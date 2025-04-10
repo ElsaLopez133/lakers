@@ -1,6 +1,9 @@
 //! Cryptography trait back-end for the lakers-crypto crate
 
 use super::*;
+// use nrf52840_hal::gpio::{p0::P0_26, Output, PushPull};
+// use nrf52840_hal::gpio::{Output, Pin, PushPull};
+// use embedded_hal::digital::v2::OutputPin;
 
 /// Returns the SUITES_I array, or an error if selected_suite is not supported.
 ///
@@ -88,12 +91,11 @@ pub trait Crypto: core::fmt::Debug {
         h: (BytesP256ElemLen, BytesP256ElemLen), 
         message: Option<&[u8]>
     ) -> SokLogProof ;
-    unsafe fn keygen_a(&mut self, gpio: GpioPin) -> (BytesP256AuthPubKey, BytesP256ElemLen);
+    unsafe fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen);
     unsafe fn precomp(
         &mut self,
         pk_aut: &[BytesP256AuthPubKey],
         id_cred_i: &[u8],
-        gpio: GpioPin,
     ) -> (BytesP256ElemLen, BytesHashLen);
     unsafe fn vok_log(
         &mut self, 

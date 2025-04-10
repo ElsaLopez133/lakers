@@ -28,8 +28,6 @@ pub use cred::*;
 mod buffer;
 pub use buffer::*;
 
-use embassy_nrf::gpio;
-
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
@@ -308,11 +306,26 @@ pub struct SokLogEqProof {
     pub pi3: [u8; 32], 
 }
 
-#[derive(Clone, Copy)]
-pub struct GpioPin<'a> {
-    port: &'a embassy_nrf::gpio::Output<'a>,
-    pin: u8,
-}
+// #[derive(Clone, Copy)]
+// pub struct GpioPin<'a> {
+//     port: &'a embassy_nrf::gpio::Output<'a>,
+//     pin: u8,
+// }
+
+// impl<'a> GpioPin<'a> {
+//     pub fn new(gpio: &'a embassy_nrf::gpio, pin: u8) -> Self {
+
+//     }
+
+//     pub fn set_high(&self) {
+
+//     }
+
+//     /// Set pin low
+//     pub fn set_low(&self) {
+
+//     }
+// }
 
 /// Value of C_R or C_I, as chosen by ourself or the peer.
 ///

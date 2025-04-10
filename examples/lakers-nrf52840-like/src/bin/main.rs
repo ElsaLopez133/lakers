@@ -3,13 +3,16 @@
 
 // Reference Manual: file:///C:/Users/elopezpe/OneDrive/Documentos/PhD/micro/stm32eba55cg/rm0493-multiprotocol-wireless-bluetooth-low-energy-and-ieee802154-stm32wba5xxx-arm-based-32-bit-mcus-stmicroelectronics-en.pdf
 
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
+// use embassy_nrf::gpio::{Level, Output, OutputDrive};
+use nrf52840_hal::pac;
+use nrf52840_hal::prelude::*;
+
 use {defmt_rtt as _, panic_probe as _};
 use cortex_m_rt::entry;
 use cortex_m::asm;
 use lakers::*;
 use lakers_shared::{Crypto as CryptoTrait, *};
-use lakers_shared::{GpioPin, BASE_POINT_X, BASE_POINT_Y, SCALAR};
+use lakers_shared::{BASE_POINT_X, BASE_POINT_Y, SCALAR};
 use lakers_crypto_rustcrypto_stm::Crypto;
 use defmt::info;
 use defmt_or_log::trace;
@@ -32,15 +35,23 @@ pub const G_R_Y_COORD: [u8; 32] = hex!("4519e257236b2a0ce2023f0931f1f386ca7afda6
 
 #[entry]
 unsafe fn main() -> ! {
-    let mut config = embassy_nrf::config::Config::default();
-    config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
-    let peripherals = embassy_nrf::init(config);
+    // let mut config = embassy_nrf::config::Config::default();
+    // config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
+    // let peripherals = embassy_nrf::init(config);
 
-    let mut led9 = Output::new(peripherals.P0_9, Level::Low, OutputDrive::Standard);
-    let mut led15 = Output::new(peripherals.P0_15, Level::Low, OutputDrive::Standard);
-    let mut led12 = Output::new(peripherals.P0_12, Level::Low, OutputDrive::Standard);
-    let mut led7 = Output::new(peripherals.P0_7, Level::Low, OutputDrive::Standard);
-    let mut led2 = Output::new(peripherals.P0_2, Level::Low, OutputDrive::Standard);
+    let peripherals = pac::Peripherals::take().unwrap();
+    let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
+    let mut led9 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led12 = p0.p0_16.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led7 = p0.p0_11.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led2 = p0.p0_24.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led15 = p0.p0_15.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+
+    // let mut led9 = Output::new(peripherals.P0_19, Level::Low, OutputDrive::Standard);
+    // let mut led15 = Output::new(peripherals.P0_14, Level::Low, OutputDrive::Standard);
+    // let mut led12 = Output::new(peripherals.P0_11, Level::Low, OutputDrive::Standard);
+    // let mut led7 = Output::new(peripherals.P0_16, Level::Low, OutputDrive::Standard);
+    // let mut led2 = Output::new(peripherals.P0_25, Level::Low, OutputDrive::Standard);
 
     // let led9 = GpioPin::new(p, 9); //orange
     // let led15 = GpioPin::new(p, 15); // yellow
@@ -57,7 +68,7 @@ unsafe fn main() -> ! {
     let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
     trace!("Setting the initiator and the responder");
-    led7.set_high();
+    led7.set_high().unwrap();
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
@@ -75,38 +86,38 @@ unsafe fn main() -> ! {
     // Precomputation phase. 
     // Keys of the authorities and compute h (product of pk of authorities) and w (hash with id_cred_i)
     // sk is the secret key and pk = (g^sk, ni)
-    led9.set_high();
-    let (pk, sk) = crypto.keygen_a(led2);
-    led9.set_low();
+    led9.set_high().unwrap();
+    let (pk, sk) = crypto.keygen_a();
+    led9.set_low().unwrap();
 
-    led9.set_high();
-    let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value(), led2);
-    led9.set_low();
+    led9.set_high().unwrap();
+    let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value());
+    led9.set_low().unwrap();
     // info!("pk.pk1: {:?}  sk: {:?}   h: {:?}   w: {:?}", pk.pk1, sk, h, w);
 
     // To follow the example, c_i= 37
     trace!("------------Initiator message_1------------");
-    led12.set_high();
-    led15.set_high();
+    led12.set_high().unwrap();
+    led15.set_high().unwrap();
     // let c_i = ConnId::from_int_raw(0x37);
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     // info!("c_i: {:#X}", c_i.as_slice());
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
-    led12.set_low();
+    led12.set_low().unwrap();
     info!("message_1: {:#X}", message_1.content[..message_1.len]);
 
     // Repsonder parses message_1 and sends message_2
     trace!("------------Responder message_2------------");
-    led12.set_high();
+    led12.set_high().unwrap();
     let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
     let (responder, message_2) = responder
         .prepare_message_2(CredentialTransfer::ByReference, None, &None)
         .unwrap();    
-    led12.set_low();
+    led12.set_low().unwrap();
     info!("message_2: {:#X}", message_2.content[..message_2.len]);
 
     trace!("------------Initiator message_3------------");
-    led12.set_high();
+    led12.set_high().unwrap();
     let (mut initiator, _c_r, id_cred_r, _ead_2) =
     initiator.parse_message_2(&message_2).unwrap();
     let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
@@ -124,34 +135,34 @@ unsafe fn main() -> ! {
         _ => panic!("Invalid key type. Expected EC2Compact."),
     };
     
-    led9.set_high();
+    led9.set_high().unwrap();
     let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &public_key);
     let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, public_key, i, w);
-    led9.set_low();
+    led9.set_low().unwrap();
     // info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
     let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
     let (initiator, message_3, i_prk_out) = initiator
         .prepare_message_3(CredentialTransfer::ByReference, &Some(ead_3))
         .unwrap();
-    led12.set_low();
+    led12.set_low().unwrap();
     info!("message_3: {:#X}", message_3.content[..message_3.len]);
     
     trace!("------------Responder message_4------------");
-    led12.set_high();
+    led12.set_high().unwrap();
     let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
     let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
     let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
-    led12.set_low();
+    led12.set_low().unwrap();
 
     // led7.set_low();
     // led15.set_low();
-    led12.set_high();
+    led12.set_high().unwrap();
     let mut initiator = initiator.completed_without_message_4().unwrap();
     let mut responder = responder.completed_without_message_4().unwrap();
-    led12.set_low();
-    led7.set_low();
-    led15.set_low();
+    led12.set_low().unwrap();
+    led7.set_low().unwrap();
+    led15.set_low().unwrap();
 
     // check that prk_out is equal at initiator and responder side
     assert_eq!(i_prk_out, r_prk_out);
