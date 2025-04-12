@@ -198,21 +198,34 @@ unsafe fn zero_ram() {
         .for_each(|dw| unsafe { write_volatile((dw * 4 + RAM_BASE) as *mut u32, 0) });
 }
 
-pub fn u32_to_u8(arr: &[u32; 8]) -> [u8; 32] {
-    let mut result = [0u8; 32];
-    for (i, &val) in arr.iter().enumerate() {
-        result[i * 4..(i + 1) * 4].copy_from_slice(&val.to_le_bytes());
+// pub fn u32_to_u8(arr: &[u32; 8]) -> [u8; 32] {
+//     let mut result = [0u8; 32];
+//     for (i, &val) in arr.iter().enumerate() {
+//         result[i * 4..(i + 1) * 4].copy_from_slice(&val.to_le_bytes());
+//     }
+//     result
+// }
+
+pub fn u32_to_u8(input: &[u32; 8]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    for (i, word) in input.iter().enumerate() {
+        let bytes = word.to_be_bytes(); // convert u32 to [u8; 4] in big-endian
+        out[i * 4..(i + 1) * 4].copy_from_slice(&bytes);
     }
-    result
+    out
 }
 
-pub fn u8_to_u32(arr: &[u8; 32]) -> [u32; 8] {
-    let mut result = [0u32; 8];
+pub fn u8_to_u32(bytes: &[u8; 32]) -> [u32; 8] {
+    let mut words = [0u32; 8];
     for i in 0..8 {
-        let bytes = &arr[i * 4..(i + 1) * 4];
-        result[i] = u32::from_le_bytes(bytes.try_into().unwrap());
+        words[i] = u32::from_be_bytes([
+            bytes[i * 4],
+            bytes[i * 4 + 1],
+            bytes[i * 4 + 2],
+            bytes[i * 4 + 3],
+        ]);
     }
-    result
+    words
 }
 
 pub fn int_to_u8_array(r: u32) -> [u8; 32] {
@@ -447,6 +460,7 @@ impl CryptoTrait for Crypto<'_>  {
 
     }
 
+    // WORKS 
     unsafe fn pka_ecc_point_add(
         &mut self, 
         point_a_x: BytesP256ElemLen, 
@@ -505,16 +519,26 @@ impl CryptoTrait for Crypto<'_>  {
         // Clear the completion flag
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
 
+        // Check: compare to the value in software
+        let point_a = coordinates_to_projective_point(point_a_x, point_a_y);
+        let point_b = coordinates_to_projective_point(point_b_x, point_b_y);
+        let sum = point_a + point_b;
+        let (sum_x, sum_y) = projective_to_coordinates(sum);
+
+        info!("software a + b : ({:#X}, {:#X})", sum_x, sum_y);
+        info!("hardware a + b : ({:#X}, {:#X})", result_x, result_y);
+
         
         (u32_to_u8(&result_x), u32_to_u8(&result_y))
 
     }
 
+    // WORKS
     unsafe fn pka_ecc_mult_scalar(
         &mut self, 
         point_x: BytesP256ElemLen, 
         point_y: BytesP256ElemLen, 
-        scalar: &BytesP256ElemLen
+        scalar: BytesP256ElemLen
     ) -> (BytesP256ElemLen, BytesP256ElemLen) {
 
         self.stm32wba_init_pka();
@@ -569,6 +593,15 @@ impl CryptoTrait for Crypto<'_>  {
                 
         // Clear the completion flag
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
+
+        // // Check: compare to the value in software
+        // let point = coordinates_to_projective_point(point_x, point_y);
+        // let r_scalar = Scalar::from_repr(scalar.into()).unwrap();
+        // let mult = point * r_scalar;
+        // let (mult_x, mult_y) = projective_to_coordinates(mult);
+
+        // info!("software a ^ b : ({:#X}, {:#X})", mult_x, mult_y);
+        // info!("hardware a ^ b : ({:#X}, {:#X})", result_x, result_y);
 
         (u32_to_u8(&result_x), u32_to_u8(&result_y))
     }
