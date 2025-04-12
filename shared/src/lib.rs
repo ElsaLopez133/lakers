@@ -158,6 +158,7 @@ pub type BufferCiphertext3 = EdhocMessageBuffer;
 pub type BufferCiphertext4 = EdhocMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
+pub type BytesP256ElemLenCompressed = [u8; P256_ELEM_LEN + 1];
 pub type BufferMessage2 = EdhocMessageBuffer;
 pub type BytesMaxBuffer = [u8; MAX_BUFFER_LEN];
 pub type BytesMaxContextBuffer = [u8; MAX_KDF_CONTEXT_LEN];

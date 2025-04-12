@@ -31,7 +31,7 @@ pub const MESSAGE_2: [u8; 45] = hex!("582b419701d7f00a26c2dc587a36dd752549f33763
 pub const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
 pub const R: &[u8] = &hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac");
 pub const G_R_X_COORD: [u8; 32] = hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
-pub const G_R_Y_COORD: [u8; 32] = hex!("4519e257236b2a0ce2023f0931f1f386ca7afda64fcd e0108c224c51eabf6072");
+pub const G_R_Y_COORD: [u8; 32] = hex!("4519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
 
 #[entry]
 unsafe fn main() -> ! {
@@ -47,6 +47,8 @@ unsafe fn main() -> ! {
     let mut led2 = p0.p0_24.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
     let mut led15 = p0.p0_15.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
+    led15.set_low().unwrap();
+    led9.set_low().unwrap();
     // let mut led9 = Output::new(peripherals.P0_19, Level::Low, OutputDrive::Standard);
     // let mut led15 = Output::new(peripherals.P0_14, Level::Low, OutputDrive::Standard);
     // let mut led12 = Output::new(peripherals.P0_11, Level::Low, OutputDrive::Standard);
@@ -86,13 +88,13 @@ unsafe fn main() -> ! {
     // Precomputation phase. 
     // Keys of the authorities and compute h (product of pk of authorities) and w (hash with id_cred_i)
     // sk is the secret key and pk = (g^sk, ni)
-    led9.set_high().unwrap();
-    let (pk, sk) = crypto.keygen_a();
-    led9.set_low().unwrap();
+    // led9.set_high().unwrap();
+    // let (pk, sk) = crypto.keygen_a(&mut led2);
+    // led9.set_low().unwrap();
 
-    led9.set_high().unwrap();
-    let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value());
-    led9.set_low().unwrap();
+    // led9.set_high().unwrap();
+    // let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value(), &mut led2);
+    // led9.set_low().unwrap();
     // info!("pk.pk1: {:?}  sk: {:?}   h: {:?}   w: {:?}", pk.pk1, sk, h, w);
 
     // To follow the example, c_i= 37
@@ -129,21 +131,16 @@ unsafe fn main() -> ! {
         .unwrap(); // exposing own identity only after validating cred_r
 
     // Prepare ead_3
-    let i: [u8; 32] = I.try_into().expect("h should be exactly 32 bytes");
-    let public_key = match valid_cred_r.key {
-        CredentialKey::EC2Compact(public_key) => public_key,
-        _ => panic!("Invalid key type. Expected EC2Compact."),
-    };
-    
-    led9.set_high().unwrap();
-    let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &public_key);
-    let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, public_key, i, w);
-    led9.set_low().unwrap();
+    // let i: [u8; 32] = I.try_into().expect("h should be exactly 32 bytes");
+    // led9.set_high().unwrap();
+    // let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &G_R_X_COORD);
+    // let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, G_R_X_COORD, i, w);
+    // led9.set_low().unwrap();
     // info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
     let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
     let (initiator, message_3, i_prk_out) = initiator
-        .prepare_message_3(CredentialTransfer::ByReference, &Some(ead_3))
+        .prepare_message_3(CredentialTransfer::ByReference, &None)
         .unwrap();
     led12.set_low().unwrap();
     info!("message_3: {:#X}", message_3.content[..message_3.len]);

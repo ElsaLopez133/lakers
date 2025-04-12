@@ -1,9 +1,9 @@
 //! Cryptography trait back-end for the lakers-crypto crate
 
 use super::*;
+use embedded_hal::digital::v2::OutputPin;
 // use nrf52840_hal::gpio::{p0::P0_26, Output, PushPull};
 // use nrf52840_hal::gpio::{Output, Pin, PushPull};
-// use embedded_hal::digital::v2::OutputPin;
 
 /// Returns the SUITES_I array, or an error if selected_suite is not supported.
 ///
@@ -84,23 +84,37 @@ pub trait Crypto: core::fmt::Debug {
         x: BytesP256ElemLen, 
         i: BytesP256ElemLen,
         message: Option<&[u8]>,
-    ) -> SokLogEqProof;
+    ) -> (SokLogEqProof, BytesP256ElemLen, BytesP256ElemLen);
     unsafe fn sok_log(
         &mut self, 
         x: BytesP256ElemLen, 
         h: (BytesP256ElemLen, BytesP256ElemLen), 
         message: Option<&[u8]>
     ) -> SokLogProof ;
-    unsafe fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen);
-    unsafe fn precomp(
+    unsafe fn keygen_a<P: OutputPin>(&mut self, led: &mut P) -> (BytesP256AuthPubKey, BytesP256ElemLen);
+    unsafe fn precomp<P: OutputPin>(
         &mut self,
         pk_aut: &[BytesP256AuthPubKey],
         id_cred_i: &[u8],
+        led: &mut P,
     ) -> (BytesP256ElemLen, BytesHashLen);
     unsafe fn vok_log(
         &mut self, 
         h: (BytesP256ElemLen, BytesP256ElemLen), 
         pi: &SokLogProof, 
         message: Option<&[u8]>
+    ) -> bool;
+    fn vok_log_eq(
+        &mut self,
+        h_i_1: BytesP256ElemLen,
+        h_i_2: BytesP256ElemLen,
+        g_x: BytesP256ElemLen,
+        g_y: BytesP256ElemLen,
+        g_i: BytesP256ElemLen,
+        g_r: BytesP256ElemLen,
+        h: BytesP256ElemLen,
+        x: BytesP256ElemLen,
+        pi: &SokLogEqProof,
+        message: Option<&[u8]>,
     ) -> bool;
 }

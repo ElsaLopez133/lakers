@@ -8,7 +8,8 @@ use lakers_shared::{A, A_SIGN, B, BASE, BASE_POINT_X, BASE_POINT_Y, COEF_A_OFFSE
 use lakers_shared::{
     BufferCiphertext3, BufferPlaintext3, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen,
     BytesMaxBuffer, BytesMaxInfoBuffer, BytesP256ElemLen, Crypto as CryptoTrait, EDHOCError,
-    AES_CCM_TAG_LEN, MAX_BUFFER_LEN, BytesP256AuthPubKey,SokLogProof,SokLogEqProof, P256_ELEM_LEN
+    AES_CCM_TAG_LEN, MAX_BUFFER_LEN, BytesP256AuthPubKey,SokLogProof,SokLogEqProof, P256_ELEM_LEN, 
+    BytesP256ElemLenCompressed
 };
 
 use core::{
@@ -38,8 +39,8 @@ use cortex_m::asm;
 use defmt::{info, trace};
 use hexlit::hex;
 
+use embedded_hal::digital::v2::OutputPin;
 // use embassy_nrf::gpio::Output;
-// use embedded_hal::digital::v2::OutputPin;
 
 type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
 
@@ -49,6 +50,38 @@ pub const G_X_Y_COORD: [u8; 32] = hex!("51e8af6c6edb781601ad1d9c5fa8bf7aa15716c7
 pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
 pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
 pub const SK: [u8; 32] = hex!("5c4172aca8b82b5a62e66f722216f5a10f72aa69f42c1d1cd3ccd7bfd29ca4e9");
+
+fn projective_to_bytes(point: ProjectivePoint) -> [u8; 33] {
+    // Convert to affine representation
+    let affine_point = point.to_affine();
+    
+    // Convert to compressed encoded point
+    let encoded_point = affine_point.to_encoded_point(true); // true for compressed format
+    
+    // Get the compressed bytes
+    let mut result = [0u8; 33];
+    result.copy_from_slice(encoded_point.as_bytes());
+    
+    result
+}
+
+fn bytes_to_projective(bytes: &[u8]) -> ProjectivePoint {
+    // Create a compressed representation with the 0x02 prefix
+    let mut compressed_point: [u8; 33] = [0; 33];    
+    compressed_point[0] = 0x02;        
+    compressed_point[1..].copy_from_slice(bytes);
+
+    // Create an EncodedPoint from the compressed bytes
+    let encoded_point = EncodedPoint::from_bytes(&compressed_point)
+        .expect("Invalid encoded point");
+    
+    // Convert to AffinePoint
+    let affine_point = AffinePoint::from_encoded_point(&encoded_point)
+        .expect("Invalid point encoding");
+    
+    // Convert to projective for efficient operations
+    ProjectivePoint::from(affine_point)
+}
 
 fn bytes_to_point(bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
     // Create an EncodedPoint from the compressed bytes
@@ -147,8 +180,6 @@ fn ecc_mult_scalar(
 
     (h_r_x, h_r_y)
 }
-
-
 
 pub struct Crypto {
     // TODO
@@ -278,26 +309,27 @@ impl CryptoTrait for Crypto  {
         (X, G_X_X_COORD)
     }
 
-    unsafe fn precomp(
+    unsafe fn precomp<P: OutputPin>(
         &mut self,
         pk_aut: &[BytesP256AuthPubKey],
         id_cred_i: &[u8],
+        led: &mut P,
     ) -> (BytesP256ElemLen, BytesHashLen) {
         trace!("Precomputation phase");
 
         trace!("Verify authorities keys");
         // Verify all authority keys
-        // gpio.set_high();
+        led.set_high();
         for pk in pk_aut {
             if !self.vok_log(pk.pk1, &pk.pk2, None) {
                 panic!("Error: authority keys invalid");
             }
         }
-        // gpio.set_low();
+        led.set_low();
         
         // Compute h as the product of all authority public keys
         trace!("Computation of h");
-        // gpio.set_high();
+        led.set_high();
         let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
         let mut h = coordinates_to_projective_point(h_point_x, h_point_y);
         for i in 1..pk_aut.len() {
@@ -305,10 +337,10 @@ impl CryptoTrait for Crypto  {
             let pk_proj = coordinates_to_projective_point(pk_point_x, pk_point_y);
             h = h + pk_proj;
         }
-        // gpio.set_low();
+        led.set_low();
         
         trace!("Computation of w");
-        // gpio.set_high();
+        led.set_high();
         // Create the tuple for hashing (pk_A, pk_aut[0].pk1, pk_aut[1].pk1, ...)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
         let mut offset = 0;
@@ -325,14 +357,14 @@ impl CryptoTrait for Crypto  {
         }
 
         let w = self.sha256_digest(&hash_input, offset);
-        // gpio.set_low();
+        led.set_low();
 
         // Return (h, w)        
         (h_point_x, w)
     }
 
     // Authority key generation function
-    unsafe fn keygen_a(&mut self) -> (BytesP256AuthPubKey, BytesP256ElemLen) {
+    unsafe fn keygen_a<P: OutputPin>(&mut self, led: &mut P) -> (BytesP256AuthPubKey, BytesP256ElemLen) {
         trace!("KeyAuthGen");
         // Generate random secret key
         // let sk = p256::NonZeroScalar::random(&mut self.rng);
@@ -341,23 +373,23 @@ impl CryptoTrait for Crypto  {
         let sk_scalar = Scalar::from_repr(SK.into()).unwrap();
 
         // pk1 = g^sk (g is the generator point in P256)
-        // gpio.set_high();
+        led.set_high();
         let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
-        // gpio.set_low();
+        led.set_low();
         // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
 
         // Create proof of knowledge of sk
         // FIX: Should we pass both coordinates? How to make sure is always the 0x2 for y-coordinate?
-        // gpio.set_high();
+        led.set_high();
         let pk2 = self.sok_log(SK, (pk1_x, pk1_y), None);
-        // gpio.set_low();
+        led.set_low();
 
         // Create the authority public key structure
-        // gpio.set_high();
+        led.set_high();
         let mut pk = BytesP256AuthPubKey::default();
         pk.pk1 = (pk1_x, pk1_y);
         pk.pk2 = pk2;
-        // gpio.set_low();
+        led.set_low();
 
         // Return (pk, sk)
         (pk, SK)
@@ -487,8 +519,15 @@ impl CryptoTrait for Crypto  {
         x: BytesP256ElemLen, 
         i: BytesP256ElemLen,
         message: Option<&[u8]>,
-    ) -> SokLogEqProof {
+    ) -> (SokLogEqProof, BytesP256ElemLen, BytesP256ElemLen) {
         trace!("Sok Log equality");
+
+        // let r= hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac");
+        // let r_scalar = Scalar::from_repr(r.into()).unwrap();
+        // let g_r_proj_point = p256::ProjectivePoint::generator() * r_scalar;
+        // let (g_r_x, g_r_y) = projective_to_coordinates(g_r_proj_point);
+        // trace!("g_r_x: {:#X}   g_r_y: {:#X}", g_r_x, g_r_y);
+        // let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
 
         let (h_point_x, h_point_y) = bytes_to_point(&h);
         let h_proj_point = coordinates_to_projective_point(h_point_x, h_point_y);
@@ -497,17 +536,19 @@ impl CryptoTrait for Crypto  {
         let g_y_proj_point = coordinates_to_projective_point(g_y_point_x, g_y_point_y);
 
         let (g_r_point_x, g_r_point_y) = bytes_to_point(&g_r);
-        let g_r_proj_point = coordinates_to_projective_point(g_r_point_x, g_r_point_x);
-
+        let g_r_proj_point = coordinates_to_projective_point(g_r_point_x, g_r_point_y);
+        
         let x_scalar = Scalar::from_repr(x.into()).unwrap();
 
         // Compute H_I^1 = (h_I * g^y)^x
         let h_i_1_temp = h_proj_point + g_y_proj_point;
         let h_i_1 = h_i_1_temp * x_scalar;
+        let (h_i_1_x, h_i_1_y) = projective_to_coordinates(h_i_1);
 
         // Compute H_I^2 = (h_I * g^r)^x
         let h_i_2_temp = h_proj_point + g_r_proj_point;
-        let h_i_1 = h_i_2_temp * x_scalar;
+        let h_i_2 = h_i_2_temp * x_scalar;
+        let (h_i_2_x, h_i_2_y) = projective_to_coordinates(h_i_2);
 
         // Generate proof pi
         // Generate random value r_I, s_I
@@ -576,7 +617,114 @@ impl CryptoTrait for Crypto  {
         proof.pi2.copy_from_slice(&beta);
         proof.pi3.copy_from_slice(&gamma);
 
-        proof
+        (proof, h_i_1_x, h_i_2_x)
+    }
+
+    fn vok_log_eq(
+        &mut self,
+        h_i_1: BytesP256ElemLen,
+        h_i_2: BytesP256ElemLen,
+        g_x: BytesP256ElemLen,
+        g_y: BytesP256ElemLen,
+        g_i: BytesP256ElemLen,
+        g_r: BytesP256ElemLen,
+        h: BytesP256ElemLen,
+        x: BytesP256ElemLen,
+        pi: &SokLogEqProof,
+        message: Option<&[u8]>,
+    ) -> bool {
+        // Convert byte arrays to points and scalars
+        let (h_point_x, h_point_y) = bytes_to_point(&h);
+        let h_proj_point = coordinates_to_projective_point(h_point_x, h_point_y);
+
+        let (g_x_point_x, g_x_point_y) = bytes_to_point(&g_x);
+        let g_x_proj_point = coordinates_to_projective_point(g_x_point_x, g_x_point_y);
+
+        let (g_y_point_x, g_y_point_y) = bytes_to_point(&g_y);
+        let g_y_proj_point = coordinates_to_projective_point(g_y_point_x, g_y_point_y);
+
+        let (g_i_point_x, g_i_point_y) = bytes_to_point(&g_i);
+        let g_i_proj_point = coordinates_to_projective_point(g_i_point_x, g_i_point_y);
+
+        let (g_r_point_x, g_r_point_y) = bytes_to_point(&g_r);
+        let g_r_proj_point = coordinates_to_projective_point(g_r_point_x, g_r_point_y);
+
+        let x_scalar = Scalar::from_repr(x.into()).unwrap();
+
+        let alpha = pi.pi1;
+        let alpha_scalar = Scalar::from_repr(alpha.into()).unwrap();
+        let beta = pi.pi2;
+        let beta_scalar = Scalar::from_repr(beta.into()).unwrap();
+        let gamma = pi.pi2;
+        let gamma_scalar = Scalar::from_repr(gamma.into()).unwrap();
+
+        let h_i_1_proj = bytes_to_projective(&h_i_1);
+        let h_i_2_proj = bytes_to_projective(&h_i_2);
+                 
+        // Compute I_1 = g^beta * (g^x)^alpha
+        let i_1 = ecc_generator_mult_projective(beta_scalar) + g_x_proj_point * alpha_scalar;
+        
+        // Compute I_2 = (h g^y)^beta (h^x g^xy)^alpha
+        let i_2 = (h_proj_point + g_y_proj_point) * beta_scalar + (h_i_1_proj * alpha_scalar);
+
+        // Compute I_3 = (h g^r)^beta(h^x g^xr)^alpha
+        let i_3 = (h_proj_point + g_r_proj_point) * beta_scalar + (h_i_2_proj * alpha_scalar);
+
+        // Compute I_4 = g^gamma (g^i)^alpha
+        let i_4 = ecc_generator_mult_projective(gamma_scalar) + g_i_proj_point * alpha_scalar;
+
+        // Compute I_5 = (h_I g^y)^s
+        // let i_5 = h_i_1_temp * s_scalar;
+
+         // Create the hash input (I_1, I_2, I_3, I_4, I_5, message)
+        // we need to add I_1 + I_2 + I_3 + I_4 + I_5
+        let sum = i_1 + i_2 + i_3 + i_4; // + i_5;
+        let (sum_x, sum_y) = projective_to_coordinates(sum);
+
+        // let inputs = [I_1 + I_2 + I_3 + I_4 + I_5 || message.unwrap_or(&[])];
+        let mut hash_input = [0u8; MAX_BUFFER_LEN];
+
+        // Copy sum_x into hash_input
+        hash_input[..P256_ELEM_LEN].copy_from_slice(&sum_x);
+        let mut hash_len = P256_ELEM_LEN;
+        
+        // Copy message if it exists
+        if let Some(message_bytes) = message {
+            hash_input[P256_ELEM_LEN..P256_ELEM_LEN + message_bytes.len()]
+                .copy_from_slice(message_bytes);
+            hash_len = hash_len + message_bytes.len()
+        }        
+
+        // // Create the hash input (R1, R2, g1, g2, h1, h2, message)
+        // let mut hash_input = Vec::with_capacity(
+        //     pi.pi1.len() + pi.pi2.len() + g1.len() + g2.len() + h1.len() + h2.len() + 
+        //     message.map_or(0, |m| m.len())
+        // );
+        // hash_input.extend_from_slice(&pi.pi1);
+        // hash_input.extend_from_slice(&pi.pi2);
+        // hash_input.extend_from_slice(g1);
+        // hash_input.extend_from_slice(g2);
+        // hash_input.extend_from_slice(h1);
+        // hash_input.extend_from_slice(h2);
+        // if let Some(msg) = message {
+        //     hash_input.extend_from_slice(msg);
+        // }
+        
+        // // Compute c = H(R1, R2, g1, g2, h1, h2, message)
+        // let c = self.hash_to_scalar(&hash_input);
+        
+        // // Verify: g1^z == R1 * h1^c and g2^z == R2 * h2^c
+        // let g1_z = g1_point * z;
+        // let h1_c = h1_point * c;
+        // let expected1 = r1_point + h1_c;
+        
+        // let g2_z = g2_point * z;
+        // let h2_c = h2_point * c;
+        // let expected2 = r2_point + h2_c;
+        
+        // g1_z == expected1 && g2_z == expected2
+
+        false
     }
     
 }

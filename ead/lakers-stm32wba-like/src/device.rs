@@ -43,7 +43,7 @@ impl<'a> InitiatorSoK<'a> {
         w: BytesHashLen, 
     ) -> EADItem {
 
-        let pi = crypto.sok_log_eq(
+        let (pi, _, _) = crypto.sok_log_eq(
             h,
             g_r,
             self.state.g_x,
