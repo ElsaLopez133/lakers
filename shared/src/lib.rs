@@ -266,15 +266,15 @@ pub const B: [u32; 8] = [
     0x651d06b0, 0xcc53b0f6, 0x3bce3c3e, 0x27d2604b
 ];
 
-pub const BASE_POINT_X: [u32; 8] = [
-    0x6b17d1f2, 0xe12c4247, 0xf8bce6e5, 0x63a440f2, 
-    0x77037d81, 0x2deb33a0, 0xf4a13945, 0xd898c296,
-];
+// pub const BASE_POINT_X: [u32; 8] = [
+//     0x6b17d1f2, 0xe12c4247, 0xf8bce6e5, 0x63a440f2, 
+//     0x77037d81, 0x2deb33a0, 0xf4a13945, 0xd898c296,
+// ];
 
-pub const BASE_POINT_Y: [u32; 8] = [
-    0x4fe342e2, 0xfe1a7f9b, 0x8ee7eb4a, 0x7c0f9e16, 
-    0x2bce3357, 0x6b315ece, 0xcbb64068, 0x37bf51f5,
-];
+// pub const BASE_POINT_Y: [u32; 8] = [
+//     0x4fe342e2, 0xfe1a7f9b, 0x8ee7eb4a, 0x7c0f9e16, 
+//     0x2bce3357, 0x6b315ece, 0xcbb64068, 0x37bf51f5,
+// ];
 
 pub const PRIME_ORDER: [u32; 8] = [
     0xffffffff, 0x00000000, 0xffffffff, 0xffffffff, 

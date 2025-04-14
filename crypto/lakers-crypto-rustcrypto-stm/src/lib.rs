@@ -1,8 +1,7 @@
 #![no_std]
 
-use lakers_shared::{GpioPin, A, A_SIGN, B, BASE, BASE_POINT_X, BASE_POINT_Y, COEF_A_OFFSET, COEF_A_OFFSET_ADD, COEF_A_SIGN_OFFSET, COEF_A_SIGN_OFFSET_ADD, COEF_B_OFFSET, MODE, MODULUS_LENGTH_OFFSET, MODULUS_LENGTH_OFFSET_ADD, MODULUS_OFFSET, MODULUS_OFFSET_ADD, MODULUS_OFFSET_PTA, MODULUS_REDUC, MODULUS_SUB, MONTGOMERY_PTA, N, OPERAND_A_ARITHEMTIC_MULT, OPERAND_A_REDUC, OPERAND_A_SUB, OPERAND_B_ARITHEMTIC_MULT, OPERAND_B_SUB, OPERAND_LENGTH, OPERAND_LENGTH_MULT, OPERAND_LENGTH_REDUC, OPERAND_LENGTH_SUB, PKA_RAM_OFFSET, POINT_P_X, POINT_P_X_PTA, POINT_P_Y, POINT_P_Y_PTA, POINT_P_Z, POINT_P_Z_PTA, POINT_Q_X, POINT_Q_Y, POINT_Q_Z, POINT_X_OFFSET, POINT_Y_OFFSET, PRIME_LENGTH_OFFSET, PRIME_LENGTH_OFFSET_ADD, PRIME_OFFSET, PRIME_ORDER, R2MODN, RAM_BASE, RAM_NUM_DW, RESULT_ARITHMETIC_MULT, RESULT_ERROR_ADD, RESULT_ERROR_OFFSET, RESULT_ERROR_PTA, RESULT_REDUC, RESULT_SUB, RESULT_X_ADD, RESULT_X_OFFSET, RESULT_X_PTA, RESULT_Y_ADD, RESULT_Y_OFFSET, RESULT_Y_PTA, SCALAR_K_ADD, SCALAR_M_ADD, SCALAR_OFFSET, WORD_LENGTH, Z_COORDINATE 
+use lakers_shared::{GpioPin, A, A_SIGN, B, BASE, COEF_A_OFFSET, COEF_A_OFFSET_ADD, COEF_A_SIGN_OFFSET, COEF_A_SIGN_OFFSET_ADD, COEF_B_OFFSET, MODE, MODULUS_LENGTH_OFFSET, MODULUS_LENGTH_OFFSET_ADD, MODULUS_OFFSET, MODULUS_OFFSET_ADD, MODULUS_OFFSET_PTA, MODULUS_REDUC, MODULUS_SUB, MONTGOMERY_PTA, N, OPERAND_A_ARITHEMTIC_MULT, OPERAND_A_REDUC, OPERAND_A_SUB, OPERAND_B_ARITHEMTIC_MULT, OPERAND_B_SUB, OPERAND_LENGTH, OPERAND_LENGTH_MULT, OPERAND_LENGTH_REDUC, OPERAND_LENGTH_SUB, PKA_RAM_OFFSET, POINT_P_X, POINT_P_X_PTA, POINT_P_Y, POINT_P_Y_PTA, POINT_P_Z, POINT_P_Z_PTA, POINT_Q_X, POINT_Q_Y, POINT_Q_Z, POINT_X_OFFSET, POINT_Y_OFFSET, PRIME_LENGTH_OFFSET, PRIME_LENGTH_OFFSET_ADD, PRIME_OFFSET, PRIME_ORDER, R2MODN, RAM_BASE, RAM_NUM_DW, RESULT_ARITHMETIC_MULT, RESULT_ERROR_ADD, RESULT_ERROR_OFFSET, RESULT_ERROR_PTA, RESULT_REDUC, RESULT_SUB, RESULT_X_ADD, RESULT_X_OFFSET, RESULT_X_PTA, RESULT_Y_ADD, RESULT_Y_OFFSET, RESULT_Y_PTA, SCALAR_K_ADD, SCALAR_M_ADD, SCALAR_OFFSET, WORD_LENGTH, Z_COORDINATE 
 };
-
 // use lakers::shared{X, G_X_X_COORD, G_X_Y_COORD, I, CRED_I};
 
 use lakers_shared::{
@@ -52,6 +51,9 @@ pub const G_X_Y_COORD: [u8; 32] = hex!("51e8af6c6edb781601ad1d9c5fa8bf7aa15716c7
 pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
 pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
 pub const SK: [u8; 32] = hex!("5c4172aca8b82b5a62e66f722216f5a10f72aa69f42c1d1cd3ccd7bfd29ca4e9");
+pub const BASE_POINT_X: [u8; 32] = hex!("6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296");
+pub const BASE_POINT_Y: [u8; 32] = hex!("4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5");
+
 
 fn bytes_to_point(bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
     // Create an EncodedPoint from the compressed bytes
@@ -525,8 +527,8 @@ impl CryptoTrait for Crypto<'_>  {
         let sum = point_a + point_b;
         let (sum_x, sum_y) = projective_to_coordinates(sum);
 
-        info!("software a + b : ({:#X}, {:#X})", sum_x, sum_y);
-        info!("hardware a + b : ({:#X}, {:#X})", result_x, result_y);
+        // info!("software a + b : ({:#X}, {:#X})", sum_x, sum_y);
+        // info!("hardware a + b : ({:#X}, {:#X})", result_x, result_y);
 
         
         (u32_to_u8(&result_x), u32_to_u8(&result_y))
@@ -750,89 +752,107 @@ impl CryptoTrait for Crypto<'_>  {
         u32_to_u8(&result)
     }
    
-    // fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
-    //     // Reset HASH peripheral
-    //     self.hash.hash_cr().write(|w| w.init().set_bit());
-    //     while self.hash.hash_cr().read().init().bit_is_set() {
-    //         asm::nop();
-    //     }
+    fn sha256_digest(
+        &mut self, 
+        message: &BytesMaxBuffer, 
+        message_len: usize
+    ) -> BytesHashLen {
+        // Reset HASH peripheral
+        self.hash.hash_cr().write(|w| w.init().set_bit());
+        while self.hash.hash_cr().read().init().bit_is_set() {
+            asm::nop();
+        }
 
-    //     // Configure for SHA-256 mode with byte-swapping
-    //     unsafe {
-    //         self.hash.hash_cr().write(|w| w
-    //             .algo().bits(0b11)      // SHA-256 algorithm
-    //             .mode().bit(false)      // Hash mode (not HMAC)
-    //             .datatype().bits(0b10)  // 8-bit data with byte swapping
-    //             .dmae().clear_bit()     // No DMA
-    //             .init().set_bit()     
-    //         );
-    //     }
+        // Configure for SHA-256 mode with byte-swapping
+        unsafe {
+            self.hash.hash_cr().write(|w| w
+                .algo().bits(0b11)      // SHA-256 algorithm
+                .mode().bit(false)      // Hash mode (not HMAC)
+                .datatype().bits(0b00)  // 8-bit data with byte swapping
+                .dmae().clear_bit()     // No DMA
+                .init().set_bit()     
+            );
+        }
 
-    //     // // Pack bytes into a word (big-endian for SHA-256)
-    //     // let mut word = 0u32;
-    //     // for (i, &byte) in message[..message_len].iter().enumerate() {
-    //     //     // Shift existing bits and add new byte
-    //     //     word |= u32::from(byte) << (8 * (3 - (i % 4)));
+        // Feed message data to the peripheral
+        // Process in 32-bit chunks
+        // info!("message: {:#X}", message[..message_len]);
+        let full_words = message_len / 4;
+        let remainder_bytes = message_len % 4;
+        
+        // Write full 32-bit words
+        for i in 0..full_words {
+            let idx = i * 4;
+            let word = (u32::from(message[idx]) << 24) |
+                    (u32::from(message[idx+1]) << 16) |
+                    (u32::from(message[idx+2]) << 8) |
+                    u32::from(message[idx+3]);
+            unsafe {
+                self.hash.hash_din().write(|w| w.bits(word));
+            }
+        }
+        
+        // Handle remaining bytes in the last partial word, if any
+        if remainder_bytes > 0 {
+            let mut last_word = 0u32;
+            let base_idx = full_words * 4;
             
-    //     //     // Write word when we have 4 bytes or at the end of the message
-    //     //     if ((i + 1) % 4 == 0) || (i == message_len - 1) {
-    //     //         // If it's the last word and not a full 4-byte word, add padding
-    //     //         if i == message_len - 1 && message_len % 4 != 0 {
-    //     //             word |= 0x80 >> (8 * (i % 4 + 1));
-    //     //         }
-                
-    //     //         unsafe { 
-    //     //             self.hash.hash_din().write(|w| w.bits(word));
-    //     //         }
-    //     //         word = 0;
-    //     //     }
-    //     // }
+            for i in 0..remainder_bytes {
+                last_word |= u32::from(message[base_idx + i]) << (24 - (i * 8));
+            }
+             unsafe {
+                self.hash.hash_din().write(|w| w.bits(last_word));
+             }
+        }
+        
+        // Tell the peripheral how many valid bytes are in the last word
+        // and start the digest calculation
+        unsafe {
+            self.hash.hash_str().write(|w| w
+            .nblw().bits(remainder_bytes as u8)  // Valid bytes in last word
+            .dcal().set_bit()                                       // Start calculation
+        );
+        }
 
-    //     // Set NBLW to original message length
-    //     unsafe {
-    //         for chunk in message[..message_len].chunks_exact(4) {
-    //             let word = u32::from_le_bytes(chunk.try_into().unwrap());
-    //             self.hash.hash_din().write(|w| w.bits(word));
-    //         }
-    //         self.hash.hash_str().write(|w| w.nblw().bits(message_len as u8));
-    //     }
+        // Wait for digest calculation to complete
+        while self.hash.hash_sr().read().busy().bit_is_set() {
+            asm::nop();
+        }
+        // Read hash result and convert to bytes
+        let mut result = [0u8; 32];
+        
+        // Read the 8 hash registers (each 32-bits)
+        let hr0 = self.hash.hash_hr0().read().bits();
+        let hr1 = self.hash.hash_hr1().read().bits();
+        let hr2 = self.hash.hash_hr2().read().bits();
+        let hr3 = self.hash.hash_hr3().read().bits();
+        let hr4 = self.hash.hash_hr4().read().bits();
+        let hr5 = self.hash.hash_hr5().read().bits();
+        let hr6 = self.hash.hash_hr6().read().bits();
+        let hr7 = self.hash.hash_hr7().read().bits();
+        
+        // Convert to bytes (be careful about endianness)
+        result[0..4].copy_from_slice(&hr0.to_be_bytes());
+        result[4..8].copy_from_slice(&hr1.to_be_bytes());
+        result[8..12].copy_from_slice(&hr2.to_be_bytes());
+        result[12..16].copy_from_slice(&hr3.to_be_bytes());
+        result[16..20].copy_from_slice(&hr4.to_be_bytes());
+        result[20..24].copy_from_slice(&hr5.to_be_bytes());
+        result[24..28].copy_from_slice(&hr6.to_be_bytes());
+        result[28..32].copy_from_slice(&hr7.to_be_bytes());
 
-    //     // Start padding and digest computation
+        // info!("hash: {:#X}", result);
+        
+        result
 
-    //     self.hash.hash_str().write(|w| w.dcal().set_bit());
-
-    //     // Wait for digest calculation to complete
-    //     while self.hash.hash_sr().read().busy().bit_is_set() {
-    //         asm::nop();
-    //     }
-
-    //     // Read final hash
-    //     let hash_result = [
-    //         self.hash.hash_hr0().read().bits(),
-    //         self.hash.hash_hr1().read().bits(),
-    //         self.hash.hash_hr2().read().bits(),
-    //         self.hash.hash_hr3().read().bits(),
-    //         self.hash.hash_hr4().read().bits(),
-    //         self.hash.hash_hr5().read().bits(),
-    //         self.hash.hash_hr6().read().bits(),
-    //         self.hash.hash_hr7().read().bits(),
-    //     ];
-
-    //      // Convert `[u32; 8]` → `[u8; 32]`
-    //     let mut final_hash: [u8; 32] = [0; 32];
-    //     for (i, word) in hash_result.iter().enumerate() {
-    //         final_hash[i * 4..(i + 1) * 4].copy_from_slice(&word.to_be_bytes()); 
-    //     }
-
-    //     final_hash
-
-    // }
-
-    fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&message[..message_len]);
-        hasher.finalize().into()
     }
+
+    // fn sha256_digest(&mut self, message: &BytesMaxBuffer, message_len: usize) -> BytesHashLen {
+    //     info!("message: {:#X}", message);
+    //     let mut hasher = sha2::Sha256::new();
+    //     hasher.update(&message[..message_len]);
+    //     hasher.finalize().into()
+    // }
 
     fn hkdf_expand(
         &mut self,
@@ -952,22 +972,20 @@ impl CryptoTrait for Crypto<'_>  {
         // Compute h as the product of all authority public keys
         trace!("Computation of h");
         gpio.set_high();
-        let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
-        let mut h = coordinates_to_projective_point(h_point_x, h_point_y);
-        for i in 1..pk_aut.len() {
-            let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
-            let pk_proj = coordinates_to_projective_point(pk_point_x, pk_point_y);
-            h = h + pk_proj;
-        }
-        gpio.set_low();
-        
-        // // Compute h as the product of all authority public keys
-        // trace!("Computation of h");
         // let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
+        // let mut h = coordinates_to_projective_point(h_point_x, h_point_y);
         // for i in 1..pk_aut.len() {
         //     let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
-        //     (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
+        //     let pk_proj = coordinates_to_projective_point(pk_point_x, pk_point_y);
+        //     h = h + pk_proj;
         // }
+        // Compute h as the product of all authority public keys
+        let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
+        for i in 1..pk_aut.len() {
+            let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
+            (h_point_x, h_point_y) = self.pka_ecc_point_add(h_point_x, h_point_y, pk_point_x, pk_point_y);
+        }
+        gpio.set_low();
         
         trace!("Computation of w");
         gpio.set_high();
@@ -1004,10 +1022,10 @@ impl CryptoTrait for Crypto<'_>  {
 
         // pk1 = g^sk (g is the generator point in P256)
         gpio.set_high();
-        let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
-        gpio.set_low();
-        // let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &SK);
+        // let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
+        let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, SK);
         // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
+        gpio.set_low();
 
         // Create proof of knowledge of sk
         // FIX: Should we pass both coordinates? How to make sure is always the 0x2 for y-coordinate?
@@ -1042,8 +1060,8 @@ impl CryptoTrait for Crypto<'_>  {
         let r_scalar = Scalar::from_repr(r.into()).unwrap();
 
         // Compute R = g^r
-        // let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &r);
-        let (g_r_x, g_r_y) = ecc_generator_mult(r_scalar);
+        let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, r);
+        // let (g_r_x, g_r_y) = ecc_generator_mult(r_scalar);
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1102,7 +1120,7 @@ impl CryptoTrait for Crypto<'_>  {
         let (h_point_x, h_point_y) = h;
 
         let (g_r_x, g_r_y) = pi.pi1;
-        let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
+        // let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
 
         let z = pi.pi2;
         let z_scalar = Scalar::from_repr(z.into()).unwrap();
@@ -1129,21 +1147,20 @@ impl CryptoTrait for Crypto<'_>  {
         let c_scalar = Scalar::from_repr(c.into()).unwrap();
         
         // Verify: g^z == R * h^c
-        let (g_z_x, g_z_y) = ecc_generator_mult(z_scalar);
+        // let (g_z_x, g_z_y) = ecc_generator_mult(z_scalar);
+        let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, z);
 
         // Convert h_x and h_y bytes into an AffinePoint
-        let h_point_proj = coordinates_to_projective_point(h_point_x, h_point_y);
-        let h_c = h_point_proj * c_scalar;
-        let expected_point = h_c + g_r_proj_point;
+        let (h_c_x, h_c_y) = self.pka_ecc_mult_scalar(h_point_x, h_point_y, c);
+        let (expected_point_x, expected_point_y) = self.pka_ecc_point_add(h_c_x, h_c_y, g_r_x, g_r_y);
+        // let h_point_proj = coordinates_to_projective_point(h_point_x, h_point_y);
+        // let h_c = h_point_proj * c_scalar;
+        // let expected_point = h_c + g_r_proj_point;
 
-        let expected_point_affine = expected_point.to_affine();
-        let uncompressed = expected_point_affine.to_encoded_point(false);
-        let expected_point_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
-        let expected_point_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
-
-        // let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(u32_to_u8(&BASE_POINT_X), u32_to_u8(&BASE_POINT_Y), &z);
-        // let (h_c_x, h_c_y) = self.pka_ecc_mult_scalar(h_point_x, h_point_y, &c);
-        // let (expected_x, expected_y) = self.pka_ecc_point_add(g_r_x, g_r_y, h_c_x, h_c_y);
+        // let expected_point_affine = expected_point.to_affine();
+        // let uncompressed = expected_point_affine.to_encoded_point(false);
+        // let expected_point_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
+        // let expected_point_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
 
         // info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
 
@@ -1181,12 +1198,16 @@ impl CryptoTrait for Crypto<'_>  {
         let x_scalar = Scalar::from_repr(x.into()).unwrap();
 
         // Compute H_I^1 = (h_I * g^y)^x
-        let h_i_1_temp = h_proj_point + g_y_proj_point;
-        let h_i_1 = h_i_1_temp * x_scalar;
+        let (h_i_1_temp_x, h_i_1_temp_y)  = self.pka_ecc_point_add(h_point_x, h_point_y, g_y_point_x, g_y_point_y);
+        let (h_i_1_x, h_i_1_y) = self.pka_ecc_mult_scalar(h_i_1_temp_x, h_i_1_temp_y, x); 
+        // let h_i_1_temp = h_proj_point + g_y_proj_point;
+        // let h_i_1 = h_i_1_temp * x_scalar;
 
         // Compute H_I^2 = (h_I * g^r)^x
-        let h_i_2_temp = h_proj_point + g_r_proj_point;
-        let h_i_1 = h_i_2_temp * x_scalar;
+        let (h_i_2_temp_x, h_i_2_temp_y)  = self.pka_ecc_point_add(h_point_x, h_point_y, g_r_point_x, g_r_point_y);
+        let (h_i_2_x, h_i_2_y) = self.pka_ecc_mult_scalar(h_i_2_temp_x, h_i_2_temp_y, x); 
+        // let h_i_2_temp = h_proj_point + g_r_proj_point;
+        // let h_i_1 = h_i_2_temp * x_scalar;
 
         // Generate proof pi
         // Generate random value r_I, s_I
@@ -1196,24 +1217,33 @@ impl CryptoTrait for Crypto<'_>  {
         let s_scalar = Scalar::from_repr(s.into()).unwrap();
 
         // Compute I_1 = g^r_I
-        let i_1 = ecc_generator_mult_projective(r_scalar);
+        let (i_1_x, i_1_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, r);
+        // let i_1 = ecc_generator_mult_projective(r_scalar);
         
         // Compute I_2 = (h_I g^y)^r
-        let i_2 = h_i_1_temp * r_scalar;
+        let (i_2_x, i_2_y) = self.pka_ecc_mult_scalar(h_i_1_temp_x, h_i_1_temp_y, r);
+        // let i_2 = h_i_1_temp * r_scalar;
 
         // Compute I_3 = (h_I g^r)^r
-        let i_3 = h_i_2_temp * r_scalar;
+        let (i_3_x, i_3_y) = self.pka_ecc_mult_scalar(h_i_2_temp_x, h_i_2_temp_y, r);
+        // let i_3 = h_i_2_temp * r_scalar;
 
         // Compute I_4 = g^s
-        let i_4 = ecc_generator_mult_projective(s_scalar);
+        let (i_4_x, i_4_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, s);
+        // let i_4 = ecc_generator_mult_projective(s_scalar);
 
         // Compute I_5 = (h_I g^y)^s
-        let i_5 = h_i_1_temp * s_scalar;
+        let (i_5_x, i_5_y) = self.pka_ecc_mult_scalar(h_i_1_temp_x, h_i_1_temp_y, s);
+        // let i_5 = h_i_1_temp * s_scalar;
 
         // Create the hash input (I_1, I_2, I_3, I_4, I_5, message)
         // we need to add I_1 + I_2 + I_3 + I_4 + I_5
-        let sum = i_1 + i_2 + i_3 + i_4 + i_5;
-        let (sum_x, sum_y) = projective_to_coordinates(sum);
+        let (mut sum_x, mut sum_y) = self.pka_ecc_point_add(i_1_x, i_1_y, i_2_x, i_2_y);
+        let (mut sum_x, mut sum_y) = self.pka_ecc_point_add(sum_x, sum_y, i_3_x, i_3_y);
+        let (mut sum_x, mut sum_y) = self.pka_ecc_point_add(sum_x, sum_y, i_4_x, i_4_y);
+        let (mut sum_x, mut sum_y) = self.pka_ecc_point_add(sum_x, sum_y, i_5_x, i_5_y);
+        // let sum = i_1 + i_2 + i_3 + i_4 + i_5;
+        // let (sum_x, sum_y) = projective_to_coordinates(sum);
 
         // let inputs = [I_1 + I_2 + I_3 + I_4 + I_5 || message.unwrap_or(&[])];
         let mut hash_input = [0u8; MAX_BUFFER_LEN];

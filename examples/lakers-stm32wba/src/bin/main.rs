@@ -9,7 +9,8 @@ use cortex_m_rt::entry;
 use cortex_m::asm;
 use lakers::*;
 use lakers_shared::{Crypto as CryptoTrait, *};
-use lakers_shared::{GpioPin, BASE_POINT_X, BASE_POINT_Y, SCALAR};
+use lakers_shared::{GpioPin};
+// use lakers_shared::{GpioPin, BASE_POINT_X, BASE_POINT_Y, SCALAR};
 use lakers_crypto_rustcrypto_stm::Crypto;
 use lakers_crypto_rustcrypto_stm::{u32_to_u8, u8_to_u32};
 use defmt::info;
@@ -44,11 +45,11 @@ unsafe fn main() -> ! {
     let rng = &p.RNG;
     let rcc = &p.RCC;
 
-    let led9 = GpioPin::new(p, 9); //orange
-    let led15 = GpioPin::new(p, 15); // yellow
-    let led12 = GpioPin::new(p, 12); // blue
-    let led7 = GpioPin::new(p, 7); // red
-    let led2 = GpioPin::new(p, 2); // green
+    let led9 = GpioPin::new(p, 9); //orange CN3 23
+    let led15 = GpioPin::new(p, 15); // yellow CN4 15
+    let led12 = GpioPin::new(p, 12); // blue CN4 17
+    let led7 = GpioPin::new(p, 7); // red CN3 28
+    let led2 = GpioPin::new(p, 2); // green CN3 32
     
     // call lakers-crypto-rustcrypto-stm private init function
     let mut crypto = Crypto::new(&p, hash, pka, rng);
@@ -122,20 +123,20 @@ unsafe fn main() -> ! {
 
     // Prepare ead_3
     let i: [u8; 32] = I.try_into().expect("I should be exactly 32 bytes");
-    // let public_key = match valid_cred_r.key {
-    //     CredentialKey::EC2Compact(public_key) => public_key,
-    //     _ => panic!("Invalid key type. Expected EC2Compact."),
-    // };
+    let public_key = match valid_cred_r.key {
+        CredentialKey::EC2Compact(public_key) => public_key,
+        _ => panic!("Invalid key type. Expected EC2Compact."),
+    };
     
     led9.set_high();
     let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &G_R_X_COORD);
     let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, G_R_X_COORD, i, w);
     led9.set_low();
-    // info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
+    info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
     let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
     let (initiator, message_3, i_prk_out) = initiator
-        .prepare_message_3(CredentialTransfer::ByReference, &Some(ead_3))
+        .prepare_message_3(CredentialTransfer::ByReference, &None) //Some(&ead_3)
         .unwrap();
     led12.set_low();
     info!("message_3: {:#X}", message_3.content[..message_3.len]);
