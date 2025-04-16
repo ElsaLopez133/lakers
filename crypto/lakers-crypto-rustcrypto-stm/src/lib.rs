@@ -652,7 +652,7 @@ impl CryptoTrait for Crypto<'_>  {
         write_ram(OPERAND_LENGTH_REDUC, &[2*OPERAND_LENGTH]);
         write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
         write_ram(OPERAND_A_REDUC, &result);
-        write_ram(MODULUS_REDUC, &N);
+        write_ram(MODULUS_REDUC, &PRIME_ORDER);
 
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
@@ -692,7 +692,7 @@ impl CryptoTrait for Crypto<'_>  {
         write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
         write_ram(OPERAND_A_SUB, &a_u32);
         write_ram(OPERAND_B_SUB, &b_u32);    
-        write_ram(MODULUS_SUB, &N);
+        write_ram(MODULUS_SUB, &PRIME_ORDER);
 
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
@@ -735,7 +735,7 @@ impl CryptoTrait for Crypto<'_>  {
         write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
         write_ram(OPERAND_A_SUB, &a_u32);
         write_ram(OPERAND_B_SUB, &b_u32); 
-        write_ram(MODULUS_SUB, &N);   
+        write_ram(MODULUS_SUB, &PRIME_ORDER);   
         
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
@@ -1036,7 +1036,6 @@ impl CryptoTrait for Crypto<'_>  {
 
         // pk1 = g^sk (g is the generator point in P256)
         gpio.set_high();
-        // let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
         let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, SK);
         // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
         gpio.set_low();
@@ -1066,6 +1065,10 @@ impl CryptoTrait for Crypto<'_>  {
     ) -> SokLogProof {
         trace!("Sok Log");
 
+        // let g = p256::ProjectivePoint::generator();
+        // let (gx, gy) = projective_to_coordinates(g);
+        // info!("generator x: {:#X}  y: {:#X}", gx, gy);
+
         let (h_point_x, h_point_y) = h;
 
         // Generate random value r
@@ -1075,8 +1078,7 @@ impl CryptoTrait for Crypto<'_>  {
 
         // Compute R = g^r
         let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, r);
-        // let (g_r_x_soft, g_r_y_soft) = ecc_generator_mult(r_scalar);
-        info!("sok_log g_r_x: {:#X}", g_r_x);
+        // info!("sok_log g_r_x: {:#X}", g_r_x);
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1099,24 +1101,23 @@ impl CryptoTrait for Crypto<'_>  {
         let hash = self.sha256_digest(&hash_input, hash_len);
         
         // Compute z = r + x*c
-        // let temp = self.pka_mod_mult(&x, &hash);
+        let temp = self.pka_mod_mult(&x, &hash);
         // info!("sok_log temp_pka: {=[u8]:#X}", temp);
-        // info!("sok_log x: {=[u8]:#X}", x);
-        // let z = self.pka_mod_add(&r, &temp);
+        let z = self.pka_mod_add(&r, &temp);
         // info!("sok_log z_pka: {=[u8]:#X}", z);
 
-        let x_scalar = Scalar::from_repr(x.into()).unwrap();
-        let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
+        // let x_scalar = Scalar::from_repr(x.into()).unwrap();
+        // let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
 
-        let temp = x_scalar * hash_scalar; // Modular multiplication 
-        let z_scalar = r_scalar + temp;    // Modular addition
+        // let temp = x_scalar * hash_scalar; // Modular multiplication 
+        // let z_scalar = r_scalar + temp;    // Modular addition
 
         // Store intermediate representations
-        let temp_repre = temp.to_repr();
-        let z_repr = z_scalar.to_repr();
+        // let temp_repre = temp.to_repr();
+        // let z_repr = z_scalar.to_repr();
 
         // Then get references for logging or further use
-        let z_bytes = z_repr.as_ref();
+        // let z_bytes = z_repr.as_ref();
         // let temp_bytes = temp_repre.as_ref();
         // info!("sok_log z: {=[u8]:#X}", z_bytes);
         // info!("sok_log temp: {=[u8]:#X}", temp_bytes);
@@ -1124,7 +1125,7 @@ impl CryptoTrait for Crypto<'_>  {
         // Return the proof (R, z)
         let mut proof = SokLogProof::default();
         proof.pi1 = (g_r_x, g_r_y);
-        proof.pi2.copy_from_slice(&z_bytes);
+        proof.pi2.copy_from_slice(&z);
         proof
 
     }
@@ -1183,7 +1184,7 @@ impl CryptoTrait for Crypto<'_>  {
         // let expected_point_x_soft: [u8; 32] = uncompressed.x().unwrap().clone().into();
         // let expected_point_y_soft: [u8; 32] = uncompressed.y().unwrap().clone().into();
 
-        info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
+        // info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
 
         g_z_x == expected_point_x
     }
