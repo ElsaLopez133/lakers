@@ -920,20 +920,26 @@ impl CryptoTrait for Crypto<'_>  {
         private_key: &BytesP256ElemLen,
         public_key: &BytesP256ElemLen,
     ) -> BytesP256ElemLen {
-        let secret = p256::SecretKey::from_bytes(private_key.as_slice().into())
-            .expect("Invalid secret key generated");
-        let public = p256::AffinePoint::decompress(
-            public_key.into(),
-            1.into(), /* Y coordinate choice does not matter for ECDH operation */
-        )
-        // While this can actually panic so far, the proper fix is in
-        // https://github.com/openwsn-berkeley/lakers/issues/93 which will justify this to be a
-        // panic (because after that, public key validity will be an invariant of the public key
-        // type)
-        .expect("Public key is not a good point");
+        // let secret = p256::SecretKey::from_bytes(private_key.as_slice().into())
+        //     .expect("Invalid secret key generated");
+        // let public = p256::AffinePoint::decompress(
+        //     public_key.into(),
+        //     1.into(), /* Y coordinate choice does not matter for ECDH operation */
+        // )
+        // // While this can actually panic so far, the proper fix is in
+        // // https://github.com/openwsn-berkeley/lakers/issues/93 which will justify this to be a
+        // // panic (because after that, public key validity will be an invariant of the public key
+        // // type)
+        // .expect("Public key is not a good point");
 
-        (*p256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), public).raw_secret_bytes()).into()
-        // [0u8; BytesP256ElemLen]
+        // (*p256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), public).raw_secret_bytes()).into()
+        // // [0u8; BytesP256ElemLen]
+
+        let (public_key_x, public_key_y) = bytes_to_point_odd(public_key);
+        unsafe {
+            let (shared_secret_x, shared_secret_y) = self.pka_ecc_mult_scalar(public_key_x, public_key_y, *private_key);
+            shared_secret_x
+        }  
     }
 
     fn get_random_byte(&mut self) -> u8 {
