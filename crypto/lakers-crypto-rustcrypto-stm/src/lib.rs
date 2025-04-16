@@ -638,7 +638,7 @@ impl CryptoTrait for Crypto<'_>  {
         }
 
         // Read the result
-        let mut result = [0u32; 8];
+        let mut result = [0u32; 2*8];
         read_ram(RESULT_ARITHMETIC_MULT, &mut result);
                 
         // Clear the completion flag
@@ -648,10 +648,10 @@ impl CryptoTrait for Crypto<'_>  {
         // self.stm32wba_init_pka();
 
         zero_ram();
-        write_ram(OPERAND_LENGTH_REDUC, &[OPERAND_LENGTH]);
+        write_ram(OPERAND_LENGTH_REDUC, &[2*OPERAND_LENGTH]);
         write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
-        write_ram(OPERAND_A_REDUC, &A);
-        write_ram(MODULUS_REDUC, &N);
+        write_ram(OPERAND_A_REDUC, &result);
+        write_ram(MODULUS_REDUC, &PRIME_ORDER);
 
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
@@ -690,7 +690,8 @@ impl CryptoTrait for Crypto<'_>  {
         // constant values for P-256 curve
         write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
         write_ram(OPERAND_A_SUB, &a_u32);
-        write_ram(OPERAND_B_SUB, &b_u32);    
+        write_ram(OPERAND_B_SUB, &b_u32);  
+        write_ram(MODULUS_SUB, &PRIME_ORDER);      
         
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
@@ -730,6 +731,7 @@ impl CryptoTrait for Crypto<'_>  {
         write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
         write_ram(OPERAND_A_SUB, &a_u32);
         write_ram(OPERAND_B_SUB, &b_u32);    
+        write_ram(MODULUS_SUB, &PRIME_ORDER);    
         
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
@@ -1024,11 +1026,10 @@ impl CryptoTrait for Crypto<'_>  {
         // let sk = p256::NonZeroScalar::random(&mut self.rng);
         // For now we replace it with a hard coded constant SK
         // info!("SK: {:#X}", SK);
-        let sk_scalar = Scalar::from_repr(SK.into()).unwrap();
+        // let sk_scalar = Scalar::from_repr(SK.into()).unwrap();
 
         // pk1 = g^sk (g is the generator point in P256)
         gpio.set_high();
-        // let (pk1_x, pk1_y) = ecc_generator_mult(sk_scalar);
         let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, SK);
         // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
         gpio.set_low();
@@ -1063,11 +1064,10 @@ impl CryptoTrait for Crypto<'_>  {
         // Generate random value r
         // let r = p256::NonZeroScalar::random(&mut self.rng);
         let r = hex!("d1f3a4c8b66e30f78a53e5b7896ab8a2ffefc0bde45a7a7e13347157956c8e2a");
-        let r_scalar = Scalar::from_repr(r.into()).unwrap();
+        // let r_scalar = Scalar::from_repr(r.into()).unwrap();
 
         // Compute R = g^r
         let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, r);
-        // let (g_r_x, g_r_y) = ecc_generator_mult(r_scalar);
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1090,26 +1090,28 @@ impl CryptoTrait for Crypto<'_>  {
         let hash = self.sha256_digest(&hash_input, hash_len);
         
         // Compute z = r + x*c
-        // let temp = self.pka_mod_mult(&x, &hash);
-        // let z = self.pka_mod_add(&r, &temp);
+        let temp = self.pka_mod_mult(&x, &hash);
+        let z = self.pka_mod_add(&r, &temp);
 
-        let x_scalar = Scalar::from_repr(x.into()).unwrap();
-        let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
+        // let x_scalar = Scalar::from_repr(x.into()).unwrap();
+        // let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
 
-        let temp = x_scalar * hash_scalar; // Modular multiplication 
-        let z_scalar = r_scalar + temp;    // Modular addition
+        // let temp = x_scalar * hash_scalar; // Modular multiplication 
+        // let z_scalar = r_scalar + temp;    // Modular addition
 
         // Store intermediate representations
-        let z_repr = z_scalar.to_repr();
+        // let z_repr = z_scalar.to_repr();
 
         // Then get references for logging or further use
-        let z_bytes = z_repr.as_ref();
-        // info!("sok_log z: {=[u8]:#X}", z_bytes);
+        // let z_bytes = z_repr.as_ref();
+        // info!("sok_log z: {=[u8]:#X}", z);
+        // info!("sok_log temp: {=[u8]:#X}", temp);
+        // info!("sok_log hash: {=[u8]:#X}", hash);
 
         // Return the proof (R, z)
         let mut proof = SokLogProof::default();
         proof.pi1 = (g_r_x, g_r_y);
-        proof.pi2.copy_from_slice(&z_bytes);
+        proof.pi2.copy_from_slice(&z);
         proof
 
     }
@@ -1129,7 +1131,7 @@ impl CryptoTrait for Crypto<'_>  {
         // let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
 
         let z = pi.pi2;
-        let z_scalar = Scalar::from_repr(z.into()).unwrap();
+        // let z_scalar = Scalar::from_repr(z.into()).unwrap();
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
