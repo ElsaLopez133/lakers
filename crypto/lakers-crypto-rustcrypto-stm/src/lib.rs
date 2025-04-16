@@ -638,8 +638,9 @@ impl CryptoTrait for Crypto<'_>  {
         }
 
         // Read the result
-        let mut result = [0u32; 8];
+        let mut result = [0u32; 2*8];
         read_ram(RESULT_ARITHMETIC_MULT, &mut result);
+        info!("A({:#X}) * B({:#X}) = {:#X}", a, b, result);
                 
         // Clear the completion flag
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
@@ -648,9 +649,9 @@ impl CryptoTrait for Crypto<'_>  {
         // self.stm32wba_init_pka();
 
         zero_ram();
-        write_ram(OPERAND_LENGTH_REDUC, &[OPERAND_LENGTH]);
+        write_ram(OPERAND_LENGTH_REDUC, &[2*OPERAND_LENGTH]);
         write_ram(MODULUS_LENGTH_OFFSET, &[OPERAND_LENGTH]);
-        write_ram(OPERAND_A_REDUC, &A);
+        write_ram(OPERAND_A_REDUC, &result);
         write_ram(MODULUS_REDUC, &N);
 
         // Configure PKA operation mode and start
@@ -691,7 +692,8 @@ impl CryptoTrait for Crypto<'_>  {
         write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
         write_ram(OPERAND_A_SUB, &a_u32);
         write_ram(OPERAND_B_SUB, &b_u32);    
-        
+        write_ram(MODULUS_SUB, &N);
+
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
             .mode().bits(0x0f)
@@ -724,12 +726,16 @@ impl CryptoTrait for Crypto<'_>  {
         // Convert points to the right format
         let a_u32 = u8_to_u32(&a);
         let b_u32 = u8_to_u32(&b);
+
+        // info!("a: {:#X}   a_u32: {:#X}", a, a_u32);
+        // info!("b: {:#X}   b_u32: {:#X}", b, b_u32);
         
         zero_ram();
         // constant values for P-256 curve
         write_ram(OPERAND_LENGTH_SUB, &[OPERAND_LENGTH]);
         write_ram(OPERAND_A_SUB, &a_u32);
-        write_ram(OPERAND_B_SUB, &b_u32);    
+        write_ram(OPERAND_B_SUB, &b_u32); 
+        write_ram(MODULUS_SUB, &N);   
         
         // Configure PKA operation mode and start
         self.pka.pka_cr().modify(|_, w| w
@@ -776,7 +782,8 @@ impl CryptoTrait for Crypto<'_>  {
 
         // Feed message data to the peripheral
         // Process in 32-bit chunks
-        // info!("message: {:#X}", message[..message_len]);
+        info!("message: {:#X}", message[..message_len]);
+        info!("message_len: {:#X}", message_len);
         let full_words = message_len / 4;
         let remainder_bytes = message_len % 4;
         
@@ -841,7 +848,7 @@ impl CryptoTrait for Crypto<'_>  {
         result[24..28].copy_from_slice(&hr6.to_be_bytes());
         result[28..32].copy_from_slice(&hr7.to_be_bytes());
 
-        // info!("hash: {:#X}", result);
+        info!("hash: {:#X}", result);
         
         result
 
@@ -920,20 +927,27 @@ impl CryptoTrait for Crypto<'_>  {
         private_key: &BytesP256ElemLen,
         public_key: &BytesP256ElemLen,
     ) -> BytesP256ElemLen {
-        let secret = p256::SecretKey::from_bytes(private_key.as_slice().into())
-            .expect("Invalid secret key generated");
-        let public = p256::AffinePoint::decompress(
-            public_key.into(),
-            1.into(), /* Y coordinate choice does not matter for ECDH operation */
-        )
-        // While this can actually panic so far, the proper fix is in
-        // https://github.com/openwsn-berkeley/lakers/issues/93 which will justify this to be a
-        // panic (because after that, public key validity will be an invariant of the public key
-        // type)
-        .expect("Public key is not a good point");
+        // let secret = p256::SecretKey::from_bytes(private_key.as_slice().into())
+        //     .expect("Invalid secret key generated");
+        // let public = p256::AffinePoint::decompress(
+        //     public_key.into(),
+        //     1.into(), /* Y coordinate choice does not matter for ECDH operation */
+        // )
+        // // While this can actually panic so far, the proper fix is in
+        // // https://github.com/openwsn-berkeley/lakers/issues/93 which will justify this to be a
+        // // panic (because after that, public key validity will be an invariant of the public key
+        // // type)
+        // .expect("Public key is not a good point");
 
-        (*p256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), public).raw_secret_bytes()).into()
-        // [0u8; BytesP256ElemLen]
+        // (*p256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), public).raw_secret_bytes()).into()
+        // // [0u8; BytesP256ElemLen]
+
+        let (public_key_x, public_key_y) = bytes_to_point_odd(public_key);
+        unsafe {
+            let (shared_secret_x, shared_secret_y) = self.pka_ecc_mult_scalar(public_key_x, public_key_y, *private_key);
+            shared_secret_x
+        }  
+        
     }
 
     fn get_random_byte(&mut self) -> u8 {
@@ -1061,7 +1075,8 @@ impl CryptoTrait for Crypto<'_>  {
 
         // Compute R = g^r
         let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, r);
-        // let (g_r_x, g_r_y) = ecc_generator_mult(r_scalar);
+        // let (g_r_x_soft, g_r_y_soft) = ecc_generator_mult(r_scalar);
+        info!("sok_log g_r_x: {:#X}", g_r_x);
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1085,7 +1100,10 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute z = r + x*c
         // let temp = self.pka_mod_mult(&x, &hash);
+        // info!("sok_log temp_pka: {=[u8]:#X}", temp);
+        // info!("sok_log x: {=[u8]:#X}", x);
         // let z = self.pka_mod_add(&r, &temp);
+        // info!("sok_log z_pka: {=[u8]:#X}", z);
 
         let x_scalar = Scalar::from_repr(x.into()).unwrap();
         let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
@@ -1094,11 +1112,14 @@ impl CryptoTrait for Crypto<'_>  {
         let z_scalar = r_scalar + temp;    // Modular addition
 
         // Store intermediate representations
+        let temp_repre = temp.to_repr();
         let z_repr = z_scalar.to_repr();
 
         // Then get references for logging or further use
         let z_bytes = z_repr.as_ref();
+        // let temp_bytes = temp_repre.as_ref();
         // info!("sok_log z: {=[u8]:#X}", z_bytes);
+        // info!("sok_log temp: {=[u8]:#X}", temp_bytes);
 
         // Return the proof (R, z)
         let mut proof = SokLogProof::default();
@@ -1120,7 +1141,7 @@ impl CryptoTrait for Crypto<'_>  {
         let (h_point_x, h_point_y) = h;
 
         let (g_r_x, g_r_y) = pi.pi1;
-        // let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
+        let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
 
         let z = pi.pi2;
         let z_scalar = Scalar::from_repr(z.into()).unwrap();
@@ -1147,7 +1168,7 @@ impl CryptoTrait for Crypto<'_>  {
         let c_scalar = Scalar::from_repr(c.into()).unwrap();
         
         // Verify: g^z == R * h^c
-        // let (g_z_x, g_z_y) = ecc_generator_mult(z_scalar);
+        // let (g_z_x_soft, g_z_y_soft) = ecc_generator_mult(z_scalar);
         let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, z);
 
         // Convert h_x and h_y bytes into an AffinePoint
@@ -1159,10 +1180,10 @@ impl CryptoTrait for Crypto<'_>  {
 
         // let expected_point_affine = expected_point.to_affine();
         // let uncompressed = expected_point_affine.to_encoded_point(false);
-        // let expected_point_x: [u8; 32] = uncompressed.x().unwrap().clone().into();
-        // let expected_point_y: [u8; 32] = uncompressed.y().unwrap().clone().into();
+        // let expected_point_x_soft: [u8; 32] = uncompressed.x().unwrap().clone().into();
+        // let expected_point_y_soft: [u8; 32] = uncompressed.y().unwrap().clone().into();
 
-        // info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
+        info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
 
         g_z_x == expected_point_x
     }
