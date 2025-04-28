@@ -17,6 +17,7 @@ pub use helpers::*;
 
 use core::num::NonZeroI16;
 use defmt_or_log::trace;
+// use defmt::info;
 
 mod crypto;
 pub use crypto::*;
@@ -792,7 +793,7 @@ mod edhoc_parser {
 
     pub fn parse_message_3(
         rcvd_message_3: &BufferMessage3,
-    ) -> Result<(BufferCiphertext3, BufferCiphertext3), EDHOCError> {
+    ) -> Result<BufferCiphertext3, EDHOCError> {
         trace!("Enter parse_message_3");
         let message_slice = rcvd_message_3.as_slice();
 
@@ -805,13 +806,14 @@ mod edhoc_parser {
             return Err(EDHOCError::ParsingError);
         }
         ciphertext_3a.fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
+        
+        // let mut ciphertext_3b = BufferCiphertext3::new();
+        // ciphertext_3b
+        //     .fill_with_slice(&message_slice[header_len + 1..header_len + ciphertext_3a_len])
+        //     .map_err(|_| EDHOCError::ParsingError)?;
+        // trace!("ciphertext_3b: {:?}", ciphertext_3b);
 
-        let mut ciphertext_3b = BufferCiphertext3::new();
-        ciphertext_3b
-            .fill_with_slice(&message_slice[ciphertext_3a_len + 1..])
-            .map_err(|_| EDHOCError::ParsingError)?;
-
-        Ok((ciphertext_3a, ciphertext_3b))
+        Ok(ciphertext_3a)
     }
 
     pub fn decode_plaintext_2(
