@@ -122,7 +122,7 @@ async fn main(spawner: Spawner) {
             pckt.pdu[1..pckt.len].try_into() 
         else {
             info!("Wrong length for EDHOC message_1");
-            radio.disable();
+            // radio.disable();
             continue;
         };
 
@@ -169,14 +169,14 @@ async fn main(spawner: Spawner) {
                             message_3.pdu[1..message_3.len].try_into()
                         else {
                             info!("Wrong length for EDHOC message_1");
-                            radio.disable();
+                            // radio.disable();
                             continue;
                         };
                         let Ok((responder, id_cred_i, _ead_3)) =
                             responder.parse_message_3(&message_3)
                         else {
                             info!("EDHOC error at parse_message_3");
-                            radio.disable();
+                            // radio.disable();
                             continue;
                         };
                         led_pin_p1_08.set_low();
@@ -192,7 +192,7 @@ async fn main(spawner: Spawner) {
                         let Ok(responder) = responder.verify_message_3(valid_cred_i)
                         else {
                             info!("EDHOC error at verify_message_3");
-                            radio.disable();
+                            // radio.disable();
                             continue;
                         };
                         led_pin_p1_08.set_low();
@@ -217,13 +217,13 @@ async fn main(spawner: Spawner) {
                         info!("Handshake completed. prk_out = {:X}", r_prk_out);
                     } else {
                         info!("Another packet interrupted the handshake.");
-                        radio.disable();
+                        // radio.disable();
                         continue;
                     }
                 }
                 Err(_) => {
                     info!("Timeout while waiting for message_3!");
-                    radio.disable();
+                    // radio.disable();
                     continue;
                 }  
                 // Err(_) => panic!("Unexpected error"),

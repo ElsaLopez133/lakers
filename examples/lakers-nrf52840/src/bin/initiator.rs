@@ -152,7 +152,7 @@ async fn main(spawner: Spawner) {
                     pckt_2.pdu[1..pckt_2.len].try_into() 
                 else {
                     info!("Wrong length for EDHOC message_2");
-                    radio.disable();
+                    // radio.disable();
                     continue;
                 };
 
@@ -162,7 +162,7 @@ async fn main(spawner: Spawner) {
                     initiator.parse_message_2(&message_2)
                 else {
                     info!("EDHOC error at parse_message_2");
-                    radio.disable();
+                    // radio.disable();
                     continue;
                 };
                 led_pin_p1_06.set_low();
@@ -174,7 +174,7 @@ async fn main(spawner: Spawner) {
                     initiator.verify_message_2(valid_cred_r)
                 else {
                     info!("EDHOC error at verify_message_2");
-                    radio.disable();
+                    // radio.disable();
                     continue;
                 };
                 led_pin_p1_06.set_low();
@@ -210,7 +210,7 @@ async fn main(spawner: Spawner) {
                             pckt_4.pdu[1..pckt_4.len].try_into()
                         else {
                             info!("Wrong length for EDHOC message_4");
-                            radio.disable();
+                            // radio.disable();
                             continue;
                         };
         
@@ -220,7 +220,7 @@ async fn main(spawner: Spawner) {
                             initiator.parse_message_4(&message_4)
                         else {
                             info!("EDHOC error at parse_message_4");
-                            radio.disable();
+                            // radio.disable();
                             continue;
                         };
                         // led_pin_p1_04.set_low();
@@ -231,7 +231,7 @@ async fn main(spawner: Spawner) {
                             initiator.verify_message_4()
                         else {
                             info!("EDHOC error at verify_message_4");
-                            radio.disable();
+                            // radio.disable();
                             continue;
                         };
                         // led_pin_p1_04.set_low();
@@ -245,7 +245,7 @@ async fn main(spawner: Spawner) {
                     Err(_) => {
                         info!("Handshake failed, continuing to next iteration");
                         Timer::after(Duration::from_secs(1)).await; 
-                        radio.disable();
+                        // radio.disable();
                         led_pin_p1_04.set_low();
                         continue;  // Skip to next iteration if handshake fails
                     }
@@ -256,7 +256,7 @@ async fn main(spawner: Spawner) {
             Err(_) => {
                 info!("Hanshake failed. Continue to next iteration. Parsing error");
                 Timer::after(Duration::from_secs(1)).await; 
-                radio.disable();
+                // radio.disable();
                 led_pin_p1_04.set_low();
                 continue;
             }
