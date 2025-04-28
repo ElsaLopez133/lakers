@@ -312,7 +312,7 @@ impl<'a> Crypto<'a> {
             .condrst().set_bit()
             .configlock().clear_bit()
             .nistc().clear_bit()   // Hardware default values for NIST compliant RNG
-            .ced().clear_bit()     // Clock error detection enabled
+            .ced().clear_bit()                      // Clock error detection enabled
         );
     
         // First clear CONDRST while keeping RNGEN disabled
@@ -411,7 +411,6 @@ impl CryptoTrait for Crypto<'_>  {
     ) -> (BytesP256ElemLen, BytesP256ElemLen ) {
 
         // FIXME: It always return zero even though there is no error flag
-        
         self.stm32wba_init_pka();
 
         // Convert points to the right format
@@ -530,7 +529,6 @@ impl CryptoTrait for Crypto<'_>  {
         // info!("software a + b : ({:#X}, {:#X})", sum_x, sum_y);
         // info!("hardware a + b : ({:#X}, {:#X})", result_x, result_y);
 
-        
         (u32_to_u8(&result_x), u32_to_u8(&result_y))
 
     }
@@ -596,16 +594,8 @@ impl CryptoTrait for Crypto<'_>  {
         // Clear the completion flag
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
 
-        // // Check: compare to the value in software
-        // let point = coordinates_to_projective_point(point_x, point_y);
-        // let r_scalar = Scalar::from_repr(scalar.into()).unwrap();
-        // let mult = point * r_scalar;
-        // let (mult_x, mult_y) = projective_to_coordinates(mult);
-
-        // info!("software a ^ b : ({:#X}, {:#X})", mult_x, mult_y);
-        // info!("hardware a ^ b : ({:#X}, {:#X})", result_x, result_y);
-
         (u32_to_u8(&result_x), u32_to_u8(&result_y))
+
     }
 
     unsafe fn pka_mod_mult(
@@ -640,7 +630,7 @@ impl CryptoTrait for Crypto<'_>  {
         // Read the result
         let mut result = [0u32; 2*8];
         read_ram(RESULT_ARITHMETIC_MULT, &mut result);
-        info!("A({:#X}) * B({:#X}) = {:#X}", a, b, result);
+        // info!("A({:#X}) * B({:#X}) = {:#X}", a, b, result);
                 
         // Clear the completion flag
         self.pka.pka_clrfr().write(|w| w.procendfc().set_bit());
@@ -782,8 +772,8 @@ impl CryptoTrait for Crypto<'_>  {
 
         // Feed message data to the peripheral
         // Process in 32-bit chunks
-        info!("message: {:#X}", message[..message_len]);
-        info!("message_len: {:#X}", message_len);
+        // info!("message: {:#X}", message[..message_len]);
+        // info!("message_len: {:#X}", message_len);
         let full_words = message_len / 4;
         let remainder_bytes = message_len % 4;
         
@@ -848,7 +838,7 @@ impl CryptoTrait for Crypto<'_>  {
         result[24..28].copy_from_slice(&hr6.to_be_bytes());
         result[28..32].copy_from_slice(&hr7.to_be_bytes());
 
-        info!("hash: {:#X}", result);
+        // info!("hash: {:#X}", result);
         
         result
 
@@ -927,20 +917,6 @@ impl CryptoTrait for Crypto<'_>  {
         private_key: &BytesP256ElemLen,
         public_key: &BytesP256ElemLen,
     ) -> BytesP256ElemLen {
-        // let secret = p256::SecretKey::from_bytes(private_key.as_slice().into())
-        //     .expect("Invalid secret key generated");
-        // let public = p256::AffinePoint::decompress(
-        //     public_key.into(),
-        //     1.into(), /* Y coordinate choice does not matter for ECDH operation */
-        // )
-        // // While this can actually panic so far, the proper fix is in
-        // // https://github.com/openwsn-berkeley/lakers/issues/93 which will justify this to be a
-        // // panic (because after that, public key validity will be an invariant of the public key
-        // // type)
-        // .expect("Public key is not a good point");
-
-        // (*p256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), public).raw_secret_bytes()).into()
-        // // [0u8; BytesP256ElemLen]
 
         let (public_key_x, public_key_y) = bytes_to_point_odd(public_key);
         unsafe {
@@ -986,13 +962,6 @@ impl CryptoTrait for Crypto<'_>  {
         // Compute h as the product of all authority public keys
         trace!("Computation of h");
         gpio.set_high();
-        // let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
-        // let mut h = coordinates_to_projective_point(h_point_x, h_point_y);
-        // for i in 1..pk_aut.len() {
-        //     let (pk_point_x, pk_point_y) = pk_aut[i].pk1;
-        //     let pk_proj = coordinates_to_projective_point(pk_point_x, pk_point_y);
-        //     h = h + pk_proj;
-        // }
         // Compute h as the product of all authority public keys
         let (mut h_point_x, mut h_point_y) = pk_aut[0].pk1;
         for i in 1..pk_aut.len() {
@@ -1031,13 +1000,9 @@ impl CryptoTrait for Crypto<'_>  {
         // Generate random secret key
         // let sk = p256::NonZeroScalar::random(&mut self.rng);
         // For now we replace it with a hard coded constant SK
-        // info!("SK: {:#X}", SK);
-        let sk_scalar = Scalar::from_repr(SK.into()).unwrap();
-
         // pk1 = g^sk (g is the generator point in P256)
         gpio.set_high();
         let (pk1_x, pk1_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, SK);
-        // info!("pk1_x: {:#X}   pk1_y: {:#X}", pk1_x, pk1_y);
         gpio.set_low();
 
         // Create proof of knowledge of sk
@@ -1065,20 +1030,12 @@ impl CryptoTrait for Crypto<'_>  {
     ) -> SokLogProof {
         trace!("Sok Log");
 
-        // let g = p256::ProjectivePoint::generator();
-        // let (gx, gy) = projective_to_coordinates(g);
-        // info!("generator x: {:#X}  y: {:#X}", gx, gy);
-
         let (h_point_x, h_point_y) = h;
-
         // Generate random value r
-        // let r = p256::NonZeroScalar::random(&mut self.rng);
         let r = hex!("d1f3a4c8b66e30f78a53e5b7896ab8a2ffefc0bde45a7a7e13347157956c8e2a");
-        let r_scalar = Scalar::from_repr(r.into()).unwrap();
 
         // Compute R = g^r
         let (g_r_x, g_r_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, r);
-        // info!("sok_log g_r_x: {:#X}", g_r_x);
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1102,25 +1059,7 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute z = r + x*c
         let temp = self.pka_mod_mult(&x, &hash);
-        // info!("sok_log temp_pka: {=[u8]:#X}", temp);
         let z = self.pka_mod_add(&r, &temp);
-        // info!("sok_log z_pka: {=[u8]:#X}", z);
-
-        // let x_scalar = Scalar::from_repr(x.into()).unwrap();
-        // let hash_scalar = Scalar::from_repr(hash.into()).unwrap();
-
-        // let temp = x_scalar * hash_scalar; // Modular multiplication 
-        // let z_scalar = r_scalar + temp;    // Modular addition
-
-        // Store intermediate representations
-        // let temp_repre = temp.to_repr();
-        // let z_repr = z_scalar.to_repr();
-
-        // Then get references for logging or further use
-        // let z_bytes = z_repr.as_ref();
-        // let temp_bytes = temp_repre.as_ref();
-        // info!("sok_log z: {=[u8]:#X}", z_bytes);
-        // info!("sok_log temp: {=[u8]:#X}", temp_bytes);
 
         // Return the proof (R, z)
         let mut proof = SokLogProof::default();
@@ -1140,12 +1079,8 @@ impl CryptoTrait for Crypto<'_>  {
         trace!("VoK Log");
 
         let (h_point_x, h_point_y) = h;
-
         let (g_r_x, g_r_y) = pi.pi1;
-        let g_r_proj_point = coordinates_to_projective_point(g_r_x, g_r_y);
-
         let z = pi.pi2;
-        let z_scalar = Scalar::from_repr(z.into()).unwrap();
 
         // Create the hash input (R, h, message)
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1166,25 +1101,13 @@ impl CryptoTrait for Crypto<'_>  {
         
         // Compute c = H(R, h, message)
         let c = self.sha256_digest(&hash_input, hash_len);
-        let c_scalar = Scalar::from_repr(c.into()).unwrap();
         
         // Verify: g^z == R * h^c
-        // let (g_z_x_soft, g_z_y_soft) = ecc_generator_mult(z_scalar);
         let (g_z_x, g_z_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, z);
 
         // Convert h_x and h_y bytes into an AffinePoint
         let (h_c_x, h_c_y) = self.pka_ecc_mult_scalar(h_point_x, h_point_y, c);
         let (expected_point_x, expected_point_y) = self.pka_ecc_point_add(h_c_x, h_c_y, g_r_x, g_r_y);
-        // let h_point_proj = coordinates_to_projective_point(h_point_x, h_point_y);
-        // let h_c = h_point_proj * c_scalar;
-        // let expected_point = h_c + g_r_proj_point;
-
-        // let expected_point_affine = expected_point.to_affine();
-        // let uncompressed = expected_point_affine.to_encoded_point(false);
-        // let expected_point_x_soft: [u8; 32] = uncompressed.x().unwrap().clone().into();
-        // let expected_point_y_soft: [u8; 32] = uncompressed.y().unwrap().clone().into();
-
-        // info!("g_z_x: {:#X}   expected_x: {:#X}", g_z_x, expected_point_x);
 
         g_z_x == expected_point_x
     }
@@ -1201,50 +1124,28 @@ impl CryptoTrait for Crypto<'_>  {
     ) -> SokLogEqProof {
         trace!("Sok Log equality");
 
-        // let r= hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac");
-        // let r_scalar = Scalar::from_repr(r.into()).unwrap();
-        // let g_r_proj_point = p256::ProjectivePoint::generator() * r_scalar;
-        // let (g_r_x, g_r_y) = projective_to_coordinates(g_r_proj_point);
-        // info!("g_r_x: {:#X}   g_r_y: {:#X}", g_r_x, g_r_y);
-        // let g_r_proj = coordinates_to_projective_point(g_r_x, g_r_y);
-
         let (h_point_x, h_point_y) = bytes_to_point(&h);
-        let h_proj_point = coordinates_to_projective_point(h_point_x, h_point_y);
-
         let (g_y_point_x, g_y_point_y) = bytes_to_point(&g_y);
-        let g_y_proj_point = coordinates_to_projective_point(g_y_point_x, g_y_point_y);
-
         let (g_r_point_x, g_r_point_y) = bytes_to_point(&g_r);
-        let g_r_proj_point = coordinates_to_projective_point(g_r_point_x, g_r_point_y);
         
-        let x_scalar = Scalar::from_repr(x.into()).unwrap();
-
         // Compute H_I^1 = (h_I * g^y)^x
         let (h_i_1_temp_x, h_i_1_temp_y)  = self.pka_ecc_point_add(h_point_x, h_point_y, g_y_point_x, g_y_point_y);
         let (h_i_1_x, h_i_1_y) = self.pka_ecc_mult_scalar(h_i_1_temp_x, h_i_1_temp_y, x); 
-        // let h_i_1_temp = h_proj_point + g_y_proj_point;
-        // let h_i_1 = h_i_1_temp * x_scalar;
 
         // Compute H_I^2 = (h_I * g^r)^x
         let (h_i_2_temp_x, h_i_2_temp_y)  = self.pka_ecc_point_add(h_point_x, h_point_y, g_r_point_x, g_r_point_y);
         let (h_i_2_x, h_i_2_y) = self.pka_ecc_mult_scalar(h_i_2_temp_x, h_i_2_temp_y, x); 
-        // let h_i_2_temp = h_proj_point + g_r_proj_point;
-        // let h_i_1 = h_i_2_temp * x_scalar;
 
         // Generate proof pi
         // Generate random value r_I, s_I
         let r = hex!("d1f3a4c8b66e30f78a53e5b7896ab8a2ffefc0bde45a7a7e13347157956c8e2a");
-        let r_scalar = Scalar::from_repr(r.into()).unwrap();
         let s = hex!("5bfe2d83d8b44059f01b0e6efef7622ab0806e67dfed50d9d48f845e7f4b35a1");
-        let s_scalar = Scalar::from_repr(s.into()).unwrap();
 
         // Compute I_1 = g^r_I
         let (i_1_x, i_1_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, r);
-        // let i_1 = ecc_generator_mult_projective(r_scalar);
         
         // Compute I_2 = (h_I g^y)^r
         let (i_2_x, i_2_y) = self.pka_ecc_mult_scalar(h_i_1_temp_x, h_i_1_temp_y, r);
-        // let i_2 = h_i_1_temp * r_scalar;
 
         // Compute I_3 = (h_I g^r)^r
         let (i_3_x, i_3_y) = self.pka_ecc_mult_scalar(h_i_2_temp_x, h_i_2_temp_y, r);
@@ -1252,11 +1153,9 @@ impl CryptoTrait for Crypto<'_>  {
 
         // Compute I_4 = g^s
         let (i_4_x, i_4_y) = self.pka_ecc_mult_scalar(BASE_POINT_X, BASE_POINT_Y, s);
-        // let i_4 = ecc_generator_mult_projective(s_scalar);
 
         // Compute I_5 = (h_I g^y)^s
         let (i_5_x, i_5_y) = self.pka_ecc_mult_scalar(h_i_1_temp_x, h_i_1_temp_y, s);
-        // let i_5 = h_i_1_temp * s_scalar;
 
         // Create the hash input (I_1, I_2, I_3, I_4, I_5, message)
         // we need to add I_1 + I_2 + I_3 + I_4 + I_5
@@ -1264,8 +1163,6 @@ impl CryptoTrait for Crypto<'_>  {
         let (mut sum_x, mut sum_y) = self.pka_ecc_point_add(sum_x, sum_y, i_3_x, i_3_y);
         let (mut sum_x, mut sum_y) = self.pka_ecc_point_add(sum_x, sum_y, i_4_x, i_4_y);
         let (mut sum_x, mut sum_y) = self.pka_ecc_point_add(sum_x, sum_y, i_5_x, i_5_y);
-        // let sum = i_1 + i_2 + i_3 + i_4 + i_5;
-        // let (sum_x, sum_y) = projective_to_coordinates(sum);
 
         // let inputs = [I_1 + I_2 + I_3 + I_4 + I_5 || message.unwrap_or(&[])];
         let mut hash_input = [0u8; MAX_BUFFER_LEN];
@@ -1285,21 +1182,12 @@ impl CryptoTrait for Crypto<'_>  {
         let alpha = self.sha256_digest(&hash_input, hash_len);
         
         // Compute beta = r - x*alpha
-        // Convert the bytes to FieldElement values
-        let alpha_scalar = Scalar::from_repr(alpha.into()).unwrap();
-
-        let temp = x_scalar * alpha_scalar;
-        let beta_scalar = r_scalar + temp;
-        let beta_repr  = beta_scalar.to_repr();
-        let beta = beta_repr.as_ref();
+        let temp_beta = self.pka_mod_mult(&x, &alpha);
+        let beta = self.pka_mod_sub(&r, &temp_beta);
 
         // Compute gamma = s - i*alpha
-        let i_scalar = Scalar::from_repr(i.into()).unwrap();
-
-        let temp = i_scalar * alpha_scalar;
-        let gamma_scalar = s_scalar + temp;
-        let gamma_repr= gamma_scalar.to_repr();
-        let gamma = gamma_repr.as_ref();
+        let temp_gamma = self.pka_mod_mult(&i, &alpha);
+        let gamma = self.pka_mod_sub(&s, &temp_gamma);
         
         // Return the proof (alpha, beta, gamma)
         let mut proof = SokLogEqProof::default();

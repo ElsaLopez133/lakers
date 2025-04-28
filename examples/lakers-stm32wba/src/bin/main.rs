@@ -79,13 +79,13 @@ unsafe fn main() -> ! {
     // Precomputation phase. 
     // Keys of the authorities and compute h (product of pk of authorities) and w (hash with id_cred_i)
     // sk is the secret key and pk = (g^sk, ni)
-    led9.set_high();
-    let (pk, sk) = crypto.keygen_a(led2);
-    led9.set_low();
+    // led9.set_high();
+    // let (pk, sk) = crypto.keygen_a(led2);
+    // led9.set_low();
 
-    led9.set_high();
-    let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value(), led2);
-    led9.set_low();
+    // led9.set_high();
+    // let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value(), led2);
+    // led9.set_low();
     // info!("pk.pk1: {:?}  sk: {:?}   h: {:?}   w: {:?}", pk.pk1, sk, h, w);
 
     // To follow the example, c_i= 37
@@ -122,21 +122,21 @@ unsafe fn main() -> ! {
         .unwrap(); // exposing own identity only after validating cred_r
 
     // Prepare ead_3
-    let i: [u8; 32] = I.try_into().expect("I should be exactly 32 bytes");
-    let public_key = match valid_cred_r.key {
-        CredentialKey::EC2Compact(public_key) => public_key,
-        _ => panic!("Invalid key type. Expected EC2Compact."),
-    };
+    // let i: [u8; 32] = I.try_into().expect("I should be exactly 32 bytes");
+    // let public_key = match valid_cred_r.key {
+        // CredentialKey::EC2Compact(public_key) => public_key,
+        // _ => panic!("Invalid key type. Expected EC2Compact."),
+    // };
     
-    led9.set_high();
-    let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &G_R_X_COORD);
-    let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, G_R_X_COORD, i, w);
-    led9.set_low();
-    info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
+    // led9.set_high();
+    // let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &G_R_X_COORD);
+    // let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, G_R_X_COORD, i, w);
+    // led9.set_low();
+    // info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
     let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
     let (initiator, message_3, i_prk_out) = initiator
-        .prepare_message_3(CredentialTransfer::ByReference, &None) //Some(&ead_3)
+        .prepare_message_3(CredentialTransfer::ByReference, &None) //Some(ead_3)
         .unwrap();
     led12.set_low();
     info!("message_3: {:#X}", message_3.content[..message_3.len]);
