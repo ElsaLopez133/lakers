@@ -1,6 +1,7 @@
 use crate::{credential_check_or_fetch, EdhocInitiatorDone};
 use lakers_shared::{Crypto as CryptoTrait, *};
 use core::{clone::Clone, panic};
+use defmt::info;
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -408,39 +409,34 @@ pub fn i_prepare_message_3(
         CredentialTransfer::ByValue => cred_i.by_value()?,
         CredentialTransfer::ByReference => cred_i.by_kid()?,
     };
-    // println!("id_cred_i: {:?}", id_cred_i);
+
     // compute ciphertext_3
     let plaintext_3b = encode_plaintext_3(None, None, &ead_3)?;
-    // info!("plaintext_3: {:?}", plaintext_3.content);
+
     //compute ciphertext_3b
     let ciphertext_3b =
         encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3b);
-    // info!("ciphertext_3b (tag): {:?}", ciphertext_3b.content);
 
     // compute ciphertext_3a
     let plaintext_3a = id_cred_i;
     // Encode plaintext_3a as CBOR
     let pt_3a = plaintext_3a.as_encoded_value();
-    // info!("pt_3a: {:?}", pt_3a);
+
     // Concatenate ciphertext_3a
-    // println!("pt_3a: {:?}", pt_3a);
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
     ct_3a.extend_from_slice(pt_3a).unwrap();
     ct_3a.extend_from_slice(ciphertext_3b.as_slice()).unwrap();
-    // info!("plaintext_3a: {:?}", ct_3a.content);
-    // println!("ct_3a: {:?}", ct_3a);
     let ciphertext_3a =
         encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
-    // info!("ciphertext_3a: {:?}", ciphertext_3a.content);
+
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
-    // println!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a);
-    // info!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a.content);
 
     let mut message_3: BufferMessage3 = BufferMessage3::new();
     message_3
         .extend_from_slice(encoded_ciphertext_3a.as_slice())
         .unwrap();
+    
     // message_3
     //     .extend_from_slice(ciphertext_3b.as_slice())
     //     .unwrap();
