@@ -4,7 +4,7 @@ runner = "probe-rs run --chip nRF52840_xxAA"
 
 [build]
 target = "thumbv7em-none-eabihf"
-rustflags = ["-Clink-args=-Map=/tmp/lakers.map"]
+rustflags = ["-Clink-args=-Map=lakers.map"]
 
 [env]
 DEFMT_LOG = "trace"
