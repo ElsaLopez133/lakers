@@ -84,10 +84,40 @@ impl AutoCredential {
         use AutoCredential::*;
         Ok(match self {
             Existing(e) => e,
-            Parse(v) => Credential::parse_ccs(v.as_slice())?,
+            Parse(v) => Credential::parse_ccs_symmetric(v.as_slice())?,
         })
     }
 }
+
+
+// #[derive(FromPyObject, Clone)]
+// pub enum AutoCredential {
+//     #[pyo3(transparent, annotation = "bytes")]
+//     Parse(Vec<u8>),
+//     #[pyo3(transparent, annotation = "Credential")]
+//     Existing(lakers_shared::Credential),
+//     #[pyo3(transparent, annotation = "(bytes, vec)")]
+//     ParseWithMethod(Vec<u8>, i32),
+// }
+
+// impl AutoCredential {
+//     pub fn to_credential(self) -> PyResult<Credential> {
+//         use AutoCredential::*;
+//         Ok(match self {
+//             Existing(e) => e,
+//             Parse(v) => Credential::parse_ccs_symmetric(v.as_slice())?,
+//             ParseWithMethod(v, method) => {
+//                 match method {
+//                     5 => Credential::parse_ccs_symmetric(v.as_slice())?,
+//                     3 => Credential::parse_ccs(v.as_slice())?,
+//                     _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+//                         format!("Invalid parsing method: Expected 3 or 5")
+//                     )),
+//                 }
+//             }
+//         })
+//     }
+// }
 
 // this name must match `lib.name` in `Cargo.toml`
 #[pymodule]

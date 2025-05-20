@@ -1,7 +1,7 @@
 use crate::{credential_check_or_fetch, EdhocInitiatorDone};
 use lakers_shared::{Crypto as CryptoTrait, *};
 use core::{clone::Clone, panic};
-use defmt::info;
+
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -98,7 +98,7 @@ pub fn r_prepare_message_2(
     crypto: &mut impl CryptoTrait,
     cred_r: Credential,
     c_r: ConnId,
-    cred_transfer: CredentialTransfer,
+    // cred_transfer: CredentialTransfer,
     ead_2: &Option<EADItem>,
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
     // compute TH_2
@@ -108,18 +108,18 @@ pub fn r_prepare_message_2(
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
 
-    let prk_3e2m = match cred_r.key {
-        CredentialKey::Symmetric(psk) => prk_2e,
-        _ => panic!("Unsuported key type"),
-    };
+    let prk_3e2m = prk_2e; // match cred_r.key {
+        // CredentialKey::Symmetric(_psk) => prk_2e,
+        // _ => panic!("Unsuported key type"),
+    // };
 
-    let id_cred_r = match cred_transfer {
-        CredentialTransfer::ByValue => cred_r.by_value()?,
-        CredentialTransfer::ByReference => cred_r.by_kid()?,
-    };
+    // let id_cred_r = match cred_transfer {
+    //     CredentialTransfer::ByValue => cred_r.by_value()?,
+    //     CredentialTransfer::ByReference => cred_r.by_kid()?,
+    // };
     // MAC_2 is not needed in PSK2
     // compute ciphertext_2
-    let plaintext_2 =encode_plaintext_2(c_r, None, None, &ead_2)?;
+    let plaintext_2 = encode_plaintext_2(c_r, None, None, &ead_2)?;
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
     let th_3 = compute_th_3(crypto, &th_2, &plaintext_2, cred_r.bytes.as_slice());
@@ -237,13 +237,14 @@ pub fn r_verify_message_3(
 pub fn r_prepare_message_4(
     state: &ProcessedM3,
     crypto: &mut impl CryptoTrait,
-    cred_transfer: CredentialTransfer,
+    // cred_transfer: CredentialTransfer,
     ead_4: &Option<EADItem>, // FIXME: make it a list of EADItem
 ) -> Result<(Completed, BufferMessage4, BytesHashLen), EDHOCError> {
-    let id_cred = match cred_transfer {
-        CredentialTransfer::ByValue => state.cred_r.by_value()?,
-        CredentialTransfer::ByReference => state.cred_r.by_kid()?,
-    };
+    // let id_cred = match cred_transfer {
+    //     CredentialTransfer::ByValue => state.cred_r.by_value()?,
+    //     CredentialTransfer::ByReference => state.cred_r.by_kid()?,
+    // };
+    let id_cred = state.cred_r.by_kid()?;
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
     let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_3, &plaintext_4);
@@ -776,7 +777,7 @@ fn encode_plaintext_4(
 fn encode_ciphertext_3a(ciphertext: EdhocMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
     let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
     // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
-    info!("ciphertext.len: {:?}", ciphertext.len);
+    // info!("ciphertext.len: {:?}", ciphertext.len);
     ciphertext_3a.content[0] = CBOR_MAJOR_BYTE_STRING | (ciphertext.len as u8);
     ciphertext_3a.content[1..][..ciphertext.len].copy_from_slice(ciphertext.as_slice());
     ciphertext_3a.len = 1 + ciphertext.len;

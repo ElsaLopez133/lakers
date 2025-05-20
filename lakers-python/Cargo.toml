@@ -14,6 +14,13 @@ lakers-ead-authz = { path = "../ead/lakers-ead-authz" }
 lakers-shared = { path = "../shared", features = ["python-bindings", "quadruple_sizes"] }
 lakers-crypto = { path = "../crypto", default-features = false, features = ["rustcrypto"] }
 
+# defmt
+defmt = "0.3"
+defmt-rtt = "0.4"
+
+log = "0.4"
+env_logger = "0.9"
+
 [dev-dependencies]
 # We don't need it to build, but it is listed in the manifest Cargo.toml, and
 # unless that gets reduced during the Python package building, listing crates

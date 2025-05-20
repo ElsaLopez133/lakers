@@ -9,6 +9,15 @@
 /// Convenience re-export
 pub use lakers_shared::Crypto as CryptoTrait;
 
+#[cfg(feature = "rustcrypto-nrf")]
+pub type Crypto  = lakers_crypto_rustcrypto_nrf::Crypto ;
+
+#[cfg(feature = "rustcrypto-nrf")]
+pub fn default_crypto() -> Crypto {
+    lakers_crypto_rustcrypto_nrf::Crypto::new()
+}
+
+
 #[cfg(any(feature = "psa", feature = "psa-rust",))]
 pub type Crypto = lakers_crypto_psa::Crypto;
 

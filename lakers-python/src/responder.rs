@@ -20,7 +20,7 @@ pub struct PyEdhocResponder {
 #[pymethods]
 impl PyEdhocResponder {
     #[new]
-    fn new(r: Vec<u8>, cred_r: super::AutoCredential) -> PyResult<Self> {
+    fn new(cred_r: super::AutoCredential) -> PyResult<Self> {
         trace!("Initializing EdhocResponder");
         let (y, g_y) = default_crypto().p256_generate_key_pair();
 
@@ -49,6 +49,7 @@ impl PyEdhocResponder {
         message_1: Vec<u8>,
     ) -> PyResult<(Bound<'a, PyBytes>, Option<EADItem>)> {
         let message_1 = EdhocMessageBuffer::new_from_slice(message_1.as_slice())?;
+        // trace!("message_1: {:?}", message_1);
         let (state, c_i, ead_1) = r_process_message_1(
             &self.start.take().ok_or(StateMismatch)?,
             &mut default_crypto(),
@@ -60,11 +61,12 @@ impl PyEdhocResponder {
         Ok((c_i, ead_1))
     }
 
-    #[pyo3(signature = (cred_transfer, c_r=None, ead_2=None))]
+    // #[pyo3(signature = (cred_transfer, c_r=None, ead_2=None))]
+    #[pyo3(signature = (c_r=None, ead_2=None))]
     fn prepare_message_2<'a>(
         &mut self,
         py: Python<'a>,
-        cred_transfer: CredentialTransfer,
+        // cred_transfer: CredentialTransfer,
         c_r: Option<Vec<u8>>,
         ead_2: Option<EADItem>,
     ) -> PyResult<Bound<'a, PyBytes>> {
@@ -85,7 +87,7 @@ impl PyEdhocResponder {
             &mut default_crypto(),
             self.cred_r,
             c_r,
-            cred_transfer,
+            // cred_transfer,
             &ead_2,
         ) {
             Ok((state, message_2)) => {
@@ -109,7 +111,10 @@ impl PyEdhocResponder {
         ) {
             Ok((state, id_cred_i, ead_3)) => {
                 self.processing_m3 = Some(state);
-                Ok((PyBytes::new_bound(py, id_cred_i.bytes.as_slice()), ead_3))
+                Ok((
+                    PyBytes::new_bound(py, id_cred_i.unwrap().bytes.as_slice()), 
+                    ead_3
+                ))
             }
             Err(error) => Err(error.into()),
         }
@@ -119,51 +124,57 @@ impl PyEdhocResponder {
         &mut self,
         py: Python<'a>,
         valid_cred_i: super::AutoCredential,
-    ) -> PyResult<Bound<'a, PyBytes>> {
+    ) -> PyResult<()> {
+        trace!("responder.verify_message_3");
         let valid_cred_i = valid_cred_i.to_credential()?;
         match r_verify_message_3(
             &mut self.processing_m3.take().ok_or(StateMismatch)?,
             &mut default_crypto(),
             valid_cred_i,
         ) {
-            Ok((state, prk_out)) => {
-                self.processed_m3 = Some(state);
-                Ok(PyBytes::new_bound(py, prk_out.as_slice()))
-            }
-            Err(error) => Err(error.into()),
-        }
-    }
-
-    #[pyo3(signature = (cred_transfer, ead_4=None))]
-    fn prepare_message_4<'a>(
-        &mut self,
-        py: Python<'a>,
-        cred_transfer: CredentialTransfer,
-        ead_4: Option<EADItem>,        
-    ) -> PyResult<Bound<'a, PyBytes>> {
-        match r_prepare_message_4(
-            &self.processed_m3.take().ok_or(StateMismatch)?,
-            &mut default_crypto(),
-            &ead_4,
-            cred_transfer,
-        ) {
-            Ok((state, message_4)) => {
-                self.completed = Some(state);
-                Ok(PyBytes::new_bound(py, message_4.as_slice()))
-            }
-            Err(error) => Err(error.into()),
-        }
-    }
-
-    pub fn completed_without_message_4<'a>(&mut self, py: Python<'a>) -> PyResult<()> {
-        match r_complete_without_message_4(&self.processed_m3.take().ok_or(StateMismatch)?) {
             Ok(state) => {
-                self.completed = Some(state);
+                self.processed_m3 = Some(state);
                 Ok(())
             }
             Err(error) => Err(error.into()),
         }
     }
+
+    // #[pyo3(signature = (cred_transfer, ead_4=None))]
+    #[pyo3(signature = (ead_4=None))]
+    fn prepare_message_4<'a>(
+        &mut self,
+        py: Python<'a>,
+        // cred_transfer: CredentialTransfer,
+        ead_4: Option<EADItem>,        
+    ) -> PyResult<(Bound<'a, PyBytes>, Bound<'a, PyBytes>)> {
+        match r_prepare_message_4(
+            &self.processed_m3.take().ok_or(StateMismatch)?,
+            &mut default_crypto(),
+            // cred_transfer,
+            &ead_4,
+        ) {
+            Ok((state, message_4, prk_out)) => {
+                self.completed = Some(state);
+                Ok((
+                    PyBytes::new_bound(py, message_4.as_slice()),
+                    PyBytes::new_bound(py, prk_out.as_slice())
+                ))
+                
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    // pub fn completed_without_message_4<'a>(&mut self, py: Python<'a>) -> PyResult<()> {
+    //     match r_complete_without_message_4(&self.processed_m3.take().ok_or(StateMismatch)?) {
+    //         Ok(state) => {
+    //             self.completed = Some(state);
+    //             Ok(())
+    //         }
+    //         Err(error) => Err(error.into()),
+    //     }
+    // }
 
     pub fn edhoc_exporter<'a>(
         &mut self,

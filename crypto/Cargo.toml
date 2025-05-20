@@ -21,6 +21,9 @@ lakers-crypto-cryptocell310 = { workspace = true, optional = true }
 lakers-crypto-rustcrypto = { workspace = true, optional = true }
 rand_core = { version = "0.6.4", optional = true, default-features = false }
 
+# software implementations from rustcrypto-stm
+lakers-crypto-rustcrypto-nrf = { workspace = true, optional = true }
+
 [dev-dependencies]
 hexlit = "0.5.3"
 rstest = "0.11.0"
@@ -35,3 +38,4 @@ cryptocell310 = [ "lakers-crypto-cryptocell310" ]
 # lakers-crypto-rustcrypto on their own, and combine it with an entropy choice
 # of their avail.
 rustcrypto = [ "lakers-crypto-rustcrypto", "rand_core/getrandom" ]
+rustcrypto-nrf = [ "lakers-crypto-rustcrypto-nrf"]

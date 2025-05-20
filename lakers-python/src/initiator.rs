@@ -15,6 +15,7 @@ pub struct PyEdhocInitiator {
     wait_m2: Option<WaitM2>,
     processing_m2: Option<ProcessingM2>,
     processed_m2: Option<ProcessedM2>,
+    processing_m4: Option<ProcessingM4>,
     wait_m4: Option<WaitM4>,
     completed: Option<Completed>,
 }
@@ -41,6 +42,7 @@ impl PyEdhocInitiator {
             wait_m2: None,
             processing_m2: None,
             processed_m2: None,
+            processing_m4: None,
             wait_m4: None,
             completed: None,
         }
@@ -85,7 +87,7 @@ impl PyEdhocInitiator {
                 self.processing_m2 = Some(state);
                 Ok((
                     PyBytes::new_bound(py, c_r.as_slice()),
-                    PyBytes::new_bound(py, id_cred_r.bytes.as_slice()),
+                    PyBytes::new_bound(py, id_cred_r.unwrap().bytes.as_slice()),
                     ead_2,
                 ))
             }
@@ -96,10 +98,10 @@ impl PyEdhocInitiator {
     pub fn verify_message_2(
         &mut self,
         i: Vec<u8>,
-        cred_i: super::AutoCredential,
+        // cred_i: super::AutoCredential,
         valid_cred_r: super::AutoCredential,
     ) -> PyResult<()> {
-        let cred_i = cred_i.to_credential()?;
+        // let cred_i = cred_i.to_credential()?;
         let valid_cred_r = valid_cred_r.to_credential()?;
 
         match i_verify_message_2(
@@ -109,7 +111,6 @@ impl PyEdhocInitiator {
         ) {
             Ok(state) => {
                 self.processed_m2 = Some(state);
-                self.cred_i = Some(cred_i);
                 Ok(())
             }
             Err(error) => Err(error.into()),
@@ -122,7 +123,7 @@ impl PyEdhocInitiator {
         py: Python<'a>,
         cred_transfer: CredentialTransfer,
         ead_3: Option<EADItem>,
-    ) -> PyResult<(Bound<'a, PyBytes>, Bound<'a, PyBytes>)> {
+    ) -> PyResult<Bound<'a, PyBytes>> {
         match i_prepare_message_3(
             &mut self.processed_m2.take().ok_or(StateMismatch)?,
             &mut default_crypto(),
@@ -130,42 +131,64 @@ impl PyEdhocInitiator {
             cred_transfer,
             &ead_3,
         ) {
-            Ok((state, message_3, prk_out)) => {
+            Ok((state, message_3)) => {
                 self.wait_m4 = Some(state);
-                Ok((
+                Ok(
                     PyBytes::new_bound(py, message_3.as_slice()),
-                    PyBytes::new_bound(py, prk_out.as_slice()),
-                ))
+                )
             }
             Err(error) => Err(error.into()),
         }
     }
 
-    pub fn completed_without_message_4<'a>(&mut self, py: Python<'a>) -> PyResult<()> {
-        match i_complete_without_message_4(&self.wait_m4.take().ok_or(StateMismatch)?) {
-            Ok(state) => {
-                self.completed = Some(state);
-                Ok(())
-            }
-            Err(error) => Err(error.into()),
-        }
-    }
+    // pub fn completed_without_message_4<'a>(&mut self, py: Python<'a>) -> PyResult<(Bound<'a, PyBytes>)> {
+    //     match i_complete_without_message_4(&self.wait_m4.take().ok_or(StateMismatch)?) {
+    //         Ok((state, prk_out)) => {
+    //             self.completed = Some(state);
+    //             Ok (
+    //                 PyBytes::new_bound(py, prk_out.as_slice()),
+    //             )
+    //         }
+    //         Err(error) => Err(error.into()),
+    //     }
+    // }
 
-    pub fn process_message_4<'a>(
+    pub fn parse_message_4<'a>(
         &mut self,
         py: Python<'a>,
         message_4: Vec<u8>,
     ) -> PyResult<Option<EADItem>> {
         let message_4 = EdhocMessageBuffer::new_from_slice(message_4.as_slice())?;
 
-        match i_process_message_4(
+        match i_parse_message_4(
             &mut self.wait_m4.take().ok_or(StateMismatch)?,
             &mut default_crypto(),
             &message_4,
         ) {
             Ok((state, ead_4)) => {
-                self.completed = Some(state);
+                self.processing_m4 = Some(state);
                 Ok(ead_4)
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub fn verify_message_4<'a>(
+        &mut self,
+        py: Python<'a>,
+        message_4: Vec<u8>,
+    ) -> PyResult<Bound<'a, PyBytes>> {
+
+        match i_verify_message_4(
+            &mut self.processing_m4.take().ok_or(StateMismatch)?,
+            &mut default_crypto(),
+        ) {
+            Ok((state, prk_out)) => {
+                self.completed = Some(state);
+                Ok (
+                    PyBytes::new_bound(py, prk_out.as_slice()),
+                )
+                
             }
             Err(error) => Err(error.into()),
         }

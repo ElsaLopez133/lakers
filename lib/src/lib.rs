@@ -186,7 +186,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
 impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
     pub fn prepare_message_2(
         mut self,
-        cred_transfer: CredentialTransfer,
+        // cred_transfer: CredentialTransfer,
         c_r: Option<ConnId>,
         ead_2: &Option<EADItem>,
     ) -> Result<(EdhocResponderWaitM3<Crypto>, BufferMessage2), EDHOCError> {
@@ -201,7 +201,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             &mut self.crypto,
             self.cred_r,
             c_r,
-            cred_transfer,
+            // cred_transfer,
             ead_2,
         ) {
             Ok((state, message_2)) => Ok((
@@ -264,7 +264,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
 impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
     pub fn prepare_message_4(
         mut self,
-        cred_transfer: CredentialTransfer,
+        // cred_transfer: CredentialTransfer,
         ead_4: &Option<EADItem>,
     ) -> Result<(
         EdhocResponderDone<Crypto>, 
@@ -275,7 +275,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
         match r_prepare_message_4(
             &self.state,
             &mut self.crypto,
-            cred_transfer,
+            // cred_transfer,
             ead_4,
         ) {
             Ok((state, message_4, prk_out)) => Ok((
@@ -497,6 +497,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
         }
     }
 }
+
 
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM4<Crypto> {
     // pub fn set_identity(
