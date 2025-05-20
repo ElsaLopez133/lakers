@@ -329,7 +329,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         // trace!("Initializing EdhocInitiator");
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
-
+        
         EdhocInitiator {
             state: InitiatorStart {
                 x,

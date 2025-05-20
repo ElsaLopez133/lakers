@@ -103,10 +103,13 @@ pub fn r_prepare_message_2(
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
     // compute TH_2
     let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
+    info!("th_2: {:#X}", th_2); 
 
     // compute prk_3e2m
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
+    info!("prk_2e: {:#X}", prk_2e);
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
+    info!("salt_3e2m: {:#X}", salt_3e2m);
 
     let prk_3e2m = match cred_r.key {
         CredentialKey::Symmetric(psk) => prk_2e,
@@ -120,18 +123,22 @@ pub fn r_prepare_message_2(
     // MAC_2 is not needed in PSK2
     // compute ciphertext_2
     let plaintext_2 =encode_plaintext_2(c_r, None, None, &ead_2)?;
+    info!("plaintext_2: {:#X}", plaintext_2.content[..plaintext_2.len]);
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
     let th_3 = compute_th_3(crypto, &th_2, &plaintext_2, cred_r.bytes.as_slice());
+    info!("th_3: {:#X}", th_3);
 
     let mut ct: BufferCiphertext2 = BufferCiphertext2::new();
     ct.fill_with_slice(plaintext_2.as_slice()).unwrap(); // TODO(hax): can we prove with hax that this won't panic since they use the same underlying buffer length?
 
     let ciphertext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ct);
+    info!("ciphertext_2: {:#X}", ciphertext_2.content[..ciphertext_2.len]);
 
     ct.fill_with_slice(ciphertext_2.as_slice()).unwrap(); // TODO(hax): same as just above.
 
     let message_2 = encode_message_2(&state.g_y, &ct);
+    info!("message_2: {:#X}", message_2.content[..message_2.len]);
 
     Ok((
         WaitM3 {
@@ -153,26 +160,26 @@ pub fn r_parse_message_3(
     let res = parse_message_3(message_3);
     let result = match res {
         Ok(ciphertext_3a) => {
-            // info!("ciphertext_3a: {:?}", ciphertext_3a.content);
+            info!("ciphertext_3a: {:?}", ciphertext_3a.content);
             let plaintext_3a = encrypt_decrypt_ciphertext_3a(
                 crypto,
                 &state.prk_3e2m,
                 &state.th_3,
                 &ciphertext_3a,
             );
-            // info!("plaintext_3a: {:?}", plaintext_3a.content);
+            info!("plaintext_3a: {:?}", plaintext_3a.content);
     
             let id_cred_psk = IdCred::from_encoded_value(&[plaintext_3a.as_slice()[0]])?;
-            // info!("id_cred_psk: {:?}", id_cred_psk.as_encoded_value());
+            info!("id_cred_psk: {:?}", id_cred_psk.as_encoded_value());
 
             let mut ciphertext_3b = BufferCiphertext3::new();
             ciphertext_3b
                 .fill_with_slice(&plaintext_3a.as_slice()[1..]);
-            // info!("ciphertext_3b: {:?}", ciphertext_3b.content);
+            info!("ciphertext_3b: {:?}", ciphertext_3b.content);
     
             let plaintext_3b =
                 decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &ciphertext_3b)?;
-            // info!("plaintext_3b: {:?}", plaintext_3b.content);
+            info!("plaintext_3b: {:?}", plaintext_3b.content);
     
             // Return the result inside the Ok variant
             Ok((Some(id_cred_psk), plaintext_3b))
@@ -217,11 +224,13 @@ pub fn r_verify_message_3(
 ) -> Result<ProcessedM3, EDHOCError> {
     // compute salt_4e3m
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
+    info!("salt_4e3m: {:#X}", salt_4e3m);
 
     let prk_4e3m = match valid_cred_i.key {
         CredentialKey::Symmetric(psk) => compute_prk_3e2m_psk(crypto, &salt_4e3m, &psk),
         _ => panic!("Unusported key method"),
     };
+    info!("prk_4e3m: {:#X}", prk_4e3m);
 
     Ok(
         ProcessedM3 {
@@ -247,8 +256,10 @@ pub fn r_prepare_message_4(
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
     let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_3, &plaintext_4);
+    info!("plaintext_4: {:#X}", plaintext_4.content[..plaintext_4.len]);
 
     let th_4 = compute_th_4(crypto, &state.th_3, &id_cred.bytes.as_slice(), ead_4, state.cred_r.bytes.as_slice());
+    info!("th_4: {:#X}", th_4);
 
     let mut th_4_buf: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
     th_4_buf[..th_4.len()].copy_from_slice(&th_4[..]);
@@ -1151,6 +1162,7 @@ fn encrypt_decrypt_ciphertext_2(
         SHA256_DIGEST_LEN,
         ciphertext_2.len,
     );
+    info!("keystream_2: {:#X}", keystream_2);
 
     let mut result = BufferCiphertext2::default();
     for i in 0..ciphertext_2.len {
@@ -1180,6 +1192,7 @@ fn encrypt_decrypt_ciphertext_3a(
         SHA256_DIGEST_LEN,
         ciphertext_3a.len,
     );
+    info!("keystream_3: {:#X}", keystream_3);
 
     let mut result = BufferCiphertext2::default();
     for i in 0..ciphertext_3a.len {

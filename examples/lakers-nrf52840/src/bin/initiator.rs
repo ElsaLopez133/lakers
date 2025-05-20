@@ -92,7 +92,7 @@ async fn main(spawner: Spawner) {
         led_pin_p1_07.set_high();
         let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
         let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-        //info!("cred_r:{:?}", cred_r.bytes.content);
+        info!("cred_r:{:?}", cred_r.bytes.content);
         led_pin_p1_07.set_low();
 
         led_pin_p1_07.set_high();
@@ -107,6 +107,7 @@ async fn main(spawner: Spawner) {
         // Send Message 1 over raw BLE and convert the response to byte
         // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
         let c_i = ConnId::from_int_raw(10);
+        info!("c_i: {:#X}", c_i.as_slice());
         led_pin_p1_07.set_low();
 
         led_pin_p1_07.set_high();
@@ -116,6 +117,7 @@ async fn main(spawner: Spawner) {
         led_pin_p1_07.set_high();
         let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
         led_pin_p1_07.set_low();
+        info!("message_1: {:#X}", message_1.content[..message_1.len]);
 
         let pckt_1 = common::Packet::new_from_slice(
             message_1.as_slice(), 
@@ -156,6 +158,7 @@ async fn main(spawner: Spawner) {
                 let (initiator, message_3) = initiator
                     .prepare_message_3(CredentialTransfer::ByReference, &None).unwrap();
                 led_pin_p1_08.set_low();
+                info!("message_3: {:#X}", message_3.content[..message_3.len]);
 
                 let pckt_3 = common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
                 .expect("Buffer not long enough");

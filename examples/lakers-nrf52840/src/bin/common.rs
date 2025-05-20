@@ -15,8 +15,9 @@ pub const CRC_POLY: u32 = 0x00065b;
 
 // pub const CRED_PSK: &[u8] =
 //     &hex!("A202686D79646F74626F7408A101A30104024132205050930FF462A77A3540CF546325DEA214");
-    pub const CRED_PSK: &[u8] =
+pub const CRED_PSK: &[u8] =
     &hex!("A202686D79646F74626F7408A101A30104024110205050930FF462A77A3540CF546325DEA214");
+   
 #[derive(Debug, Clone)]
 pub enum PacketError {
     SliceTooLong,

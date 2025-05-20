@@ -124,6 +124,7 @@ async fn main(spawner: Spawner) {
             let (responder, message_2) = responder
                 .prepare_message_2(CredentialTransfer::ByReference, c_r, &ead_2)
                 .unwrap();
+            info!("message_2: {:#X}", message_2.content[..message_2.len]);
             led_pin_p1_06.set_low();
             led_pin_p0_26.set_low();
             // prepend 0xf5 also to message_2 in order to allow the Initiator filter out from other BLE packets
@@ -178,6 +179,7 @@ async fn main(spawner: Spawner) {
                         led_pin_p1_04.set_high();
                         let (responder, message_4, r_prk_out) = responder.prepare_message_4(CredentialTransfer::ByReference, &None).unwrap();
                         led_pin_p1_04.set_low();
+                        info!("message_4: {:#X}", message_4.content[..message_4.len]);
 
                         // info!("Send message_4");
                         common::transmit_without_response(
