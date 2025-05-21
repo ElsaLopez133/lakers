@@ -103,7 +103,10 @@ pub fn r_prepare_message_2(
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
     // compute TH_2
     let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
-    info!("th_2: {:#X}", th_2); 
+    // info!("th_2: {:#X}", th_2); 
+    info!("g_x: {:#X}", state.g_x);
+    info!("y: {:#X}", state.y);
+    // info!("h_m_1: {:#X}", state.h_message_1);
 
     // compute prk_3e2m
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
@@ -160,14 +163,14 @@ pub fn r_parse_message_3(
     let res = parse_message_3(message_3);
     let result = match res {
         Ok(ciphertext_3a) => {
-            info!("ciphertext_3a: {:?}", ciphertext_3a.content);
+            info!("ciphertext_3a: {:?}", ciphertext_3a.content[..ciphertext_3a.len]);
             let plaintext_3a = encrypt_decrypt_ciphertext_3a(
                 crypto,
                 &state.prk_3e2m,
                 &state.th_3,
                 &ciphertext_3a,
             );
-            info!("plaintext_3a: {:?}", plaintext_3a.content);
+            info!("plaintext_3a: {:?}", plaintext_3a.content[..plaintext_3a.len]);
     
             let id_cred_psk = IdCred::from_encoded_value(&[plaintext_3a.as_slice()[0]])?;
             info!("id_cred_psk: {:?}", id_cred_psk.as_encoded_value());
@@ -175,11 +178,11 @@ pub fn r_parse_message_3(
             let mut ciphertext_3b = BufferCiphertext3::new();
             ciphertext_3b
                 .fill_with_slice(&plaintext_3a.as_slice()[1..]);
-            info!("ciphertext_3b: {:?}", ciphertext_3b.content);
+            info!("ciphertext_3b: {:?}", ciphertext_3b.content[..ciphertext_3b.len]);
     
             let plaintext_3b =
                 decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &ciphertext_3b)?;
-            info!("plaintext_3b: {:?}", plaintext_3b.content);
+            info!("plaintext_3b: {:?}", plaintext_3b.content[..plaintext_3b.len]);
     
             // Return the result inside the Ok variant
             Ok((Some(id_cred_psk), plaintext_3b))
@@ -341,6 +344,10 @@ pub fn i_parse_message_2<'a>(
     let res = parse_message_2(message_2);
     if let Ok((g_y, ciphertext_2)) = res {
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
+        info!("th_2: {:#X}", th_2);
+        info!("h_m_1: {:#X}", state.h_message_1);
+        info!("x: {:#X}", state.x);
+        info!("g_y: {:#X}", g_y);
 
         // compute prk_2e
         let prk_2e = compute_prk_2e(crypto, &state.x, &g_y, &th_2);
@@ -422,31 +429,30 @@ pub fn i_prepare_message_3(
     // println!("id_cred_i: {:?}", id_cred_i);
     // compute ciphertext_3
     let plaintext_3b = encode_plaintext_3(None, None, &ead_3)?;
-    // info!("plaintext_3: {:?}", plaintext_3.content);
+    info!("plaintext_3b: {:#X}", plaintext_3b.content[..plaintext_3b.len]);
     //compute ciphertext_3b
     let ciphertext_3b =
         encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3b);
-    // info!("ciphertext_3b (tag): {:?}", ciphertext_3b.content);
+    info!("ciphertext_3b (tag): {:#X}", ciphertext_3b.content[..ciphertext_3b.len]);
 
     // compute ciphertext_3a
     let plaintext_3a = id_cred_i;
     // Encode plaintext_3a as CBOR
     let pt_3a = plaintext_3a.as_encoded_value();
-    // info!("pt_3a: {:?}", pt_3a);
+    // info!("pt_3a: {:#X}", pt_3a);
     // Concatenate ciphertext_3a
-    // println!("pt_3a: {:?}", pt_3a);
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
     ct_3a.extend_from_slice(pt_3a).unwrap();
     ct_3a.extend_from_slice(ciphertext_3b.as_slice()).unwrap();
-    // info!("plaintext_3a: {:?}", ct_3a.content);
+    info!("pt_3a: {:#X}", ct_3a.content[..ct_3a.len]);
     // println!("ct_3a: {:?}", ct_3a);
     let ciphertext_3a =
         encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
-    // info!("ciphertext_3a: {:?}", ciphertext_3a.content);
+    info!("ciphertext_3a: {:#X}", ciphertext_3a.content[..ciphertext_3a.len]);
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
     // println!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a);
-    // info!("encoded_ciphertext_3a: {:?}", encoded_ciphertext_3a.content);
+    // info!("encoded_ciphertext_3a: {:#X}", encoded_ciphertext_3a.content[..encoded_ciphertext_3a.len]);
 
     let mut message_3: BufferMessage3 = BufferMessage3::new();
     message_3
@@ -904,6 +910,8 @@ fn encrypt_message_3(
     let enc_structure = encode_enc_structure(th_3);
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
+    info!("k_3: {:#X}", k_3);
+    info!("iv_3: {:#X}", iv_3);
 
     let ciphertext_3 = crypto.aes_ccm_encrypt_tag_8(&k_3, &iv_3, &enc_structure[..], plaintext_3);
 
@@ -972,6 +980,8 @@ fn encrypt_message_4(
     let enc_structure = encode_enc_structure(th_4);
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
+    info!("k_4: {:#X}", k_4);
+    info!("iv_4: {:#X}", iv_4);
 
     let ciphertext_4 = crypto.aes_ccm_encrypt_tag_8(&k_4, &iv_4, &enc_structure[..], plaintext_4);
 
@@ -1162,7 +1172,9 @@ fn encrypt_decrypt_ciphertext_2(
         SHA256_DIGEST_LEN,
         ciphertext_2.len,
     );
-    info!("keystream_2: {:#X}", keystream_2);
+    // info!("prk_2e: {:#X}", prk_2e);
+    // info!("th_2: {:#X}", th_2);
+    info!("keystream_2: {:#X}", keystream_2[..ciphertext_2.len]);
 
     let mut result = BufferCiphertext2::default();
     for i in 0..ciphertext_2.len {
@@ -1294,7 +1306,9 @@ fn compute_prk_2e(
     // compute the shared secret
     let g_xy = crypto.p256_ecdh(x, g_y);
     // compute prk_2e as PRK_2e = HMAC-SHA-256( salt, G_XY )
-
+    info!("g_xy: {:#X}", g_xy);
+    // info!("x: {:#X}", x);
+    // info!("g_y: {:#X}", g_y);
     crypto.hkdf_extract(th_2, &g_xy)
 }
 

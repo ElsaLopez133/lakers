@@ -23,6 +23,17 @@ pub use lakers_ead_authz::*;
 
 mod edhoc;
 pub use edhoc::*;
+use hexlit::hex;
+
+// pub const X: [u8; 32] = hex!("892ec28e5cb6669108470539500b705e60d008d347c5817ee9f3327c8a87bb03");
+// pub const G_X: [u8; 32] = hex!("31f82c7b5b9cbbf0f194d913cc12ef1532d328ef32632a4881a1c0701e237f04");
+// pub const Y: [u8; 32] = hex!("e69c23fbf81bc435942446837fe827bf206c8fa10a39db47449e5a813421e1e8");
+// pub const G_Y: [u8; 32] = hex!("dc88d2d51da5ed67fc4616356bc8ca74ef9ebe8b387e623a360ba480b9b29d1c");
+
+pub const X: [u8; 32] = hex!("09972DFEF1EAAB926EC96E8005FED29F70FFBF4E361C3A061A7ACDB5170C10E5");
+pub const G_X: [u8; 32] = hex!("7EC68102940602AAB548539BF42A35992D957249EB7F1888406D178A04C912DB");
+pub const Y: [u8; 32] = hex!("1E1C8F2DF1AA7110B39F33BA5EA8DCCF31411EB33D4F9A094CF65192D335A7A3");
+pub const G_Y: [u8; 32] = hex!("ED156A6243E0AFEC9EFBAABCE8429D5AD5E4E1C432F76A6EDE8F79247BB97D83");
 
 /// Starting point for performing EDHOC in the role of the Initiator.
 #[derive(Debug)]
@@ -145,7 +156,8 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         cred_r: Credential,
     ) -> Self {
         // trace!("Initializing EdhocResponder");
-        let (y, g_y) = crypto.p256_generate_key_pair();
+        // let (y, g_y) = crypto.p256_generate_key_pair();
+        let (y, g_y) = (Y, G_Y);
 
         // let r = match method {
         //     EDHOCMethod::StatStat => r.unwrap(),
@@ -328,7 +340,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     pub fn new(mut crypto: Crypto, method: EDHOCMethod, selected_suite: EDHOCSuite) -> Self {
         // trace!("Initializing EdhocInitiator");
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
-        let (x, g_x) = crypto.p256_generate_key_pair();
+        // let (x, g_x) = crypto.p256_generate_key_pair();
+        let (x, g_x) = (X, G_X);
         
         EdhocInitiator {
             state: InitiatorStart {
