@@ -20,7 +20,6 @@ nb = "1.0"
 # lakers
 lakers = { package = "lakers", path = "../../lib", features = [ "defmt" ] }
 lakers-crypto = { path = "../../crypto", default-features = false }
-lakers-crypto-psa = { path = "../../crypto/lakers-crypto-psa", default-features = false }
 lakers-crypto-rustcrypto-nrf = { path = "../../crypto/lakers-crypto-rustcrypto-nrf", default-features = false }
 lakers-shared.workspace = true
 
