@@ -92,7 +92,7 @@ async fn main(spawner: Spawner) {
         led_pin_p1_07.set_high();
         let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
         let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-        info!("cred_r:{:?}", cred_r.bytes.content);
+        info!("cred_r:{:#X}", cred_r.bytes.content);
         led_pin_p1_07.set_low();
 
         led_pin_p1_07.set_high();

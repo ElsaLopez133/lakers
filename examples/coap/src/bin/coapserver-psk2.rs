@@ -3,10 +3,14 @@ use hexlit::hex;
 use lakers::*;
 use log::*;
 use std::net::UdpSocket;
+use defmt_or_log::info;
+use hex::encode;
 
-const ID_CRED: &[u8] = &hex!("a1044120");
+// const ID_CRED: &[u8] = &hex!("a1044120");
 const CRED_PSK: &[u8] =
     &hex!("A202686D79646F74626F7408A101A30104024110205050930FF462A77A3540CF546325DEA214");
+
+// Run with RUST_LOG=info cargo run --bin coapserver-psk2
 
 fn main() {
     env_logger::init();
@@ -46,8 +50,9 @@ fn main() {
                 let result = responder.process_message_1(&message_1);
                 println!("\n---------MESSAGE_2-----------\n");
                 if let Ok((responder, _c_i, ead_1)) = result {
-                    let c_r =
-                        generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+                    let c_r = ConnId::from_int_raw(5);
+                    // let c_r =
+                    // generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
                     let ead_2 = None;
                     let (responder, message_2) = responder
                         .prepare_message_2(CredentialTransfer::ByReference, Some(c_r), &ead_2)
@@ -55,6 +60,7 @@ fn main() {
                     response.message.payload = Vec::from(message_2.as_slice());
                     // save edhoc connection
                     edhoc_connections.push((c_r, responder));
+                    println!("message_2 : 0x{}", encode(message_2.as_slice()));
                 } else {
                     println!("msg1 err");
                     response.set_status(ResponseType::BadRequest);
@@ -70,7 +76,7 @@ fn main() {
                 println!("Found state with connection identifier {:?}", c_r_rcvd);
                 let message_3 =
                     EdhocMessageBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
-                println!("message_3 :{:?}", message_3);
+                println!("message_3: 0x{}", encode(message_3.as_slice()));
                 let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3)
                 else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);
@@ -87,6 +93,7 @@ fn main() {
                     continue;
                 };
                 // Prepare message_4
+                println!("\n---------MESSAGE_3-----------\n");
                 println!("Preparing message_4");
                 let ead_4: Option<EADItem> = None;
                 let result = responder.prepare_message_4(CredentialTransfer::ByReference, &ead_4);
@@ -95,7 +102,7 @@ fn main() {
                         // Handle the success case
                         println!("Message 4 prepared successfully");
                         // Use responder, message_4, and prk_out as needed
-                        println!("message_4 :{:?}", message_4);
+                        println!("message_4: 0x{}", encode(message_4.as_slice()));
                         response.message.payload = Vec::from(message_4.as_slice());
                         // response.message.payload = b"".to_vec();
 

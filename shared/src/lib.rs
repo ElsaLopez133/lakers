@@ -50,7 +50,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = SCALE_FACTOR * (128 + 64);
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 5u8; // stat-stat is the only supported method
+pub const EDHOC_METHOD: u8 = 4u8; // PSK
 pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
@@ -206,10 +206,8 @@ impl ConnId {
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum EDHOCMethod {
     StatStat = 3,
-    PSK1 = 4,
-    PSK2 = 5,
-    // add others, such as:
-    // PSK2 = ?,
+    PSK2 = 4,
+    PSK1 = 5,
 }
 
 impl From<EDHOCMethod> for u8 {

@@ -4,6 +4,8 @@ use hexlit::hex;
 use lakers::*;
 use log::*;
 use std::time::Duration;
+use defmt_or_log::info;
+use hex::encode;
 
 const ID_CRED: &[u8] = &hex!("a1044120");
 const CRED_PSK: &[u8] =
@@ -24,7 +26,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("Client request: {}", url);
 
     let cred: Credential = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
-    println!("cred_psk: {:?}", cred);
+    // println!("cred_psk: {:?}", cred);
+    println!("cred_psk bytes: 0x{}", encode(cred.bytes.as_slice()));
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
@@ -34,10 +37,12 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_1-----------\n");
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
-    let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+    // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+    let c_i = ConnId::from_int_raw(10);
     initiator.set_identity(cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     println!("message_1 len = {}", message_1.len);
+    println!("message_1 = 0x{}", encode(message_1.as_slice()));
     msg_1_buf.extend_from_slice(message_1.as_slice());
     
 
@@ -62,6 +67,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let (mut initiator, message_3) =
         initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
         println!("message_3 len = {}", message_3.len);
+    println!("message_3 = 0x{}", encode(message_3.as_slice()));
     msg_3.extend_from_slice(message_3.as_slice());
     
 
@@ -72,7 +78,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_4-----------\n");
     println!("message_4 len = {}", response.message.payload.len());
     let message_4 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
-    println!("message_4:{:?}", message_4);
+    println!("message_4: 0x{}", encode(message_4.as_slice()));
     println!("message_4 len = {}", response.message.payload.len());
 
     println!("Entering parse message 4");
