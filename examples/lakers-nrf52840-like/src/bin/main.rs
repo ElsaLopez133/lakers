@@ -89,13 +89,13 @@ unsafe fn main() -> ! {
     // Keys of the authorities and compute h (product of pk of authorities) and w (hash with id_cred_i)
     // sk is the secret key and pk = (g^sk, ni)
     // led9.set_high().unwrap();
-    // let (pk, sk) = crypto.keygen_a(&mut led2);
+    let (pk, sk) = crypto.keygen_a(&mut led2);
     // led9.set_low().unwrap();
 
     // led9.set_high().unwrap();
-    // let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value(), &mut led2);
+    let (h, w) = crypto.precomp(&[pk], id_cred_i.as_full_value(), &mut led2);
     // led9.set_low().unwrap();
-    // info!("pk.pk1: {:?}  sk: {:?}   h: {:?}   w: {:?}", pk.pk1, sk, h, w);
+    info!("pk.pk1: {:?}  sk: {:?}   h: {:?}   w: {:?}", pk.pk1, sk, h, w);
 
     // To follow the example, c_i= 37
     trace!("------------Initiator message_1------------");
@@ -103,7 +103,7 @@ unsafe fn main() -> ! {
     led15.set_high().unwrap();
     // let c_i = ConnId::from_int_raw(0x37);
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
-    // info!("c_i: {:#X}", c_i.as_slice());
+    info!("c_i: {:#X}", c_i.as_slice());
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None).unwrap();
     led12.set_low().unwrap();
     info!("message_1: {:#X}", message_1.content[..message_1.len]);
@@ -131,16 +131,16 @@ unsafe fn main() -> ! {
         .unwrap(); // exposing own identity only after validating cred_r
 
     // Prepare ead_3
-    // let i: [u8; 32] = I.try_into().expect("h should be exactly 32 bytes");
+    let i: [u8; 32] = I.try_into().expect("h should be exactly 32 bytes");
     // led9.set_high().unwrap();
-    // let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &G_R_X_COORD);
-    // let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, G_R_X_COORD, i, w);
+    let initiator_sok = lakers_stm32wba_like::InitiatorSoK::new(&initiator.state, &G_R_X_COORD);
+    let ead_3 = initiator_sok.prepare_ead_3(&mut crypto, h, G_R_X_COORD, i, w);
     // led9.set_low().unwrap();
-    // info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
+    info!("ead_3: {:#X}", ead_3.value.unwrap().content[..ead_3.value.unwrap().len]);
 
     let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
     let (initiator, message_3, i_prk_out) = initiator
-        .prepare_message_3(CredentialTransfer::ByReference, &None)
+        .prepare_message_3(CredentialTransfer::ByReference, &Some(ead_3))
         .unwrap();
     led12.set_low().unwrap();
     info!("message_3: {:#X}", message_3.content[..message_3.len]);
