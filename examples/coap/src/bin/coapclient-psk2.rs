@@ -51,7 +51,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
         panic!("Message 1 response error: {:?}", response.get_status());
     }
     println!("\n---------MESSAGE_2-----------\n");
-    //println!("response_vec = {:02x?}", response.message.payload);
+    // println!("response_vec = {:02x?}", response.message.payload);
+    println!("message_2 : 0x{}", encode(response.message.payload.as_slice()));
     println!("message_2 len = {}", response.message.payload.len());
 
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
