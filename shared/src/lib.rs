@@ -9,7 +9,7 @@
 //! [lakers-ead]: https://docs.rs/lakers-ead/latest/lakers_ead/
 // NOTE: if there is no python-bindings feature, which will be the case for embedded builds,
 //       then the crate will be no_std
-#![cfg_attr(not(feature = "python-bindings"), no_std)]
+// #![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
 pub use edhoc_parser::*;
@@ -18,6 +18,8 @@ pub use helpers::*;
 use core::num::NonZeroI16;
 use defmt_or_log::trace;
 // use defmt::info;
+
+// use hex::encode;
 
 mod crypto;
 pub use crypto::*;
@@ -379,19 +381,21 @@ pub struct ProcessingM2 {
 #[repr(C)]
 pub struct ProcessedM2 {
     pub prk_3e2m: BytesHashLen,
-    // pub prk_4e3m: BytesHashLen,
+    pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
 }
 
 #[derive(Default, Debug)]
 pub struct ProcessingM3 {
-    pub mac_3: Option<BytesMac3>,
+    // pub mac_3: Option<BytesMac3>,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub salt_3e2m: BytesHashLen,
+    pub prk_4e3m: BytesHashLen,
+    pub salt_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
     pub id_cred_i: Option<IdCred>,
-    pub plaintext_3: EdhocMessageBuffer,
+    // pub plaintext_3: EdhocMessageBuffer,
     pub ead_3: Option<EADItem>,
 }
 
@@ -409,16 +413,17 @@ pub struct ProcessedM3 {
     pub prk_4e3m: BytesHashLen,
     pub cred_r: Credential,
     pub th_3: BytesHashLen,
+    pub th_4: BytesHashLen,
     pub id_cred: Option<IdCred>,
 }
 
 #[derive(Debug)]
 pub struct WaitM4 {
-    pub prk_3e2m: BytesHashLen,
-    // pub prk_4e3m: BytesHashLen,
+    // pub prk_3e2m: BytesHashLen,
+    pub prk_4e3m: BytesHashLen,
     pub cred_r: Credential,
     pub th_3: BytesHashLen,
-    // pub th_4: BytesHashLen,
+    pub th_4: BytesHashLen,
     pub id_cred: Option<IdCred>,
     pub ead_3: Option<EADItem>,
 }
@@ -762,16 +767,24 @@ mod edhoc_parser {
         rcvd_message_2: &BufferMessage2,
     ) -> Result<(BytesP256ElemLen, BufferCiphertext2), EDHOCError> {
         trace!("Enter parse_message_2");
+        println!("parse_message_2");
         // FIXME decode negative integers as well
         let mut ciphertext_2: BufferCiphertext2 = BufferCiphertext2::new();
 
         let mut decoder = CBORDecoder::new(rcvd_message_2.as_slice());
         // message_2 consists of 1 bstr element; this element in turn contains the concatenation of g_y and ciphertext_2
         let decoded = decoder.bytes()?;
+        println!("decoded: {:?}", decoded);
+        // println!("decoded: 0x{}", encode(decoded));
+
         if decoder.finished() {
             if let Some(key) = decoded.get(0..P256_ELEM_LEN) {
                 let mut g_y: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
                 g_y.copy_from_slice(key);
+                println!("g_y: {:?}", g_y);
+                // println!("g_y: 0x{}", encode(g_y));
+
+
                 if let Some(c2) = decoded.get(P256_ELEM_LEN..) {
                     if ciphertext_2.fill_with_slice(c2).is_ok() {
                         Ok((g_y, ciphertext_2))

@@ -1,3 +1,6 @@
+use defmt_or_log::info;
+use hex::encode;
+
 use super::*;
 
 pub type BufferCred = EdhocBuffer<192>; // arbitrary size
@@ -68,14 +71,17 @@ impl IdCred {
 
     /// Instantiate an IdCred from an encoded value.
     pub fn from_encoded_value(value: &[u8]) -> Result<Self, EDHOCError> {
+        println!("value: 0x{}", encode(value));
         let bytes = match value {
             // kid that has been encoded as CBOR integer
             &[x] if Self::bstr_representable_as_int(x) => {
+                println!("x");
                 BufferIdCred::new_from_slice(&[0xa1, KID_LABEL, 0x41, x])
                     .map_err(|_| EDHOCError::CredentialTooLongError)? // TODO: how to avoid map_err overuse?
             }
             // kid that has been encoded as CBOR byte string
             &[0x41, x, ..] if !Self::bstr_representable_as_int(x) => {
+                println!("0x41");
                 let mut bytes = BufferIdCred::new_from_slice(&[0xa1, KID_LABEL])
                     .map_err(|_| EDHOCError::CredentialTooLongError)?;
                 bytes

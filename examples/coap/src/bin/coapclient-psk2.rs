@@ -21,7 +21,8 @@ fn main() {
 }
 
 fn client_handshake() -> Result<(), EDHOCError> {
-    let url = "coap://127.0.0.1:5683/.well-known/edhoc";
+    let url = "coap://10.56.24.235:5683/.well-known/edhoc";
+    // let url = "coap://127.0.0.1:5683/.well-known/edhoc";
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);
 
@@ -39,12 +40,12 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
     // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     let c_i = ConnId::from_int_raw(10);
+    println!("c_i: {:?}", c_i);
     initiator.set_identity(cred);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     println!("message_1 len = {}", message_1.len);
     println!("message_1 = 0x{}", encode(message_1.as_slice()));
-    msg_1_buf.extend_from_slice(message_1.as_slice());
-    
+    msg_1_buf.extend_from_slice(message_1.as_slice());    
 
     let response = CoAPClient::post_with_timeout(url, msg_1_buf, timeout).unwrap();
     if response.get_status() != &ResponseType::Changed {
@@ -59,7 +60,10 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
     //println!("I after parsing m2:{:?}", initiator);
     let valid_cred_r = credential_check_or_fetch(Some(cred), id_cred_r.unwrap()).unwrap();
-    //println!("initiator verifies message_2");
+    println!("valid_cred_r: 0x{}", encode(valid_cred_r.bytes.as_slice()));
+    println!("id_cred_r: 0x{}", encode(id_cred_r.unwrap().as_full_value()));
+    // println!("valid_cred_r_key: 0x{}", encode(valid_cred_r.key));
+
     let initiator = initiator.verify_message_2(valid_cred_r)?;
 
     println!("\n---------MESSAGE_3-----------\n");

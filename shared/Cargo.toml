@@ -13,7 +13,7 @@ categories.workspace = true
 
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
-hex = { version = "0.4.3", optional = true }
+hex = { version = "0.4.3", optional = false }
 defmt-or-log = { version = "0.2.1", default-features = false }
 log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
@@ -24,7 +24,8 @@ rstest = "0.21.0"
 
 [features]
 default = [  ]
-python-bindings = ["pyo3", "hex"]
+# python-bindings = ["pyo3", "hex"]
+python-bindings = ["pyo3"]
 
 ## For all arbitrarily limited buffers, pick 4x the current default.
 ##

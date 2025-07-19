@@ -17,7 +17,8 @@ fn main() {
     info!("Starting EDHOC CoAP Server");
 
     let mut buf = [0; MAX_MESSAGE_SIZE_LEN];
-    let socket = UdpSocket::bind("127.0.0.1:5683").unwrap();
+    // let socket = UdpSocket::bind("127.0.0.1:5683").unwrap();
+    let socket = UdpSocket::bind("0.0.0.0:5683").unwrap(); // Listen on all available network interfaces
 
     let mut edhoc_connections = Vec::new();
 
@@ -85,7 +86,7 @@ fn main() {
                     // anyway legally
                     continue;
                 };
-                //println!("message_3 parsed");
+                println!("message_3 parsed");
                 let cred = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let valid_cred_i =
                     credential_check_or_fetch(Some(cred), id_cred_i.unwrap()).unwrap();

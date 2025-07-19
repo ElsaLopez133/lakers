@@ -13,7 +13,7 @@
 //! respectively, through which the EDHOC key material can be obtained.
 //!
 //! [EDHOC]: https://datatracker.ietf.org/doc/html/rfc9528
-#![cfg_attr(not(test), no_std)]
+// #![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::info;
 pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
@@ -154,8 +154,10 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         // trace!("Initializing EdhocResponder");
         // let (y, g_y) = crypto.p256_generate_key_pair();
         let (y, g_y) = (Y, G_Y);
-        info!("y: 0x{}", encode(y));
-        info!("g_y: 0x{}", encode(g_y));
+        // info!("y: 0x{}", encode(y));
+        // info!("g_y: 0x{}", encode(g_y));
+        println!("y: 0x{}", encode(y));
+        println!("g_y: 0x{}", encode(g_y));
 
 
         // let r = match method {
@@ -341,8 +343,10 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
         // let (x, g_x) = crypto.p256_generate_key_pair();
         let (x, g_x) = (X, G_X);
-        info!("x: 0x{}", encode(x));
-        info!("g_x: 0x{}", encode(g_x));
+        // info!("x: 0x{}", encode(x));
+        // info!("g_x: 0x{}", encode(g_x));
+        println!("x: 0x{}", encode(x));
+        println!("g_x: 0x{}", encode(g_x));
 
         
         EdhocInitiator {
