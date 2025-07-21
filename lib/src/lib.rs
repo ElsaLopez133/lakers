@@ -181,7 +181,6 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         message_1: &BufferMessage1,
     ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, Option<EADItem>), EDHOCError> {
         // trace!("Enter process_message_1");
-        //println!("Responder processes message_1");
         let (state, c_i, ead_1) = r_process_message_1(&self.state, &mut self.crypto, message_1)?;
 
         Ok((
@@ -214,7 +213,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             &mut self.crypto,
             self.cred_r,
             c_r,
-            cred_transfer,
+            // cred_transfer,
             ead_2,
         ) {
             Ok((state, message_2)) => Ok((
@@ -343,8 +342,6 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
         // let (x, g_x) = crypto.p256_generate_key_pair();
         let (x, g_x) = (X, G_X);
-        // info!("x: 0x{}", encode(x));
-        // info!("g_x: 0x{}", encode(g_x));
         println!("x: 0x{}", encode(x));
         println!("g_x: 0x{}", encode(g_x));
 
@@ -402,6 +399,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
     pub fn parse_message_2(
         mut self,
+        cred_transfer: CredentialTransfer,
         message_2: &'a BufferMessage2,
     ) -> Result<
         (
@@ -413,15 +411,15 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
         EDHOCError,
     > {
         // trace!("Enter parse_message_2");
-        match i_parse_message_2(&self.state, &mut self.crypto, message_2) {
-            Ok((state, c_r, id_cred_r, ead_2)) => Ok((
+        match i_parse_message_2(&self.state, &mut self.crypto, message_2, cred_transfer) {
+            Ok((state, c_r, id_cred_psk, ead_2)) => Ok((
                 EdhocInitiatorProcessingM2 {
                     state,
                     cred_i: self.cred_i,
                     crypto: self.crypto,
                 },
                 c_r,
-                id_cred_r,
+                Some(id_cred_psk),
                 ead_2,
             )),
             Err(error) => Err(error),
@@ -457,7 +455,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
     pub fn prepare_message_3(
         mut self,
-        cred_transfer: CredentialTransfer,
+        // cred_transfer: CredentialTransfer,
         ead_3: &Option<EADItem>,
     ) -> Result<
         (
@@ -474,8 +472,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
         match i_prepare_message_3(
             &mut self.state,
             &mut self.crypto,
-            cred_i,
-            cred_transfer,
+            // cred_i,
+            // cred_transfer,
             ead_3,
         ) {
             Ok((state, message_3)) => Ok((

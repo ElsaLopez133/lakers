@@ -7,9 +7,13 @@ use std::time::Duration;
 use defmt_or_log::info;
 use hex::encode;
 
-const ID_CRED: &[u8] = &hex!("a1044120");
-const CRED_PSK: &[u8] =
-    &hex!("A202686D79646F74626F7408A101A30104024110205050930FF462A77A3540CF546325DEA214");
+const ID_CRED_PSK: &[u8] = &hex!("a1044120");
+const CRED_I: &[u8] =
+    &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+const CRED_R: &[u8] =
+    &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+// const CRED_PSK: &[u8] =
+    // &hex!("A202686D79646F74626F7408A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
 fn main() {
     env_logger::init();
@@ -21,14 +25,14 @@ fn main() {
 }
 
 fn client_handshake() -> Result<(), EDHOCError> {
-    let url = "coap://10.56.24.235:5683/.well-known/edhoc";
-    // let url = "coap://127.0.0.1:5683/.well-known/edhoc";
+    let url = "coap://127.0.0.1:5683/.well-known/edhoc";
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);
 
-    let cred: Credential = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
-    // println!("cred_psk: {:?}", cred);
-    println!("cred_psk bytes: 0x{}", encode(cred.bytes.as_slice()));
+    let cred_i: Credential = Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap()).unwrap();
+    let cred_r: Credential = Credential::parse_ccs_symmetric(CRED_R.try_into().unwrap()).unwrap();
+    println!("cred_i bytes: 0x{}", encode(cred_i.bytes.as_slice()));
+    println!("cred_r bytes: 0x{}", encode(cred_i.bytes.as_slice()));
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
@@ -41,7 +45,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     let c_i = ConnId::from_int_raw(10);
     println!("c_i: {:?}", c_i);
-    initiator.set_identity(cred);
+    initiator.set_identity(cred_i);
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
     println!("message_1 len = {}", message_1.len);
     println!("message_1 = 0x{}", encode(message_1.as_slice()));
@@ -57,12 +61,11 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("message_2 len = {}", response.message.payload.len());
 
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
-    let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
+    let (mut initiator, c_r,id_cred_psk, _ead_2) = initiator.parse_message_2(CredentialTransfer::ByReference, &message_2)?;
     //println!("I after parsing m2:{:?}", initiator);
-    let valid_cred_r = credential_check_or_fetch(Some(cred), id_cred_r.unwrap()).unwrap();
+    let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_psk.unwrap()).unwrap();
     println!("valid_cred_r: 0x{}", encode(valid_cred_r.bytes.as_slice()));
-    println!("id_cred_r: 0x{}", encode(id_cred_r.unwrap().as_full_value()));
-    // println!("valid_cred_r_key: 0x{}", encode(valid_cred_r.key));
+    println!("id_cred_psk: 0x{}", encode(id_cred_psk.unwrap().as_full_value()));
 
     let initiator = initiator.verify_message_2(valid_cred_r)?;
 
@@ -70,8 +73,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let mut msg_3 = Vec::from(c_r.as_cbor());
     //println!("initiator prepares message_3");
     let (mut initiator, message_3) =
-        initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
-        println!("message_3 len = {}", message_3.len);
+        // initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
+        initiator.prepare_message_3(&None)?;
+    println!("message_3 len = {}", message_3.len);
     println!("message_3 = 0x{}", encode(message_3.as_slice()));
     msg_3.extend_from_slice(message_3.as_slice());
     

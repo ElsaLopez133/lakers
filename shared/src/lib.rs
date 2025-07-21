@@ -373,7 +373,8 @@ pub struct ProcessingM2 {
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: EdhocMessageBuffer,
     pub c_r: ConnId,
-    pub id_cred_r: Option<IdCred>,
+    pub cred_i: Option<Credential>,
+    pub id_cred_psk: Option<IdCred>,
     pub ead_2: Option<EADItem>,
 }
 
@@ -383,6 +384,10 @@ pub struct ProcessedM2 {
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
+    pub cred_i: Option<Credential>,
+    pub cred_r: Option<Credential>,
+    pub id_cred_psk: Option<IdCred>,
+
 }
 
 #[derive(Default, Debug)]
@@ -394,7 +399,8 @@ pub struct ProcessingM3 {
     pub prk_4e3m: BytesHashLen,
     pub salt_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
-    pub id_cred_i: Option<IdCred>,
+    pub id_cred_psk: Option<IdCred>,
+    pub cred_r: Option<Credential>,
     // pub plaintext_3: EdhocMessageBuffer,
     pub ead_3: Option<EADItem>,
 }
@@ -414,17 +420,18 @@ pub struct ProcessedM3 {
     pub cred_r: Credential,
     pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
-    pub id_cred: Option<IdCred>,
+    pub id_cred_psk: Option<IdCred>,
 }
 
 #[derive(Debug)]
 pub struct WaitM4 {
     // pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
-    pub cred_r: Credential,
+    // pub cred_r: Option<Credential>,
+    // pub cred_i: Option<Credential>,
     pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
-    pub id_cred: Option<IdCred>,
+    // pub id_cred_psk: Option<IdCred>,
     pub ead_3: Option<EADItem>,
 }
 
@@ -432,7 +439,7 @@ pub struct WaitM4 {
 pub struct ProcessingM4 {
     // pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
-    pub cred_i: Credential,
+    // pub cred_i: Option<Credential>,
     // pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
 }
@@ -829,26 +836,23 @@ mod edhoc_parser {
 
     pub fn decode_plaintext_2(
         plaintext_2: &BufferCiphertext2,
-    ) -> Result<(ConnId, Option<IdCred>, Option<BytesMac2>, Option<EADItem>), EDHOCError> {
+    ) -> Result<(ConnId, Option<EADItem>), EDHOCError> {
         trace!("Enter decode_plaintext_2");
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
 
         let c_r = ConnId::from_int_raw(decoder.int_raw()?);
-
-        // the id_cred may have been encoded as a single int, a byte string, or a map
-        //mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
 
         // if there is still more to parse, the rest will be the EAD_2
         if plaintext_2.len > decoder.position() {
             // assume only one EAD item
             let ead_res = parse_ead(decoder.remaining_buffer()?);
             if let Ok(ead_2) = ead_res {
-                Ok((c_r, None, None, ead_2))
+                Ok((c_r, ead_2))
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((c_r, None, None, None))
+            Ok((c_r, None))
         } else {
             Err(EDHOCError::ParsingError)
         }
@@ -856,23 +860,24 @@ mod edhoc_parser {
 
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
-    ) -> Result<(Option<IdCred>, Option<BytesMac3>, Option<EADItem>), EDHOCError> {
-        trace!("Enter decode_plaintext_3");
+    ) -> Result<(Option<EADItem>), EDHOCError> {
+        // trace!("Enter decode_plaintext_3");
 
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
         // the id_cred may have been encoded as a single int, a byte string, or a map
+        // let id_cred_psk = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
         // if there is still more to parse, the rest will be the EAD_3
         if plaintext_3.len > decoder.position() {
             // assume only one EAD item
             let ead_res = parse_ead(decoder.remaining_buffer()?);
             if let Ok(ead_3) = ead_res {
-                Ok((None, None, ead_3))
+                Ok((ead_3))
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((None, None, None))
+            Ok((None))
         } else {
             Err(EDHOCError::ParsingError)
         }

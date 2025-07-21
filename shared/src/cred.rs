@@ -71,7 +71,6 @@ impl IdCred {
 
     /// Instantiate an IdCred from an encoded value.
     pub fn from_encoded_value(value: &[u8]) -> Result<Self, EDHOCError> {
-        println!("value: 0x{}", encode(value));
         let bytes = match value {
             // kid that has been encoded as CBOR integer
             &[x] if Self::bstr_representable_as_int(x) => {
