@@ -32,7 +32,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let cred_i: Credential = Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap()).unwrap();
     let cred_r: Credential = Credential::parse_ccs_symmetric(CRED_R.try_into().unwrap()).unwrap();
     println!("cred_i bytes: 0x{}", encode(cred_i.bytes.as_slice()));
-    println!("cred_r bytes: 0x{}", encode(cred_i.bytes.as_slice()));
+    println!("cred_r bytes: 0x{}", encode(cred_r.bytes.as_slice()));
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),

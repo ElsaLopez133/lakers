@@ -393,7 +393,7 @@ pub fn i_prepare_message_1(
 
     // hash message_1 here to avoid saving the whole message in the state
     let h_message_1 = crypto.sha256_digest(&message_1_buf, message_1.len);
-    info!("h(message_1): 0x{}", encode(h_message_1));
+    println!("h(message_1): 0x{}", encode(h_message_1));
 
     Ok((
         WaitM2 {
@@ -1251,7 +1251,7 @@ fn encrypt_decrypt_ciphertext_2(
         SHA256_DIGEST_LEN,
         ciphertext_2.len,
     );
-    info!("keystream_2: 0x{}", encode(keystream_2));
+    println!("keystream_2: 0x{}", encode(keystream_2));
 
     let mut result = BufferCiphertext2::default();
     for i in 0..ciphertext_2.len {
@@ -1370,8 +1370,9 @@ fn compute_prk_4e3m(
         temp[..cred.len()].copy_from_slice(cred); // Copy the existing data
         temp // Return the expanded array
     };
-    println!("expanded_cred: 0x{}", encode(expanded_cred));
-    crypto.hkdf_extract(salt_4e3m, &expanded_cred)
+    // println!("expanded_cred: 0x{}", encode(expanded_cred));
+    // crypto.hkdf_extract(salt_4e3m, &expanded_cred)
+    crypto.hkdf_extract_psk(salt_4e3m, cred)
 }
 
 fn compute_prk_2e(

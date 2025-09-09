@@ -51,6 +51,7 @@ pub trait Crypto: core::fmt::Debug {
         length: usize,
     ) -> BytesMaxBuffer;
     fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen;
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLenPSK) -> BytesHashLen;
     fn aes_ccm_encrypt_tag_8(
         &mut self,
         key: &BytesCcmKeyLen,
