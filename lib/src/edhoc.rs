@@ -1276,7 +1276,7 @@ fn encrypt_decrypt_ciphertext_3a(
     let keystream_3a = edhoc_kdf(
         crypto,
         prk_3e2m,
-        11u8,
+        12u8,
         &th_3_context,
         SHA256_DIGEST_LEN,
         ciphertext_3a.len,
