@@ -21,7 +21,7 @@ pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
 mod edhoc;
 pub use edhoc::*;
 use hex_literal::hex;
-// use hex::encode;
+use hex::encode;
 
 pub const X: [u8; 32] = hex!("09972DFEF1EAAB926EC96E8005FED29F70FFBF4E361C3A061A7ACDB5170C10E5");
 pub const G_X: [u8; 32] = hex!("7EC68102940602AAB548539BF42A35992D957249EB7F1888406D178A04C912DB");
@@ -161,15 +161,10 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         cred_r: Credential,
     ) -> Self {
         trace!("Initializing EdhocResponder");
-        let (y, g_y) = crypto.p256_generate_key_pair();
-        // let (y, g_y) = (Y, G_Y);
-        // info!("y: 0x{}", encode(y));
-        // info!("g_y: 0x{}", encode(g_y));
-
-        // let r = match method {
-        //     EDHOCMethod::StatStat => r.unwrap(),
-        //     EDHOCMethod::PSK1 => BytesP256ElemLen::default(),
-        // };
+        // let (y, g_y) = crypto.p256_generate_key_pair();
+        let (y, g_y) = (Y, G_Y);
+        trace!("y: 0x{}", encode(y));
+        trace!("g_y: 0x{}", encode(g_y));
 
         EdhocResponder {
             state: ResponderStart {
@@ -340,8 +335,11 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     pub fn new(mut crypto: Crypto, method: EDHOCMethod, selected_suite: EDHOCSuite) -> Self {
         trace!("Initializing EdhocInitiator");
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
-        let (x, g_x) = crypto.p256_generate_key_pair();
-        // let (x, g_x) = (X, G_X);
+        // let (x, g_x) = crypto.p256_generate_key_pair();
+        let (x, g_x) = (X, G_X);
+        trace!("x: 0x{}", encode(x));
+        trace!("g_x: 0x{}", encode(g_x));
+        
         EdhocInitiator {
             state: InitiatorStart {
                 x,
