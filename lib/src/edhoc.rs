@@ -995,10 +995,10 @@ pub fn build_external_aad(
 
     if let (Some(id), Some(ci), Some(cr)) = (id_cred, cred_i, cred_r) {
         // PSK case: array of 4 items
-        buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
+        //buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
         for item in [id, th_3, ci, cr] {
-            buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8))
-                .unwrap();
+            //buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8))
+            //    .unwrap();
             buf.extend_from_slice(item).unwrap();
         }
     } else {
@@ -1072,7 +1072,9 @@ fn encrypt_message_3(
 
     // let enc_structure = encode_enc_structure(th_3);
     let (external_aad, _aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
+    trace!("external_aad: 0x{}", encode(external_aad.as_slice()));
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
+    trace!("enc_structure: 0x{}", encode(enc_structure.as_slice()));
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
     trace!("k_3: 0x{}", encode(k_3));
