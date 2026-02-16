@@ -996,13 +996,18 @@ pub fn build_external_aad(
     if let (Some(id), Some(ci), Some(cr)) = (id_cred, cred_i, cred_r) {
         // PSK case: array of 4 items
         //buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
-        for item in [id, th_3, ci, cr] {
-            //buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8))
-            //    .unwrap();
-            buf.extend_from_slice(item).unwrap();
-        }
+
+        // id_cred_psk is considered as a CBOR encoded int
+        buf.extend_from_slice(id).unwrap();
+        // th_3
+        buf.push(CBOR_BYTE_STRING).unwrap();
+        buf.push(th_3.len() as u8).unwrap();
+        buf.extend_from_slice(th_3).unwrap();
+        // cred_i, cred_r are already CBOR Web Token
+        buf.extend_from_slice(ci).unwrap();
+        buf.extend_from_slice(cr).unwrap();
+
     } else {
-        // Non-PSK: array of 1 item (TH_3)
         buf.extend_from_slice(th_3).unwrap();
     }
 
@@ -1070,7 +1075,6 @@ fn encrypt_message_3(
         "Tried to encode a message that is too large."
     );
 
-    // let enc_structure = encode_enc_structure(th_3);
     let (external_aad, _aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
     trace!("external_aad: 0x{}", encode(external_aad.as_slice()));
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
@@ -1130,7 +1134,6 @@ fn decrypt_message_3(
     trace!("k_3: 0x{}", encode(k_3));
     trace!("iv_3: 0x{}", encode(iv_3));
 
-    // let enc_structure = encode_enc_structure(th_3);
     let (external_aad, _aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
 
@@ -1162,7 +1165,6 @@ fn encrypt_message_4(
     };
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
 
-    // let enc_structure = encode_enc_structure(th_4);
     let (external_aad, _aad_len) = build_external_aad(th_4, None, None, None);
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
 
@@ -1219,7 +1221,6 @@ fn decrypt_message_4(
 
     let (external_aad, _aad_len) = build_external_aad(th_4, None, None, None);
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
-    // let enc_structure = encode_enc_structure(th_4);
 
     crypto.aes_ccm_decrypt_tag_8(
         &k_4,
@@ -1533,23 +1534,19 @@ mod tests {
     const PLAINTEXT_3A_LEN_PSK_TV: usize = MESSAGE_3_PSK_TV.len() - 1;
     const PLAINTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
     // === CIPHERTEXT_3B (9 bytes) ===
-    // FIXME: Old value whit external_aad = th_3
-    //const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-    //    &hex!("480488b7f2a666b629")
-    //);
     const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("482996d76b91ac456a"));
+        EdhocBuffer::new_from_array(&hex!("487f34496f3f69c288"));
     // === KEYSTREAM_3A (10 bytes) ===
     const KEYSTREAM_3A_PSK_TV: [u8; PLAINTEXT_3A_LEN_PSK_TV] = hex!("03e5d1571bbc9332471b");
     // === PLAINTEXT_3A (10 bytes) ===
     const PLAINTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("10480488b7f2a666b629"));
+        EdhocBuffer::new_from_array(&hex!("10487f34496f3f69c288"));
     // === CIPHERTEXT_3A (10 bytes) ===
     const CIPHERTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("13add5dfac4e3554f132"));
+        EdhocBuffer::new_from_array(&hex!("13adae6352d3ac5b8593"));
     // === message_3 (11 bytes) ===
     const MESSAGE_3_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("4a13add5dfac4e3554f132"));
+        EdhocBuffer::new_from_array(&hex!("4a13adae6352d3ac5b8593"));
     // === TH_4 ===
     const TH_4_PSK_TV: BytesHashLen =
         hex!("11481b9afef95c679a52038217eedd0e0ce08faa865bdc825511ca6dc3919413");
