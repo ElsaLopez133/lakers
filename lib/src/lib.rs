@@ -191,6 +191,33 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
             Err(error) => Err(error),
         }
     }
+
+    pub fn parse_message_3_with_credential_lookup<F>(
+        mut self,
+        message_3: &'a BufferMessage3,
+        resolve_cred_i: F,
+    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError>
+    where
+        F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+    {
+        trace!("Enter parse_message_3_with_credential_lookup");
+        match r_parse_message_3_with_cred_resolver(
+            &mut self.state,
+            &mut self.crypto,
+            message_3,
+            resolve_cred_i,
+        ) {
+            Ok((state, id_cred_i, ead_3)) => Ok((
+                EdhocResponderProcessingM3 {
+                    state,
+                    crypto: self.crypto,
+                },
+                id_cred_i,
+                ead_3,
+            )),
+            Err(error) => Err(error),
+        }
+    }
 }
 
 impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {

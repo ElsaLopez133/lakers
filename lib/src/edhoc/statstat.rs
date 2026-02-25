@@ -34,7 +34,7 @@ pub fn r_prepare_message_2_statstat(
     );
 
     // compute ciphertext_2
-    let plaintext_2 = encode_plaintext_2(c_r, id_cred_r.as_encoded_value(), &mac_2, &ead_2)?;
+    let plaintext_2 = encode_plaintext_2_statstat(c_r, id_cred_r.as_encoded_value(), &mac_2, &ead_2)?;
 
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
@@ -51,6 +51,7 @@ pub fn r_prepare_message_2_statstat(
 
     Ok((
         WaitM3 {
+            method_specifics: WaitM3MethodSpecifics::StatStat {},
             method: state.method,
             y: state.y,
             prk_3e2m: prk_3e2m,
@@ -112,6 +113,7 @@ pub fn r_verify_message_3_statstat(
 
     let id_cred_i = match &state.method_specifics {
         ProcessingM3MethodSpecifics::StatStat { id_cred_i, .. } => id_cred_i,
+        _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
     // compute mac_3
@@ -124,8 +126,9 @@ pub fn r_verify_message_3_statstat(
         &state.ead_3,
     );
 
-    let mac_3 = match state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { mac_3, .. } => mac_3,
+    let mac_3 = match &state.method_specifics {
+        ProcessingM3MethodSpecifics::StatStat { mac_3, .. } => *mac_3,
+        _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
     // verify mac_3
