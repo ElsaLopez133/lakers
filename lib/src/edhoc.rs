@@ -42,7 +42,7 @@ pub fn r_process_message_1(
         let method = EDHOCMethod::try_from(method)?;
 
         match method {
-            EDHOCMethod::StatStat => {
+            EDHOCMethod::StatStat | EDHOCMethod::PSK => {
                 // Step 2: verify that the selected cipher suite is supported
                 if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
@@ -63,7 +63,6 @@ pub fn r_process_message_1(
                     Err(EDHOCError::UnsupportedCipherSuite)
                 }
             }
-            // If lakers-shared gets merged into lakers, this can be removed:
             _ => Err(EDHOCError::UnsupportedMethod),
         }
     } else {
@@ -188,10 +187,10 @@ pub fn i_parse_message_2<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, IdCred, EadItems), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details), EDHOCError> {
     match state.method {
         EDHOCMethod::StatStat => i_parse_message_2_statstat(state, crypto, message_2),
-        // EDHOCMethod::PSK => r_parse_message_3_psk()
+        EDHOCMethod::PSK => i_parse_message_2_psk(state, crypto, message_2),
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -201,10 +200,11 @@ pub fn i_verify_message_2(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
-    i: &BytesP256ElemLen, // I's static private DH key
+    i: Option<&BytesP256ElemLen>, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
     match state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { .. } => {
+            let i = i.ok_or(EDHOCError::MissingIdentity)?;
             i_verify_message_2_statstat(state, crypto, valid_cred_r, i)
         }
         ProcessingM2MethodSpecifics::Psk { .. } => {
@@ -224,7 +224,7 @@ pub fn i_prepare_message_3(
         EDHOCMethod::StatStat => {
             i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)
         }
-        // EDHOCMethod::PSK => i_prepare_message_3_psk()
+        EDHOCMethod::PSK => i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3),
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -395,6 +395,11 @@ fn edhoc_kdf_owned<const N: usize>(
     result
 }
 
+fn encode_plaintext_3_psk(ead_3: &EadItems) -> Result<BufferPlaintext3, EDHOCError> {
+    let mut plaintext_3 = BufferPlaintext3::new();
+    ead_3.encode(&mut plaintext_3)?;
+    Ok(plaintext_3)
+}
 fn encode_plaintext_3(
     id_cred_i: &[u8],
     mac_3: &BytesMac3,

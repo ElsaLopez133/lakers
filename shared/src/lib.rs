@@ -553,9 +553,23 @@ pub struct ProcessingM2 {
 }
 
 #[derive(Debug)]
+pub enum ParsedMessage2Details {
+    StatStat { id_cred_r: IdCred, ead_2: EadItems },
+    Psk { ead_2: EadItems },
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub enum ProcessedM2MethodSpecifics {
+    StatStat {},
+    Psk { cred_r: Credential },
+}
+
+#[derive(Debug)]
 #[repr(C)]
 pub struct ProcessedM2 {
     pub method: EDHOCMethod,
+    pub method_specifics: ProcessedM2MethodSpecifics,
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
@@ -1155,6 +1169,29 @@ mod edhoc_parser {
             }
         } else if decoder.finished() {
             Ok((c_r, id_cred_r, mac_2, EadItems::new()))
+        } else {
+            Err(EDHOCError::ParsingError)
+        }
+    }
+
+    pub fn decode_plaintext_2_psk(
+        plaintext_2: &BufferCiphertext2,
+    ) -> Result<(ConnId, EadItems), EDHOCError> {
+        trace!("Enter decode_plaintext_2");
+        let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
+
+        let c_r = ConnId::from_decoder(&mut decoder)?;
+
+        // if there is still more to parse, the rest will be the EADs
+        if plaintext_2.len() > decoder.position() {
+            let ead_res = parse_eads(decoder.remaining_buffer()?);
+            if let Ok(ead2_buffer) = ead_res {
+                Ok((c_r, ead2_buffer))
+            } else {
+                Err(ead_res.unwrap_err())
+            }
+        } else if decoder.finished() {
+            Ok((c_r, EadItems::new()))
         } else {
             Err(EDHOCError::ParsingError)
         }

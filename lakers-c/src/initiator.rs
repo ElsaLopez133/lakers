@@ -106,11 +106,15 @@ pub unsafe extern "C" fn initiator_parse_message_2(
     let state = core::ptr::read(&(*initiator_c).wait_m2);
 
     let result = match i_parse_message_2(&state, crypto, &(*message_2)) {
-        Ok((state, c_r, id_cred_r, ead_2)) => {
+        Ok((state, c_r, details)) => {
             ProcessingM2C::copy_into_c(state, &mut (*initiator_c).processing_m2);
             let c_r = c_r.as_slice();
             assert_eq!(c_r.len(), 1, "C API only supports short C_R");
             *c_r_out = c_r[0];
+            let (id_cred_r, ead_2) = match details {
+                ParsedMessage2Details::StatStat { id_cred_r, ead_2 } => (id_cred_r, ead_2),
+                ParsedMessage2Details::Psk { ead_2 } => (IdCred::new(), ead_2),
+            };
             *id_cred_r_out = id_cred_r;
 
             EadItemsC::copy_into_c(ead_2, ead_2_c_out);
@@ -140,7 +144,7 @@ pub unsafe extern "C" fn initiator_verify_message_2(
 
     let state = core::ptr::read(&(*initiator_c).processing_m2).to_rust();
 
-    match i_verify_message_2(&state, crypto, (*valid_cred_r).to_rust(), &(*i)) {
+    match i_verify_message_2(&state, crypto, (*valid_cred_r).to_rust(), Some(&(*i))) {
         Ok(state) => {
             (*initiator_c).processed_m2 = state;
             (*initiator_c).cred_i = cred_i;

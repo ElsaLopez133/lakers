@@ -97,6 +97,7 @@ impl EadItemsC {
 #[repr(C)]
 pub enum ProcessingM2MethodSpecificsKindC {
     Pm2StatStat,
+    Pm2Psk,
 }
 
 #[derive(Debug)]
@@ -111,6 +112,7 @@ pub struct ProcessingM2MethodSpecificsC {
 #[repr(C)]
 pub struct ProcessingM2C {
     pub method_specifics: ProcessingM2MethodSpecificsC,
+    /// Retained for C-side introspection; derived from `method_specifics` when copied from Rust.
     pub method: EDHOCMethod,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
@@ -150,11 +152,11 @@ impl ProcessingM2C {
                     id_cred_r: self.method_specifics.id_cred_r.clone(),
                 }
             }
+            ProcessingM2MethodSpecificsKindC::Pm2Psk => ProcessingM2MethodSpecifics::Psk {},
         };
 
         ProcessingM2 {
             method_specifics,
-            method: self.method,
             prk_2e: self.prk_2e,
             th_2: self.th_2,
             x: self.x,
@@ -177,17 +179,25 @@ impl ProcessingM2C {
         (*processing_m2_c).x = processing_m2.x;
         (*processing_m2_c).g_y = processing_m2.g_y;
         (*processing_m2_c).plaintext_2 = processing_m2.plaintext_2;
-        (*processing_m2_c).method = processing_m2.method;
         let c_r = processing_m2.c_r.as_slice();
         assert_eq!(c_r.len(), 1, "C API only supports short C_R");
         (*processing_m2_c).c_r = c_r[0];
 
         match processing_m2.method_specifics {
             ProcessingM2MethodSpecifics::StatStat { mac_2, id_cred_r } => {
+                (*processing_m2_c).method = EDHOCMethod::StatStat;
                 (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
                     kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
                     mac_2,
                     id_cred_r,
+                };
+            }
+            ProcessingM2MethodSpecifics::Psk {} => {
+                (*processing_m2_c).method = EDHOCMethod::PSK;
+                (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
+                    kind: ProcessingM2MethodSpecificsKindC::Pm2Psk,
+                    mac_2: Default::default(),
+                    id_cred_r: Default::default(),
                 };
             }
         }
