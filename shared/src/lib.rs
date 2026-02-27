@@ -513,22 +513,31 @@ pub struct WaitM2 {
 #[derive(Debug)]
 pub enum WaitM3MethodSpecifics {
     StatStat {},
-    Psk {cred_r: Credential}
+    Psk { cred_r: Credential },
 }
 #[derive(Debug)]
 pub struct WaitM3 {
     pub method_specifics: WaitM3MethodSpecifics,
-    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
+}
+
+/// Method-specific details required to prepare EDHOC message_2.
+#[derive(Copy, Clone, Debug)]
+pub enum PrepareMessage2Details<'a> {
+    StatStat {
+        r: &'a BytesP256ElemLen,
+        cred_transfer: CredentialTransfer,
+    },
+    Psk,
 }
 
 #[derive(Debug)]
 #[repr(C)]
 pub enum ProcessingM2MethodSpecifics {
     StatStat { mac_2: BytesMac2, id_cred_r: IdCred },
-    // PSK, -- is empty, but in other stages it might have fields that StatStat has not.
+    Psk {},
 }
 #[derive(Debug)]
 #[repr(C)]
@@ -553,8 +562,14 @@ pub struct ProcessedM2 {
 }
 #[derive(Debug)]
 pub enum ProcessingM3MethodSpecifics {
-    StatStat { mac_3: BytesMac3, id_cred_i: IdCred },
-    Psk { id_cred_psk: IdCred, cred_r: Credential },
+    StatStat {
+        mac_3: BytesMac3,
+        id_cred_i: IdCred,
+    },
+    Psk {
+        id_cred_psk: IdCred,
+        cred_r: Credential,
+    },
 }
 #[derive(Debug)]
 pub struct ProcessingM3 {
@@ -1173,10 +1188,7 @@ mod edhoc_parser {
         }
     }
 
-
-    pub fn decode_plaintext_3_psk(
-        plaintext_3: &BufferPlaintext3,
-    ) -> Result<EadItems, EDHOCError> {
+    pub fn decode_plaintext_3_psk(plaintext_3: &BufferPlaintext3) -> Result<EadItems, EDHOCError> {
         trace!("Enter decode_plaintext_3");
         let decoder = CBORDecoder::new(plaintext_3.as_slice());
 

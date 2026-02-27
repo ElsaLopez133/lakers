@@ -35,7 +35,6 @@ pub fn r_prepare_message_2_psk(
     Ok((
         WaitM3 {
             method_specifics: WaitM3MethodSpecifics::Psk { cred_r },
-            method: state.method,
             y: state.y,
             prk_3e2m: prk_3e2m,
             th_3: th_3,
@@ -44,13 +43,17 @@ pub fn r_prepare_message_2_psk(
     ))
 }
 
-
 pub fn r_parse_message_3_psk(
     state: &mut WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
-    r_parse_message_3_psk_with_cred_resolver(state, crypto, message_3, recover_cred_i_from_id_cred_psk)
+    r_parse_message_3_psk_with_cred_resolver(
+        state,
+        crypto,
+        message_3,
+        recover_cred_i_from_id_cred_psk,
+    )
 }
 
 pub fn r_parse_message_3_psk_with_cred_resolver<F>(
@@ -103,7 +106,6 @@ where
                     id_cred_psk: id_cred_psk.clone(),
                     cred_r: cred_r.clone(),
                 },
-                method: state.method,
                 y: state.y,
                 prk_3e2m: state.prk_3e2m,
                 th_3: state.th_3,
@@ -131,13 +133,14 @@ pub fn r_verify_message_3_psk(
         CredentialKey::EC2Compact(public_key) => {
             compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
         }
-        CredentialKey::Symmetric(psk) => {
-            compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk)
-        }
+        CredentialKey::Symmetric(psk) => compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk),
     };
 
     let (id_cred_psk, cred_r) = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::Psk { id_cred_psk, cred_r } => (id_cred_psk, cred_r),
+        ProcessingM3MethodSpecifics::Psk {
+            id_cred_psk,
+            cred_r,
+        } => (id_cred_psk, cred_r),
         _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
@@ -171,9 +174,41 @@ pub fn r_verify_message_3_psk(
     ))
 }
 
-fn recover_cred_i_from_id_cred_psk(
-    id_cred_psk: &IdCred,
-) -> Result<Credential, EDHOCError> {
+pub fn i_verify_message_2_psk(
+    state: &ProcessingM2,
+    crypto: &mut impl CryptoTrait,
+    valid_cred_r: Credential,
+) -> Result<ProcessedM2, EDHOCError> {
+    // verify mac_2
+    let _salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
+
+    let prk_3e2m = state.prk_2e;
+
+    let th_3 = compute_th_3_psk(crypto, &state.th_2, &state.plaintext_2);
+
+    // message 3 processing
+    let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
+
+    let psk = match valid_cred_r.key {
+        CredentialKey::Symmetric(psk) => psk,
+        _ => return Err(EDHOCError::UnsupportedMethod),
+    };
+
+    let prk_4e3m = compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk);
+
+    let state = ProcessedM2 {
+        // We need the method for next step. Since we are in the branch of StatStat,
+        // we can add EDHOCMethod::StatStat
+        method: EDHOCMethod::StatStat,
+        prk_3e2m: prk_3e2m,
+        prk_4e3m: prk_4e3m,
+        th_3: th_3,
+    };
+
+    Ok(state)
+}
+
+fn recover_cred_i_from_id_cred_psk(id_cred_psk: &IdCred) -> Result<Credential, EDHOCError> {
     if let Some(cred_i) = id_cred_psk.get_ccs() {
         Ok(cred_i)
     } else {
@@ -213,7 +248,7 @@ fn decrypt_message_3_psk(
     let ciphertext_3: BufferCiphertext3 = BufferCiphertext3::new_from_slice(
         &message_3.as_slice()[prefix_length..][..bytestring_length],
     )
-        .unwrap();
+    .unwrap();
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
 
@@ -284,7 +319,6 @@ pub fn build_external_aad_psk(
     (buf, len)
 }
 
-
 pub fn encode_enc_structure_psk(
     external_aad: &EdhocBuffer<MAX_BUFFER_LEN>,
 ) -> (EdhocBuffer<MAX_BUFFER_LEN>, usize) {
@@ -313,6 +347,21 @@ pub fn encode_enc_structure_psk(
 
     let len = enc_structure.len();
     (enc_structure, len)
+}
+
+fn compute_th_3_psk(
+    crypto: &mut impl CryptoTrait,
+    th_2: &BytesHashLen,
+    plaintext_2: &BufferPlaintext2,
+) -> BytesHashLen {
+    let mut hash = crypto.sha256_start();
+
+    hash.update([CBOR_BYTE_STRING, th_2.len() as u8]);
+    hash.update(th_2);
+
+    hash.update(plaintext_2.as_slice());
+
+    hash.finalize().into()
 }
 
 fn compute_th_4_psk(
