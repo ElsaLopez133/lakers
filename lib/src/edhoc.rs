@@ -1,5 +1,6 @@
 use digest::Digest;
 use lakers_shared::{Crypto as CryptoTrait, *};
+use defmt_or_log::trace;
 mod psk;
 mod statstat;
 
