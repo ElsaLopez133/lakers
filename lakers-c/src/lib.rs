@@ -13,11 +13,18 @@ use lakers_crypto::{default_crypto, CryptoTrait};
 pub mod ead_authz;
 pub mod initiator;
 
+#[cfg(test)]
+extern crate std;
+
 // crate type staticlib requires a panic handler and an allocator
 use embedded_alloc::Heap;
-use panic_semihosting as _;
+#[cfg(not(test))]
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
+
+#[cfg(test)]
+#[global_allocator]
+static ALLOC: std::alloc::System = std::alloc::System;
 
 /// Note that while the Rust version supports optional value to indicate an empty value,
 /// in the C version we use an empty buffer for that case.
@@ -99,19 +106,36 @@ pub enum ProcessingM2MethodSpecificsKindC {
     Pm2Psk,
 }
 
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ProcessingM2StatStatC {
     pub mac_2: BytesMac2,
     pub id_cred_r: IdCred,
 }
 
+impl Default for ProcessingM2StatStatC {
+    fn default() -> Self {
+        Self {
+            mac_2: Default::default(),
+            id_cred_r: Default::default(),
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ProcessingM2PskC {}
 
+impl Default for ProcessingM2PskC {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
 #[repr(C)]
 pub union ProcessingM2MethodSpecificsDataC {
-    pub statstat: core::mem::ManuallyDrop<ProcessingM2StatStatC>,
-    pub psk: core::mem::ManuallyDrop<ProcessingM2PskC>,
+    pub statstat: ProcessingM2StatStatC,
+    pub psk: ProcessingM2PskC,
 }
 
 #[repr(C)]
@@ -138,10 +162,7 @@ impl Default for ProcessingM2C {
             method_specifics: ProcessingM2MethodSpecificsC {
                 kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
                 data: ProcessingM2MethodSpecificsDataC {
-                    statstat: core::mem::ManuallyDrop::new(ProcessingM2StatStatC {
-                        mac_2: Default::default(),
-                        id_cred_r: Default::default(),
-                    }),
+                    statstat: ProcessingM2StatStatC::default(),
                 },
             },
             prk_2e: Default::default(),
@@ -204,10 +225,10 @@ impl ProcessingM2C {
                 (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
                     kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
                     data: ProcessingM2MethodSpecificsDataC {
-                        statstat: core::mem::ManuallyDrop::new(ProcessingM2StatStatC {
+                        statstat: ProcessingM2StatStatC {
                             mac_2: mac_2,
                             id_cred_r: id_cred_r,
-                        }),
+                        },
                     },
                 };
             }
@@ -215,7 +236,7 @@ impl ProcessingM2C {
                 (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
                     kind: ProcessingM2MethodSpecificsKindC::Pm2Psk,
                     data: ProcessingM2MethodSpecificsDataC {
-                        psk: core::mem::ManuallyDrop::new(ProcessingM2PskC {}),
+                        psk: ProcessingM2PskC {},
                     },
                 };
             }
@@ -223,7 +244,8 @@ impl ProcessingM2C {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+//Adding Copy to avoid the use of ManuallyDrop in lakers-c
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(C)]
 pub struct CredentialC {
     pub bytes: BufferCred,
@@ -233,6 +255,17 @@ pub struct CredentialC {
     /// the alternative would be to use a pointer, but then we need to care about memory management
     pub kid: BufferKid,
     pub cred_type: CredentialType,
+}
+
+impl Default for CredentialC {
+    fn default() -> Self {
+        Self {
+            bytes: Default::default(),
+            key: CredentialKey::Symmetric([0; 16]),
+            kid: Default::default(),
+            cred_type: CredentialType::CCS_PSK,
+        }
+    }
 }
 
 impl CredentialC {
@@ -258,18 +291,35 @@ pub enum ProcessedM2MethodSpecificsKindC {
     Prm2StatStat,
     Prm2Psk,
 }
+
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ProcessedM2StatStatC {}
 
+impl Default for ProcessedM2StatStatC {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ProcessedM2PskC {
     cred_r: CredentialC,
 }
 
+impl Default for ProcessedM2PskC {
+    fn default() -> Self {
+        Self {
+            cred_r: CredentialC::default(),
+        }
+    }
+}
+
 #[repr(C)]
 pub union ProcessedM2MethodSpecificsDataC {
-    pub statstat: core::mem::ManuallyDrop<ProcessedM2StatStatC>,
-    pub psk: core::mem::ManuallyDrop<ProcessedM2PskC>,
+    pub statstat: ProcessedM2StatStatC,
+    pub psk: ProcessedM2PskC,
 }
 
 #[repr(C)]
@@ -292,7 +342,9 @@ impl Default for ProcessedM2C {
             method_specifics: ProcessedM2MethodSpecificsC {
                 kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
                 data: ProcessedM2MethodSpecificsDataC {
-                    statstat: core::mem::ManuallyDrop::new(ProcessedM2StatStatC {}),
+                    // Initialize the union with the largest payload shape so the backing
+                    // storage is fully initialized even when the logical tag is StatStat.
+                    psk: ProcessedM2PskC::default(),
                 },
             },
             prk_3e2m: Default::default(),
@@ -341,18 +393,21 @@ impl ProcessedM2C {
                 (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
                     data: ProcessedM2MethodSpecificsDataC {
-                        statstat: core::mem::ManuallyDrop::new(ProcessedM2StatStatC {}),
+                        statstat: ProcessedM2StatStatC {},
                     },
                 };
             }
             ProcessedM2MethodSpecifics::Psk { cred_r } => {
-                let mut cred_r_c = core::mem::MaybeUninit::<CredentialC>::uninit();
-                CredentialC::copy_into_c(cred_r, cred_r_c.as_mut_ptr());
-                let cred_r_c = cred_r_c.assume_init();
+                let cred_r_c = CredentialC {
+                    bytes: cred_r.bytes,
+                    key: cred_r.key,
+                    kid: cred_r.kid.unwrap(),
+                    cred_type: cred_r.cred_type,
+                };
                 (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2Psk,
                     data: ProcessedM2MethodSpecificsDataC {
-                        psk: core::mem::ManuallyDrop::new(ProcessedM2PskC { cred_r: cred_r_c }),
+                        psk: ProcessedM2PskC { cred_r: cred_r_c },
                     },
                 };
             }
@@ -412,5 +467,149 @@ pub extern "C" fn p256_generate_key_pair_from_c(out_private_key: *mut u8, out_pu
             lakers::P256_ELEM_LEN,
         );
         core::ptr::copy_nonoverlapping(public_key.as_ptr(), out_public_key, lakers::P256_ELEM_LEN);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn processing_m2_default_to_rust_is_statstat() {
+        let mut ead_2_c = EadItemsC::default();
+        let mut value = ProcessingM2C::default();
+        value.ead_2 = &mut ead_2_c;
+        let rust = value.to_rust();
+        assert!(matches!(
+            rust.method_specifics,
+            ProcessingM2MethodSpecifics::StatStat { .. }
+        ));
+    }
+
+    #[test]
+    fn processed_m2_default_to_rust_is_statstat() {
+        let value = ProcessedM2C::default();
+        let rust = value.to_rust();
+        assert!(matches!(
+            rust.method_specifics,
+            ProcessedM2MethodSpecifics::StatStat {}
+        ));
+    }
+    #[test]
+    fn credential_c_roundtrip() {
+        let cred = Credential {
+            bytes: BufferCred::new_from_slice(&[1, 2, 3]).unwrap(),
+            key: CredentialKey::Symmetric([7; 16]),
+            kid: Some(BufferKid::new_from_slice(&[9]).unwrap()),
+            cred_type: CredentialType::CCS_PSK,
+        };
+
+        let mut c = CredentialC::default();
+        unsafe { CredentialC::copy_into_c(cred.clone(), &mut c) };
+        let roundtrip = c.to_rust();
+
+        assert_eq!(roundtrip, cred);
+    }
+
+    #[test]
+    fn processed_m2_psk_roundtrip() {
+        let cred = Credential {
+            bytes: BufferCred::new_from_slice(&[1, 2, 3]).unwrap(),
+            key: CredentialKey::Symmetric([5; 16]),
+            kid: Some(BufferKid::new_from_slice(&[8]).unwrap()),
+            cred_type: CredentialType::CCS_PSK,
+        };
+
+        let rust_value = ProcessedM2 {
+            method_specifics: ProcessedM2MethodSpecifics::Psk {
+                cred_r: cred.clone(),
+            },
+            prk_3e2m: Default::default(),
+            prk_4e3m: Default::default(),
+            th_3: Default::default(),
+        };
+
+        let mut c_value = ProcessedM2C::default();
+        unsafe { ProcessedM2C::copy_into_c(rust_value, &mut c_value) };
+        let roundtrip = c_value.to_rust();
+
+        match roundtrip.method_specifics {
+            ProcessedM2MethodSpecifics::Psk { cred_r } => assert_eq!(cred_r, cred),
+            _ => panic!("expected psk"),
+        }
+    }
+
+    #[test]
+    fn processed_m2_statstat_roundtrip() {
+        let rust_value = ProcessedM2 {
+            method_specifics: ProcessedM2MethodSpecifics::StatStat {},
+            prk_3e2m: Default::default(),
+            prk_4e3m: Default::default(),
+            th_3: Default::default(),
+        };
+
+        let mut c_value = ProcessedM2C::default();
+        unsafe { ProcessedM2C::copy_into_c(rust_value, &mut c_value) };
+        let roundtrip = c_value.to_rust();
+
+        assert!(matches!(
+            roundtrip.method_specifics,
+            ProcessedM2MethodSpecifics::StatStat {}
+        ));
+    }
+
+    #[test]
+    fn processing_m2_psk_roundtrip() {
+        let rust_value = ProcessingM2 {
+            method_specifics: ProcessingM2MethodSpecifics::Psk {},
+            prk_2e: Default::default(),
+            th_2: Default::default(),
+            x: Default::default(),
+            g_y: Default::default(),
+            plaintext_2: Default::default(),
+            #[allow(deprecated)]
+            c_r: ConnId::from_int_raw(0),
+            ead_2: EadItems::new(),
+        };
+
+        let mut ead_2_c = EadItemsC::default();
+        let mut c_value = ProcessingM2C::default();
+        c_value.ead_2 = &mut ead_2_c;
+        unsafe { ProcessingM2C::copy_into_c(rust_value, &mut c_value) };
+        let roundtrip = c_value.to_rust();
+
+        assert!(matches!(
+            roundtrip.method_specifics,
+            ProcessingM2MethodSpecifics::Psk {}
+        ));
+    }
+
+    #[test]
+    fn processing_m2_statstat_roundtrip() {
+        let rust_value = ProcessingM2 {
+            method_specifics: ProcessingM2MethodSpecifics::StatStat {
+                mac_2: Default::default(),
+                id_cred_r: IdCred::default(),
+            },
+            prk_2e: Default::default(),
+            th_2: Default::default(),
+            x: Default::default(),
+            g_y: Default::default(),
+            plaintext_2: Default::default(),
+            #[allow(deprecated)]
+            c_r: ConnId::from_int_raw(0),
+            ead_2: EadItems::new(),
+        };
+
+        let mut ead_2_c = EadItemsC::default();
+        let mut c_value = ProcessingM2C::default();
+        c_value.ead_2 = &mut ead_2_c;
+        unsafe { ProcessingM2C::copy_into_c(rust_value, &mut c_value) };
+        let roundtrip = c_value.to_rust();
+
+        assert!(matches!(
+            roundtrip.method_specifics,
+            ProcessingM2MethodSpecifics::StatStat { .. }
+        ));
     }
 }

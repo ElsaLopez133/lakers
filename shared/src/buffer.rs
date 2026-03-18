@@ -54,7 +54,8 @@ pub enum EdhocBufferError {
 /// Trying to have an API as similar as possible to `heapless::Vec`,
 /// so that in the future it can be hot-swappable by the application.
 // NOTE: how would this const generic thing work across the C and Python bindings?
-#[derive(PartialEq, Debug, Clone)]
+// Adding Copy to avoid the use of ManuallyDrop in lakers-c
+#[derive(Copy, PartialEq, Debug, Clone)]
 #[repr(C)]
 // `#[hax_lib::attributes]` is not usable here due to https://github.com/cryspen/hax/issues/899
 pub struct EdhocBuffer<const N: usize> {

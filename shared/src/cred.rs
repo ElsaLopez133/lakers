@@ -51,7 +51,9 @@ impl From<u8> for IdCredType {
 /// let long_kid = IdCred::from_encoded_value(&hex!("43616263")).unwrap(); // 'abc'
 /// assert_eq!(long_kid.as_full_value(), &hex!("a10443616263")); // {4: 'abc'}
 /// ```
-#[derive(Clone, Debug, Default, PartialEq)]
+
+//Adding Copy to avoid the use of ManuallyDrop in lakers-c
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 #[repr(C)]
 pub struct IdCred {
     /// The value is always stored in the ID_CRED_x form as a serialized one-element dictionary;
