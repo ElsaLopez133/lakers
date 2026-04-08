@@ -319,7 +319,6 @@ mod tests {
 
     fn make_ffi_initiator() -> EdhocInitiator {
         EdhocInitiator {
-            method: EDHOCMethod::StatStat,
             start: InitiatorStart {
                 suites_i: Default::default(),
                 method: EDHOCMethod::StatStat,
@@ -403,7 +402,6 @@ mod tests {
         unsafe {
             assert_eq!(initiator_new(&mut initiator, EDHOCMethod::PSK), 0);
         }
-        assert!(matches!(initiator.method, EDHOCMethod::PSK));
         assert!(matches!(initiator.start.method, EDHOCMethod::PSK));
     }
 
