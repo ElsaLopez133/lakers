@@ -12,7 +12,7 @@ use lakers_crypto::{default_crypto, CryptoTrait};
 #[cfg(feature = "ead-authz")]
 pub mod ead_authz;
 pub mod initiator;
-mod responder;
+pub mod responder;
 
 #[cfg(test)]
 extern crate std;
@@ -367,6 +367,58 @@ impl ProcessedM2C {
                 };
             }
         }
+    }
+}
+
+#[repr(C)]
+pub struct ProcessingM1C {
+    pub method: EDHOCMethod,
+    pub y: BytesP256ElemLen,
+    pub g_y: BytesP256ElemLen,
+    pub c_i: u8,
+    pub g_x: BytesP256ElemLen,
+    pub h_message_1: BytesHashLen,
+}
+
+impl Default for ProcessingM1C {
+    fn default() -> Self {
+        Self {
+            method: EDHOCMethod::StatStat,
+            y: Default::default(),
+            g_y: Default::default(),
+            c_i: Default::default(),
+            g_x: Default::default(),
+            h_message_1: Default::default(),
+        }
+    }
+}
+
+impl ProcessingM1C {
+    pub fn to_rust(&self) -> ProcessingM1 {
+        ProcessingM1 {
+            method: self.method,
+            y: self.y,
+            g_y: self.g_y,
+            #[allow(deprecated)]
+            c_i: ConnId::from_int_raw(self.c_i),
+            g_x: self.g_x,
+            h_message_1: self.h_message_1,
+        }
+    }
+
+    pub unsafe fn copy_into_c(processing_m1: ProcessingM1, processing_m1_c: *mut ProcessingM1C) {
+        if processing_m1_c.is_null() {
+            panic!("processing_m1_c is null");
+        }
+
+        (*processing_m1_c).method = processing_m1.method;
+        (*processing_m1_c).y = processing_m1.y;
+        (*processing_m1_c).g_y = processing_m1.g_y;
+        let c_i = processing_m1.c_i.as_slice();
+        assert_eq!(c_i.len(), 1, "C API only supports short C_I");
+        (*processing_m1_c).c_i = c_i[0];
+        (*processing_m1_c).g_x = processing_m1.g_x;
+        (*processing_m1_c).h_message_1 = processing_m1.h_message_1;
     }
 }
 

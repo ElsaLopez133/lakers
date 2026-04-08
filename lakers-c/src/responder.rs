@@ -11,7 +11,7 @@ use crate::*;
 #[repr(C)]
 pub struct EdhocResponder {
     pub start: ResponderStart,
-    pub processing_m1: ProcessingM1,
+    pub processing_m1: ProcessingM1C,
     pub wait_m3: WaitM3C,
     pub processing_m3: ProcessingM3C,
     pub processed_m3: ProcessedM3,
@@ -46,7 +46,7 @@ pub unsafe extern "C" fn responder_process_message_1(
 
     match r_process_message_1(&state, crypto, &(*message_1)) {
         Ok((state, c_i, ead_1)) => {
-            (*responder_c).processing_m1 = state;
+            ProcessingM1C::copy_into_c(state, &mut (*responder_c).processing_m1);
 
             let c_i = c_i.as_slice();
             assert_eq!(c_i.len(), 1, "C API only supports short C_I");
@@ -75,7 +75,7 @@ pub unsafe extern "C" fn responder_prepare_message_2(
     }
 
     let crypto = &mut default_crypto();
-    let state = core::ptr::read(&(*responder_c).processing_m1);
+    let state = core::ptr::read(&(*responder_c).processing_m1).to_rust();
 
     let c_r = if c_r.is_null() {
         generate_connection_identifier_cbor(crypto)
@@ -275,11 +275,11 @@ mod tests {
                 y: Default::default(),
                 g_y: Default::default(),
             },
-            processing_m1: ProcessingM1 {
+            processing_m1: ProcessingM1C {
                 method: EDHOCMethod::StatStat,
                 y: Default::default(),
                 g_y: Default::default(),
-                c_i: ConnId::from_int_raw(0),
+                c_i: 0,
                 g_x: Default::default(),
                 h_message_1: Default::default(),
             },
@@ -326,7 +326,7 @@ mod tests {
 
         assert_eq!(rc, 0);
         assert_eq!(responder.processing_m1.method, EDHOCMethod::StatStat);
-        assert_eq!(responder.processing_m1.c_i, ConnId::from_int_raw(c_i_out));
+        assert_eq!(responder.processing_m1.c_i, c_i_out);
         let _ = initiator;
     }
 
@@ -341,7 +341,10 @@ mod tests {
             EDHOCSuite::CipherSuite2,
         );
         initiator
-            .set_identity(InitiatorIdentity::StatStat { i: I_STATSTAT }, cred_i.clone())
+            .set_identity(
+                InitiatorIdentity::StatStat { i: I_STATSTAT },
+                cred_i.clone(),
+            )
             .unwrap();
 
         let mut responder = make_ffi_responder();
