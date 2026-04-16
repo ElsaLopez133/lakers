@@ -25,6 +25,7 @@ all_features = true
 
 [export]
 include = [
+    "ResponderParseMessage3CredResolver",
     "CredentialC",
     "ProcessingM1C",
     "WaitM3MethodSpecificsKindC",

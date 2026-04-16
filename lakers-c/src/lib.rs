@@ -263,6 +263,14 @@ impl CredentialC {
     }
 }
 
+pub type ResponderParseMessage3CredResolver = Option<
+    unsafe extern "C" fn(
+        id_cred_i: *const IdCred,
+        cred_out: *mut CredentialC,
+        context: *mut core::ffi::c_void,
+    ) -> i8,
+>;
+
 #[repr(C)]
 pub enum ProcessedM2MethodSpecificsKindC {
     Prm2StatStat,
