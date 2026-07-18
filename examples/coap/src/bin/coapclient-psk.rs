@@ -6,11 +6,11 @@ use hexlit::hex;
 use lakers::*;
 use std::time::Duration;
 
-const _ID_CRED_PSK: &[u8] = &hex!("a1044120");
+const _ID_CRED_PSK: &[u8] = &hex!("a104420010");
 const CRED_I: &[u8] =
-    &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+    &hex!("A20269696E69746961746F7208A101A3010402420010205050930FF462A77A3540CF546325DEA214");
 const CRED_R: &[u8] =
-    &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+    &hex!("A20269726573706F6E64657208A101A3010402420010205050930FF462A77A3540CF546325DEA214");
 
 fn main() {
     env_logger::init();
@@ -38,7 +38,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_1-----------\n");
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
-    //let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+                                             //let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     #[allow(deprecated)]
     let c_i = ConnId::from_int_raw(10);
     println!("c_i: {:?}", c_i);

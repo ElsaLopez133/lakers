@@ -1,8 +1,8 @@
 use core::clone::Clone;
-use digest::Digest;
-use lakers_shared::{Crypto as CryptoTrait, *};
-use hex::encode;
 use defmt_or_log::trace;
+use digest::Digest;
+use hex::encode;
+use lakers_shared::{Crypto as CryptoTrait, *};
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -169,10 +169,14 @@ pub fn r_parse_message_3(
         let res = parse_message_3(message_3)?;
         let plaintext_3a =
             encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &res);
-        let id_cred_psk = IdCred::from_encoded_value(&[plaintext_3a.as_slice()[0]])?;
+        let mut decoder = CBORDecoder::new(plaintext_3a.as_slice());
+        let encoded_id_cred_psk = decoder.any_as_encoded()?;
+        let id_cred_psk = IdCred::from_encoded_value(encoded_id_cred_psk)?;
 
         let mut ciphertext_3b = BufferCiphertext3::new();
-        let _ = ciphertext_3b.fill_with_slice(&plaintext_3a.as_slice()[1..]); // changed 1 to 4
+        ciphertext_3b
+            .fill_with_slice(&plaintext_3a.as_slice()[decoder.position()..])
+            .map_err(|_| EDHOCError::EncodingError)?;
 
         // compute salt_4e3m
         let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
@@ -297,7 +301,7 @@ pub fn r_verify_message_3(
             &state.th_3,
             &state.plaintext_3,
             state.method,
-            Some(state.id_cred_i.clone().unwrap().as_encoded_value()),
+            Some(state.id_cred_i.as_ref().unwrap().as_encoded_value()),
             Some(&state.ead_3),
             &valid_cred_i.bytes.as_slice(),
             cred_r_bytes,
@@ -389,7 +393,10 @@ pub fn i_prepare_message_1(
 
     // hash message_1 here to avoid saving the whole message in the state
     let h_message_1 = crypto.sha256_digest(message_1.as_slice());
-    trace!("h(message_1) CBOR Data Item = 0x{}", encode(h_message_1.as_slice()));
+    trace!(
+        "h(message_1) CBOR Data Item = 0x{}",
+        encode(h_message_1.as_slice())
+    );
 
     Ok((
         WaitM2 {
@@ -411,7 +418,6 @@ pub fn i_parse_message_2<'a>(
 ) -> Result<(ProcessingM2, ConnId, Option<IdCred>, EadItems), EDHOCError> {
     let res = parse_message_2(message_2);
     if let Ok((g_y, ciphertext_2)) = res {
-
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
         trace!("th_2: 0x{}", encode(th_2));
         // compute prk_2e
@@ -464,7 +470,6 @@ pub fn i_verify_message_2(
         _ => Err(EDHOCError::UnsupportedMethod)?,
     };
     trace!("prk_3e2m: 0x{}", encode(prk_3e2m));
-
 
     let expected_mac_2 = match state.method {
         m if m == EDHOCMethod::StatStat.into() => Some(compute_mac_2(
@@ -530,6 +535,11 @@ pub fn i_prepare_message_3(
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems, // FIXME: make it a list of EADItem
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
+    trace!(
+        "cred_i kid: 0x{}",
+        encode(cred_i.kid.clone().unwrap().as_slice())
+    );
+
     let id_cred_i = match cred_transfer {
         CredentialTransfer::ByValue => cred_i.by_value()?,
         CredentialTransfer::ByReference => cred_i.by_kid()?,
@@ -582,14 +592,17 @@ pub fn i_prepare_message_3(
         ct_3a.extend_from_slice(pt_3a).unwrap();
         ct_3a.extend_from_slice(ciphertext_3b.as_slice()).unwrap();
         trace!("plaintext_3a: 0x{}", encode(ct_3a.as_slice()));
-        
+
         let ciphertext_3a =
             encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
         trace!("ciphertext_3a: 0x{}", encode(ciphertext_3a.as_slice()));
 
         // CBOR encoding of ct_3a
         let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
-        trace!("encoded_ciphertext_3a: 0x{}", encode(encoded_ciphertext_3a.as_slice()));
+        trace!(
+            "encoded_ciphertext_3a: 0x{}",
+            encode(encoded_ciphertext_3a.as_slice())
+        );
 
         //compute message_3
         message_3
@@ -616,7 +629,7 @@ pub fn i_prepare_message_3(
         &state.th_3,
         &plaintext_3,
         state.method,
-        Some(id_cred_i.clone().as_encoded_value()),
+        Some(id_cred_i.as_encoded_value()),
         Some(&ead_3),
         &cred_i.bytes.as_slice(),
         //Some(&state.cred_r.clone().unwrap().bytes.as_slice()),
@@ -1006,7 +1019,6 @@ pub fn build_external_aad(
         // cred_i, cred_r are already CBOR Web Token
         buf.extend_from_slice(ci).unwrap();
         buf.extend_from_slice(cr).unwrap();
-
     } else {
         buf.extend_from_slice(th_3).unwrap();
     }
