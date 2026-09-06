@@ -115,9 +115,11 @@ fn main() {
                         println!("message_4: {:02x?}", message_4.as_slice());
                         response.message.payload = Vec::from(message_4.as_slice());
                         // response.message.payload = b"".to_vec();
+                        let rpsk = responder.derive_resumption_psk().unwrap();
 
                         println!("EDHOC exchange successfully completed");
                         println!("PRK_out: {:02x?}", prk_out);
+                        println!("rPSK: {:02x?}", rpsk);
 
                         let mut oscore_secret = [0; 16];
                         responder.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0

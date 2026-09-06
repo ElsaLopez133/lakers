@@ -70,9 +70,11 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let message_4 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, ead_4) = initiator.process_message_4(&message_4).unwrap();
     ead_4.processed_critical_items().unwrap();
+    let rpsk = initiator.derive_resumption_psk().unwrap();
 
     println!("EDHOC exchange successfully completed");
     println!("PRK_out: {:02x?}", prk_out);
+    println!("rPSK: {:02x?}", rpsk);
 
     let mut oscore_secret = [0; 16];
     initiator.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0

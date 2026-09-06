@@ -375,7 +375,7 @@ pub enum EDHOCMethod {
     StatStat = 3,
     PSK = 4,
 }
-
+#[derive(PartialEq, Debug, Clone)]
 pub struct ResumptionPsk {
     pub rpsk: BytesResumptionPsk,
     pub kid: [u8; RESUMPTION_PSK_KID_LEN],
