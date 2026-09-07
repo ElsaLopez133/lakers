@@ -1,4 +1,5 @@
 use core::ops::Index;
+use zeroize::Zeroize;
 
 // NOTE: This constant is only here for now because it is only ever used in instances of EdhocBuffer.
 // TODO: move to lib.rs, once EdhocMessageBuffer is replaced by EdhocBuffer.
@@ -260,7 +261,13 @@ impl<const N: usize> TryFrom<&[u8]> for EdhocBuffer<N> {
         }
     }
 }
-
+#[allow(deprecated)]
+impl<const N: usize> Zeroize for EdhocBuffer<N> {
+    fn zeroize(&mut self) {
+        self.content.zeroize();
+        self.len = 0;
+    }
+}
 #[allow(deprecated)]
 mod test {
 

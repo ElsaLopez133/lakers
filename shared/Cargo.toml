@@ -19,13 +19,14 @@ log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
 hax-lib.workspace = true
 digest = { version = "0.10.7", default-features = false }
+zeroize = { version = "1.8.2", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
 hexlit = "0.5.3"
 rstest = "0.21.0"
 
 [features]
-default = [  ]
+default = []
 python-bindings = ["pyo3", "hex"]
 
 ## For all arbitrarily limited buffers, pick the maximum.
