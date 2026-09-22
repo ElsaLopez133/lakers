@@ -129,13 +129,13 @@ pub fn r_prepare_message_2(
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
     let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
-
+    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
     let prepared = match (state.method, method_details) {
         (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
             r_prepare_message_2_statstat(
                 state,
                 crypto,
-                cred_r,
+                cred_r.try_into()?,
                 r,
                 c_r,
                 cred_transfer,
@@ -145,7 +145,7 @@ pub fn r_prepare_message_2(
             )?
         }
         (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
-            r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
+            r_prepare_message_2_psk(crypto, cred_r.try_into()?, c_r, ead_2, &th_2, &prk_2e)?
         }
         _ => return Err(EDHOCError::UnsupportedMethod),
     };
@@ -209,13 +209,12 @@ where
         WaitM3MethodSpecifics::StatStat { .. } => {
             r_parse_message_3_statstat(state, crypto, message_3)?
         }
-        WaitM3MethodSpecifics::Psk { cred_r } => r_parse_message_3_psk_with_cred_resolver(
-            state,
-            crypto,
-            message_3,
-            cred_r,
-            resolve_cred_i,
-        )?,
+        // TEMPORARY (#435)
+        WaitM3MethodSpecifics::Psk { cred_r } => {
+            r_parse_message_3_psk_with_cred_resolver(state, crypto, message_3, cred_r, |id| {
+                resolve_cred_i(id).and_then(PskCredential::try_from)
+            })?
+        }
     };
 
     Ok((
@@ -238,15 +237,27 @@ pub fn r_verify_message_3(
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
-
+    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
     let verified = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
-            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
-        }
+        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => r_verify_message_3_statstat(
+            state,
+            crypto,
+            valid_cred_i.try_into()?,
+            *mac_3,
+            id_cred_i,
+            &salt_4e3m,
+        )?,
         ProcessingM3MethodSpecifics::Psk {
             id_cred_psk,
             cred_r,
-        } => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+        } => r_verify_message_3_psk(
+            state,
+            crypto,
+            valid_cred_i.try_into()?,
+            id_cred_psk,
+            cred_r,
+            &salt_4e3m,
+        )?,
     };
 
     let mut prk_out: BytesHashLen = Default::default();
@@ -362,12 +373,13 @@ pub fn i_verify_message_2(
     // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
     // the method-specific derivation in the child modules and only shares the final
     // `ProcessedM2` assembly here.
+    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
     let verified = match (&state.method_specifics, &i) {
         (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
-            i_verify_message_2_statstat(state, crypto, valid_cred_r, i)?
+            i_verify_message_2_statstat(state, crypto, valid_cred_r.try_into()?, i)?
         }
         (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
-            i_verify_message_2_psk(state, crypto, valid_cred_r)?
+            i_verify_message_2_psk(state, crypto, valid_cred_r.try_into()?)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.
         _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
@@ -388,12 +400,13 @@ pub fn i_prepare_message_3(
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
+    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
     let prepared = match state.method_specifics {
         ProcessedM2MethodSpecifics::StatStat { .. } => {
-            i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?
+            i_prepare_message_3_statstat(state, crypto, cred_i.try_into()?, cred_transfer, ead_3)?
         }
         ProcessedM2MethodSpecifics::Psk { .. } => {
-            i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?
+            i_prepare_message_3_psk(state, crypto, cred_i.try_into()?, cred_transfer, ead_3)?
         }
     };
 

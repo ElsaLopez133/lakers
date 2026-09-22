@@ -214,7 +214,10 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
     }
     let crypto = &mut default_crypto();
 
-    let state = core::ptr::read(&(*initiator_c).processed_m2).to_rust();
+    let state = match core::ptr::read(&(*initiator_c).processed_m2).to_rust() {
+        Ok(state) => state,
+        Err(err) => return err as i8,
+    };
 
     let ead_3 = if ead_3_c.is_null() {
         EadItems::new()

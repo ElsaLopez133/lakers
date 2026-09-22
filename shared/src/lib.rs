@@ -528,7 +528,7 @@ pub struct WaitM2 {
 #[derive(Debug)]
 pub enum WaitM3MethodSpecifics {
     StatStat {},
-    Psk { cred_r: Credential },
+    Psk { cred_r: PskCredential },
 }
 #[derive(Debug)]
 pub struct WaitM3 {
@@ -577,7 +577,7 @@ pub enum ParsedMessage2Details {
 #[repr(C)]
 pub enum ProcessedM2MethodSpecifics {
     StatStat {},
-    Psk { cred_r: Credential },
+    Psk { cred_r: PskCredential },
 }
 
 #[derive(Debug)]
@@ -596,7 +596,7 @@ pub enum ProcessingM3MethodSpecifics {
     },
     Psk {
         id_cred_psk: IdCred,
-        cred_r: Credential,
+        cred_r: PskCredential,
     },
 }
 #[derive(Debug)]
