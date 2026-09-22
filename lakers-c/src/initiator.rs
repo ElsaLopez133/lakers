@@ -177,9 +177,13 @@ pub unsafe extern "C" fn initiator_verify_message_2(
     };
 
     let valid_cred_r = match &state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
-            lakers::credential_check_or_fetch(cred_expected, id_cred_r.clone())
-        }
+        // TEMPORARY (#435): same conversion as `verify_message_2` in the `lakers` crate. `and_then`
+        // and `map` keep every error inside the `Result`: this `extern "C"` function must not panic.
+        ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => cred_expected
+            .map(PublicCredential::try_from)
+            .transpose()
+            .and_then(|cred| lakers::credential_check_or_fetch(cred, id_cred_r.clone()))
+            .map(Credential::from),
         ProcessingM2MethodSpecifics::Psk {} => cred_expected.ok_or(EDHOCError::MissingIdentity),
     };
 

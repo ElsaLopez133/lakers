@@ -414,9 +414,16 @@ pub unsafe extern "C" fn credential_check_or_fetch(
     };
 
     let id_cred_received_value = (*id_cred_received).clone();
-    match credential_check_or_fetch_rust(cred_expected, id_cred_received_value) {
+    // TEMPORARY (#435): the C API still passes a `CredentialC`, which maps to `Credential`, while the
+    // Rust function now takes a `PublicCredential`. A symmetric credential fails the conversion
+    // and is reported to C as an error code, like any other error below.
+    let result = cred_expected
+        .map(PublicCredential::try_from)
+        .transpose()
+        .and_then(|cred| credential_check_or_fetch_rust(cred, id_cred_received_value));
+    match result {
         Ok(valid_cred) => {
-            CredentialC::copy_into_c(valid_cred, cred_out);
+            CredentialC::copy_into_c(valid_cred.into(), cred_out);
             0
         }
         Err(err) => err as i8,

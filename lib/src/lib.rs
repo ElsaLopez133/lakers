@@ -217,17 +217,26 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
         }
     }
 
-    // Example of application of lookup
-    // let cred_table = [cred_i_1.clone(), cred_i_2.clone()];
-    // let (responder, id_cred_i, ead_3) =
-    // responder_wait_m3.parse_message_3_with_credential_lookup(&message_3, |id| {
-    // credential_lookup_or_fetch(&cred_table, id.clone())
-    // })?;
-
+    /// Parse message 3, resolving the initiator's credential with `resolve_cred_i`.
+    ///
+    /// Only the PSK method calls the resolver; for the StatStat method it is ignored. `ID_CRED_PSK`
+    /// is always a reference (such as a `kid`): a by-value one is rejected before the resolver
+    /// runs. A typical resolver looks that reference up in a table of stored PSK credentials:
+    ///
+    /// ```ignore
+    /// let cred_table = [cred_i_1.clone(), cred_i_2.clone()];
+    /// let (responder, id_cred_i, ead_3) = responder_wait_m3
+    ///     .parse_message_3_with_credential_lookup(&message_3, |id| {
+    ///         psk_credential_lookup(&cred_table, id).map(Credential::from)
+    ///     })?;
+    /// ```
+    ///
+    /// The `.map(Credential::from)` is TEMPORARY (#435): it goes away once the resolver returns a
+    /// `PskCredential`.
     pub fn parse_message_3_with_credential_lookup<F>(
         mut self,
         message_3: &'a BufferMessage3,
-        resolve_cred_i: F, // we pass a function to look up for the credential: credential_lookup_or_fetch
+        resolve_cred_i: F, // looks up the peer's PSK credential, e.g. with `psk_credential_lookup`
     ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError>
     where
         F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
@@ -420,9 +429,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         trace!("Enter verify_message_2");
         let i = self.i.ok_or(EDHOCError::MissingIdentity)?;
         let valid_cred_r = match &self.state.method_specifics {
-            ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
-                credential_check_or_fetch(cred_expected, id_cred_r.clone())?
-            }
+            // TEMPORARY (#435): converts to and from the legacy `Credential`, which this API still
+            // takes, until the credential moves into the method-specific identity.
+            ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => credential_check_or_fetch(
+                cred_expected.map(PublicCredential::try_from).transpose()?,
+                id_cred_r.clone(),
+            )?
+            .into(),
             ProcessingM2MethodSpecifics::Psk {} => {
                 cred_expected.ok_or(EDHOCError::MissingIdentity)?
             }
@@ -539,9 +552,9 @@ pub fn generate_connection_identifier<Crypto: CryptoTrait>(crypto: &mut Crypto) 
 
 // Implements auth credential checking according to draft-tiloca-lake-implem-cons
 pub fn credential_check_or_fetch(
-    cred_expected: Option<Credential>,
+    cred_expected: Option<PublicCredential>,
     id_cred_received: IdCred,
-) -> Result<Credential, EDHOCError> {
+) -> Result<PublicCredential, EDHOCError> {
     trace!("Enter credential_check_or_fetch");
     // Processing of auth credentials according to draft-tiloca-lake-implem-cons
     // Comments tagged with a number refer to steps in Section 4.3.1. of draft-tiloca-lake-implem-cons
@@ -592,9 +605,9 @@ pub fn credential_check_or_fetch(
 /// credential is converted to the matching ID_CRED form and compared against `id_cred_received`.
 /// If no entry matches and `id_cred_received` carries a full CCS by value, that CCS is returned.
 pub fn credential_lookup_or_fetch(
-    credentials: &[Credential],
+    credentials: &[PublicCredential],
     id_cred_received: IdCred,
-) -> Result<Credential, EDHOCError> {
+) -> Result<PublicCredential, EDHOCError> {
     for cred in credentials {
         let candidate = if id_cred_received.reference_only() {
             cred.by_kid()
@@ -612,6 +625,36 @@ pub fn credential_lookup_or_fetch(
     id_cred_received.get_ccs()
 }
 
+/// Resolve a PSK credential from a local table of stored credentials.
+///
+/// The PSK counterpart of [`credential_lookup_or_fetch`], with one deliberate difference: there is
+/// no fetch fallback. A PSK must already be stored locally, so the peer can only *refer* to it
+/// (by `kid`). A credential carrying the PSK by value is never accepted, since that would let the
+/// peer choose the key that the handshake then authenticates with.
+///
+/// Errors with `WrongCredentialType` if `id_cred_received` carries a credential by value, and with
+/// `MissingIdentity` if no stored credential has the referenced `kid`. Stored credentials without a
+/// `kid` can never match.
+pub fn psk_credential_lookup(
+    credentials: &[PskCredential],
+    id_cred_received: &IdCred,
+) -> Result<PskCredential, EDHOCError> {
+    if !id_cred_received.reference_only() {
+        return Err(EDHOCError::WrongCredentialType);
+    }
+    for cred in credentials {
+        let candidate = cred.by_kid();
+
+        if let Ok(candidate) = candidate {
+            if candidate.as_full_value() == id_cred_received.as_full_value() {
+                // This copies the PSK: the resolver has to return an owned credential. The copy
+                // is not erased when dropped yet; see the zeroize TODO on `BufferPsk`.
+                return Ok(cred.clone());
+            }
+        }
+    }
+    Err(EDHOCError::MissingIdentity)
+}
 #[cfg(test)]
 mod test_vectors_common {
     use hexlit::hex;
@@ -644,6 +687,8 @@ mod test {
         &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
     const CRED_I_PSK_FORGED: &[u8] =
         &hex!("A20269696E69746961746F7208A101A301040241102050AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    const CRED_I_PSK_WRONG_KID: &[u8] =
+        &hex!("A20269696E69746961746F7208A101A30104024111205050930FF462A77A3540CF546325DEA214");
 
     #[test]
     fn test_new_initiator() {
@@ -717,8 +762,8 @@ mod test {
     #[cfg(feature = "test-ead-none")]
     #[test]
     fn test_handshake() {
-        let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
-        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+        let cred_i = PublicCredential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
+        let cred_r = PublicCredential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
         let initiator = EdhocInitiator::new(
             default_crypto(),
@@ -731,7 +776,7 @@ mod test {
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
-            cred_r.clone(),
+            cred_r.clone().into(),
         ); // has to select an identity before learning who is I
 
         // ---- begin initiator handling
@@ -755,10 +800,10 @@ mod test {
                 InitiatorIdentity::StatStat {
                     i: I.try_into().expect("Wrong length of initiator private key"),
                 },
-                cred_i.clone(),
+                cred_i.clone().into(),
             )
             .unwrap(); // exposing own identity only after validating cred_r
-        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
+        let initiator = initiator.verify_message_2(Some(cred_r.into())).unwrap();
 
         // if needed: prepare ead_3
         let (initiator, message_3, i_prk_out) = initiator
@@ -769,7 +814,7 @@ mod test {
         // ---- begin responder handling
         let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
         let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i.into()).unwrap();
 
         // Send message_4
         let (mut responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
@@ -809,14 +854,17 @@ mod test {
     #[cfg(feature = "test-ead-none")]
     #[test]
     fn test_handshake_psk() {
-        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
-        let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
+        let cred_i = PskCredential::parse_ccs(CRED_I_PSK.try_into().unwrap()).unwrap();
+        let cred_r = PskCredential::parse_ccs(CRED_R_PSK.try_into().unwrap()).unwrap();
 
         let initiator =
             EdhocInitiator::new(default_crypto(), EDHOCMethod::PSK, EDHOCSuite::CipherSuite2);
 
-        let responder =
-            EdhocResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
+        let responder = EdhocResponder::new(
+            default_crypto(),
+            ResponderIdentity::Psk,
+            cred_r.clone().into(),
+        );
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
 
@@ -827,9 +875,9 @@ mod test {
 
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
-            .set_identity(InitiatorIdentity::Psk, cred_i.clone())
+            .set_identity(InitiatorIdentity::Psk, cred_i.clone().into())
             .unwrap();
-        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
+        let initiator = initiator.verify_message_2(Some(cred_r.into())).unwrap();
 
         let (initiator, message_3, i_prk_out) = initiator
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
@@ -837,11 +885,11 @@ mod test {
 
         let (responder, id_cred_i, _ead_3) = responder
             .parse_message_3_with_credential_lookup(&message_3, |id| {
-                credential_check_or_fetch(Some(cred_i.clone()), id.clone())
+                psk_credential_lookup(&[cred_i.clone()], id).map(Credential::from)
             })
             .unwrap();
         assert!(id_cred_i.reference_only());
-        let (responder, r_prk_out) = responder.verify_message_3(cred_i.clone()).unwrap();
+        let (responder, r_prk_out) = responder.verify_message_3(cred_i.clone().into()).unwrap();
 
         let (mut responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
         let (mut initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
@@ -863,43 +911,30 @@ mod test {
     }
 
     #[test]
-    fn test_forged_cred_i_psk_credential_lookup_or_fetch() {
-        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
+    fn test_psk_credential_lookup_list() {
+        // The peer refers to the *second* table entry. A lookup that gave up at the first
+        // mismatch, instead of moving on to the next entry, would fail here.
+        let cred_wrong_kid = PskCredential::parse_ccs(CRED_I_PSK_WRONG_KID).unwrap();
+        let cred_i = PskCredential::parse_ccs(CRED_I_PSK).unwrap();
+        // ID_CRED by reference, { 4: h'10' }, as a peer would send it for CRED_I_PSK
+        let id_cred_received = cred_i.by_kid().unwrap();
 
-        let mut id_cred_attacker = IdCred::new();
-        id_cred_attacker
-            .bytes
-            .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
-            .unwrap();
-        id_cred_attacker
-            .bytes
-            .extend_from_slice(CRED_I_PSK_FORGED)
-            .unwrap();
-
-        let cred_fetch = credential_lookup_or_fetch(&[cred_i], id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::WrongCredentialType)))
+        let found = psk_credential_lookup(&[cred_wrong_kid, cred_i], &id_cred_received).unwrap();
+        assert_eq!(found.kid().unwrap().as_slice(), &[0x10]);
     }
 
     #[test]
-    fn test_forged_cred_i_psk_credential_check_or_fetch() {
-        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
-
-        let mut id_cred_attacker = IdCred::new();
-        id_cred_attacker
-            .bytes
-            .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
-            .unwrap();
-        id_cred_attacker
-            .bytes
-            .extend_from_slice(CRED_I_PSK_FORGED)
+    fn test_psk_credential_lookup_wrong_kid() {
+        // The peer refers to a kid for which no PSK is stored.
+        let cred_wrong_kid = PskCredential::parse_ccs(CRED_I_PSK_WRONG_KID).unwrap();
+        let id_cred_received = PskCredential::parse_ccs(CRED_I_PSK)
+            .unwrap()
+            .by_kid()
             .unwrap();
 
-        let cred_fetch = credential_check_or_fetch(Some(cred_i), id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::UnexpectedCredential)))
+        let cred_lookup = psk_credential_lookup(&[cred_wrong_kid], &id_cred_received);
+        assert!(matches!(cred_lookup, Err(EDHOCError::MissingIdentity)));
     }
-
     #[test]
     fn test_forged_cred_i_psk_credential_check_or_fetch_none() {
         let mut id_cred_attacker = IdCred::new();
@@ -1063,7 +1098,7 @@ mod test_authz {
         let valid_cred_i = if id_cred_i.reference_only() {
             mock_fetch_cred_i(id_cred_i).unwrap()
         } else {
-            id_cred_i.get_ccs().unwrap()
+            id_cred_i.get_ccs().unwrap().into()
         };
         let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
 

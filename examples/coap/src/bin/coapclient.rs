@@ -30,8 +30,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);
 
-    let cred_i: Credential = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
-    let cred_r: Credential = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+    let cred_i: PublicCredential = PublicCredential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
+    let cred_r: PublicCredential = PublicCredential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
     let initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
@@ -60,9 +60,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
         InitiatorIdentity::StatStat {
             i: I.try_into().unwrap(),
         },
-        cred_i,
+        cred_i.into(), // TEMPORARY (#435): API still takes the legacy `Credential`
     )?;
-    let initiator = initiator.verify_message_2(Some(cred_r))?;
+    let initiator = initiator.verify_message_2(Some(cred_r.into()))?; // TEMPORARY (#435): API still takes the legacy `Credential`
 
     let mut msg_3 = Vec::from(c_r.as_cbor());
     let (initiator, message_3, prk_out) =

@@ -152,8 +152,7 @@ impl IdCred {
     ///
     /// A credential carrying a symmetric key (`CCS_PSK`) is never returned. Doing so would take
     /// key material from the peer's own message instead of from local storage, letting the peer
-    /// choose the PSK that the handshake then "authenticates" with. This is the receive-side half
-    /// of the rule that [`Credential::by_value`] already enforces when sending.
+    /// choose the PSK that the handshake then "authenticates" with.
     ///
     /// Errors with `MissingIdentity` if the ID_CRED is a reference (such as a `kid`) and so
     /// carries no credential at all, `ParsingError` if the CCS is malformed, and
@@ -164,13 +163,10 @@ impl IdCred {
     /// any resolver runs. Neither check subsumes the other: that one protects handshakes that use
     /// an application-supplied resolver, this one protects direct callers of
     /// `credential_lookup_or_fetch` and `credential_check_or_fetch`.
-    pub fn get_ccs(&self) -> Result<Credential, EDHOCError> {
+    pub fn get_ccs(&self) -> Result<PublicCredential, EDHOCError> {
         if self.item_type() == IdCredType::KCCS {
-            let cred = Credential::parse_ccs(&self.bytes.as_slice()[2..])?;
-            match cred.cred_type {
-                CredentialType::CCS => Ok(cred),
-                _ => Err(EDHOCError::WrongCredentialType),
-            }
+            let cred = PublicCredential::parse_ccs(&self.bytes.as_slice()[2..]);
+            cred
         } else {
             Err(EDHOCError::MissingIdentity)
         }
@@ -497,6 +493,62 @@ pub struct Credential {
     pub cred_type: CredentialType,
 }
 
+// TEMPORARY (#435): bridges between the new credential types and the legacy `Credential`, so that
+// callers can be migrated one at a time. `From` goes new -> legacy and cannot fail; `TryFrom` goes
+// legacy -> new and fails with `WrongCredentialType` when the key is of the other kind.
+// Delete all four together with `Credential`.
+impl From<PublicCredential> for Credential {
+    fn from(cred: PublicCredential) -> Self {
+        Self {
+            bytes: cred.bytes,
+            key: CredentialKey::EC2Compact(cred.key),
+            kid: cred.kid,
+            cred_type: CredentialType::CCS,
+        }
+    }
+}
+
+// TEMPORARY (#435): see the bridge note above.
+impl TryFrom<Credential> for PublicCredential {
+    type Error = EDHOCError;
+    fn try_from(cred: Credential) -> Result<Self, Self::Error> {
+        match cred.key {
+            CredentialKey::EC2Compact(key) => Ok(Self {
+                bytes: cred.bytes,
+                key,
+                kid: cred.kid,
+            }),
+            CredentialKey::Symmetric(..) => Err(EDHOCError::WrongCredentialType),
+        }
+    }
+}
+
+// TEMPORARY (#435): see the bridge note above.
+impl From<PskCredential> for Credential {
+    fn from(cred: PskCredential) -> Self {
+        Self {
+            bytes: cred.bytes,
+            key: CredentialKey::Symmetric(cred.key),
+            kid: cred.kid,
+            cred_type: CredentialType::CCS_PSK,
+        }
+    }
+}
+
+// TEMPORARY (#435): see the bridge note above.
+impl TryFrom<Credential> for PskCredential {
+    type Error = EDHOCError;
+    fn try_from(cred: Credential) -> Result<Self, Self::Error> {
+        match cred.key {
+            CredentialKey::Symmetric(key) => Ok(Self {
+                bytes: cred.bytes,
+                key,
+                kid: cred.kid,
+            }),
+            CredentialKey::EC2Compact(..) => Err(EDHOCError::WrongCredentialType),
+        }
+    }
+}
 impl Credential {
     /// Creates a new CCS credential with the given bytes and public key
     pub fn new_ccs(bytes: BufferCred, public_key: BytesKeyEC2) -> Self {
@@ -802,12 +854,14 @@ mod test_experimental {
     /// and `IdCred::get_ccs` had to perform.
     #[test]
     fn test_psk_credential_rejects_ec2() {
-        assert!(PskCredential::parse_ccs(CRED_EC2_TV).is_err());
+        let some_result = PskCredential::parse_ccs(CRED_EC2_TV);
+        assert!(matches!(some_result, Err(EDHOCError::WrongCredentialType)));
     }
 
     #[test]
     fn test_public_credential_rejects_psk() {
-        assert!(PublicCredential::parse_ccs(CRED_PSK_16).is_err());
+        let some_result = PublicCredential::parse_ccs(CRED_PSK_16);
+        assert!(matches!(some_result, Err(EDHOCError::WrongCredentialType)));
     }
 
     /// The PSK must not reach logs or panic messages, either directly...
