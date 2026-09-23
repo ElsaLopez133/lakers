@@ -133,7 +133,9 @@ fn main() -> ! {
                 cred_i: cred_i.clone(),
             })
             .unwrap(); // exposing own identity only after validating cred_r
-        let initiator = initiator.verify_message_2(Some(cred_r.into())).unwrap();
+        let initiator = initiator
+            .verify_message_2(PeerCredential::StatStat(Some(cred_r)))
+            .unwrap();
 
         let (initiator, message_3, i_prk_out) = initiator
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
@@ -141,7 +143,9 @@ fn main() -> ! {
 
         let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
         let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i.into()).unwrap();
+        let (responder, r_prk_out) = responder
+            .verify_message_3(PeerCredential::StatStat(Some(valid_cred_i)))
+            .unwrap();
 
         let mut initiator = initiator.completed_without_message_4().unwrap();
         let mut responder = responder.completed_without_message_4().unwrap();
@@ -193,7 +197,9 @@ fn main() -> ! {
                 cred_i: cred_i.clone(),
             })
             .unwrap(); // exposing own identity only after validating cred_r
-        let initiator = initiator.verify_message_2(Some(cred_r.into())).unwrap();
+        let initiator = initiator
+            .verify_message_2(PeerCredential::Psk(cred_r))
+            .unwrap();
 
         let (initiator, message_3, i_prk_out) = initiator
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
@@ -201,12 +207,14 @@ fn main() -> ! {
 
         let (responder, id_cred_i, _ead_3) = responder
             .parse_message_3_with_credential_lookup(&message_3, |id| {
-                psk_credential_lookup(&[cred_i.clone()], id).map(Credential::from)
+                psk_credential_lookup(&[cred_i.clone()], id).map(PskCredential::from)
             })
             .unwrap();
         assert!(id_cred_i.reference_only());
         // The resolver above already identified the PSK credential; no second lookup is needed.
-        let (responder, r_prk_out) = responder.verify_message_3(cred_i.into()).unwrap();
+        let (responder, r_prk_out) = responder
+            .verify_message_3(PeerCredential::Psk(cred_i))
+            .unwrap();
 
         let mut initiator = initiator.completed_without_message_4().unwrap();
         let mut responder = responder.completed_without_message_4().unwrap();

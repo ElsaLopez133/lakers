@@ -157,8 +157,15 @@ impl PyEdhocResponder {
             ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
             ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
         };
-        let valid_cred_i = super::parse_credential(method, valid_cred_i)
+        let cred = super::parse_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
+        let valid_cred_i = match method {
+            EDHOCMethod::StatStat => {
+                PeerCredential::StatStat(Some(PublicCredential::try_from(cred)?))
+            }
+            EDHOCMethod::PSK => PeerCredential::Psk(PskCredential::try_from(cred)?),
+            _ => return Err(EDHOCError::UnsupportedMethod.into()),
+        };
         let (state, prk_out) = r_verify_message_3(
             &mut self.take_processing_m3()?,
             &mut default_crypto(),

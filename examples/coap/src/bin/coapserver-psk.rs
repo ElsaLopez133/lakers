@@ -84,7 +84,7 @@ fn main() {
                 let cred_table = [cred_i.clone()];
                 let Ok((responder, id_cred_i, _ead_3)) = responder
                     .parse_message_3_with_credential_lookup(&message_3, |id| {
-                        psk_credential_lookup(&[cred_i.clone()], id).map(Credential::from)
+                        psk_credential_lookup(&[cred_i.clone()], id).map(PskCredential::from)
                     })
                 else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);
@@ -94,11 +94,12 @@ fn main() {
                 };
                 println!("message_3 parsed");
                 let valid_cred_i = psk_credential_lookup(&cred_table[..], &id_cred_i)
-                    .map(Credential::from)
+                    .map(PskCredential::from)
                     .unwrap();
                 // println!("valid_cred_i: 0x{}", encode(valid_cred_i.bytes.as_slice()));
 
-                let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone())
+                let Ok((responder, prk_out)) =
+                    responder.verify_message_3(PeerCredential::Psk(valid_cred_i.clone()))
                 else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;

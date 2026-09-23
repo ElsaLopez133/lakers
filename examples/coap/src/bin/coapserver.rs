@@ -116,10 +116,11 @@ fn main() {
                 ead_3.processed_critical_items().unwrap();
                 let cred_i = PublicCredential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
                 let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i)
-                    .map(Credential::from) // TEMPORARY (#435): API still takes the legacy `Credential`
+                    .map(PublicCredential::from) // TEMPORARY (#435): API still takes the legacy `Credential`
                     .unwrap();
                 // FIXME: instead of cloning, take by reference
-                let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone())
+                let Ok((responder, prk_out)) = responder
+                    .verify_message_3(PeerCredential::StatStat(Some(valid_cred_i.clone())))
                 else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;

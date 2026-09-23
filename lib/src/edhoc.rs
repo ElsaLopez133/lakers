@@ -206,7 +206,7 @@ pub fn r_parse_message_3_with_cred_resolver<F>(
     resolve_cred_i: F,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError>
 where
-    F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+    F: Fn(&IdCred) -> Result<PskCredential, EDHOCError>,
 {
     let parsed = match &state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
@@ -215,7 +215,7 @@ where
         // TEMPORARY (#435)
         WaitM3MethodSpecifics::Psk { cred_r } => {
             r_parse_message_3_psk_with_cred_resolver(state, crypto, message_3, cred_r, |id| {
-                resolve_cred_i(id).and_then(PskCredential::try_from)
+                resolve_cred_i(id)
             })?
         }
     };
@@ -237,30 +237,31 @@ where
 pub fn r_verify_message_3(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
-    valid_cred_i: Credential,
+    valid_cred_i: PeerCredential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
-    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
-    let verified = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => r_verify_message_3_statstat(
-            state,
-            crypto,
-            valid_cred_i.try_into()?,
-            *mac_3,
-            id_cred_i,
-            &salt_4e3m,
-        )?,
-        ProcessingM3MethodSpecifics::Psk {
-            id_cred_psk,
-            cred_r,
-        } => r_verify_message_3_psk(
-            state,
-            crypto,
-            valid_cred_i.try_into()?,
-            id_cred_psk,
-            cred_r,
-            &salt_4e3m,
-        )?,
+    let verified = match (&state.method_specifics, valid_cred_i) {
+        (
+            ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i },
+            PeerCredential::StatStat(Some(valid_cred_i)),
+        ) => {
+            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
+        }
+        (
+            ProcessingM3MethodSpecifics::Psk {
+                id_cred_psk,
+                cred_r,
+            },
+            PeerCredential::Psk(valid_cred_i),
+        ) => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+        (
+            ProcessingM3MethodSpecifics::StatStat {
+                mac_3: _,
+                id_cred_i: _,
+            },
+            PeerCredential::StatStat(None),
+        ) => return Err(EDHOCError::MissingIdentity),
+        _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
     let mut prk_out: BytesHashLen = Default::default();
@@ -369,22 +370,24 @@ pub fn i_parse_message_2<'a>(
 pub fn i_verify_message_2(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
-    valid_cred_r: Credential,
+    valid_cred_r: PeerCredential,
     i: &InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
     // The overall verification flow is shared across methods, but `prk_3e2m`,
     // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
     // the method-specific derivation in the child modules and only shares the final
     // `ProcessedM2` assembly here.
-    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
-    let verified = match (&state.method_specifics, &i) {
+    let verified = match (&state.method_specifics, &i, valid_cred_r) {
         (
             ProcessingM2MethodSpecifics::StatStat { .. },
             InitiatorIdentity::StatStat { i, cred_i: _ },
-        ) => i_verify_message_2_statstat(state, crypto, valid_cred_r.try_into()?, i)?,
-        (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk { cred_i: _ }) => {
-            i_verify_message_2_psk(state, crypto, valid_cred_r.try_into()?)?
-        }
+            PeerCredential::StatStat(Some(valid_cred_r)),
+        ) => i_verify_message_2_statstat(state, crypto, valid_cred_r, i)?,
+        (
+            ProcessingM2MethodSpecifics::Psk { .. },
+            InitiatorIdentity::Psk { cred_i: _ },
+            PeerCredential::Psk(valid_cred_r),
+        ) => i_verify_message_2_psk(state, crypto, valid_cred_r)?,
         // FIXME: it is not an error, but more a lack of agreement between peers.
         _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
     };

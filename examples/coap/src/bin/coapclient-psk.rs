@@ -55,7 +55,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     initiator.set_identity(InitiatorIdentity::Psk {
         cred_i: cred_i.clone(),
     })?;
-    let initiator = initiator.verify_message_2(Some(cred_r.into()))?; // TEMPORARY (#435): API still takes the legacy `Credential`
+    let initiator = initiator.verify_message_2(PeerCredential::Psk(cred_r))?;
 
     let mut msg_3 = Vec::from(c_r.as_cbor());
     let (initiator, message_3, prk_out) =

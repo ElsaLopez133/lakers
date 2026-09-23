@@ -142,8 +142,6 @@ impl PyEdhocInitiator {
     ) -> PyResult<()> {
         let cred_i = parse_credential(self.start.method, cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
-        let valid_cred_r = parse_credential(self.start.method, valid_cred_r)
-            .with_cause(py, "Failed to ingest CRED_R")?;
 
         // The initiator identity format depends on the negotiated method:
         // stat-stat needs the static DH private key, PSK does not.
@@ -164,7 +162,15 @@ impl PyEdhocInitiator {
             },
             _ => return Err(EDHOCError::UnsupportedMethod.into()),
         };
-
+        let cred = super::parse_credential(self.start.method, valid_cred_r)
+            .with_cause(py, "Failed to ingest CRED_I")?;
+        let valid_cred_r = match self.start.method {
+            EDHOCMethod::StatStat => {
+                PeerCredential::StatStat(Some(PublicCredential::try_from(cred)?))
+            }
+            EDHOCMethod::PSK => PeerCredential::Psk(PskCredential::try_from(cred)?),
+            _ => return Err(EDHOCError::UnsupportedMethod.into()),
+        };
         let state = i_verify_message_2(
             &self.take_processing_m2()?,
             &mut default_crypto(),

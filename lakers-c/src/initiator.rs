@@ -184,16 +184,18 @@ pub unsafe extern "C" fn initiator_verify_message_2(
     } else {
         Some((*cred_expected).to_rust())
     };
-
-    let valid_cred_r = match &state.method_specifics {
-        // TEMPORARY (#435): same conversion as `verify_message_2` in the `lakers` crate. `and_then`
-        // and `map` keep every error inside the `Result`: this `extern "C"` function must not panic.
+    // TEMPORARY (#435): C still hands us a `CredentialC`; build the method-specific
+    // credential here. Errors stay in the `Result`: this function must not panic.
+    let valid_cred_r: Result<PeerCredential, EDHOCError> = match &state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => cred_expected
             .map(PublicCredential::try_from)
             .transpose()
             .and_then(|cred| lakers::credential_check_or_fetch(cred, id_cred_r.clone()))
-            .map(Credential::from),
-        ProcessingM2MethodSpecifics::Psk {} => cred_expected.ok_or(EDHOCError::MissingIdentity),
+            .map(|cred| PeerCredential::StatStat(Some(cred))),
+        ProcessingM2MethodSpecifics::Psk {} => cred_expected
+            .ok_or(EDHOCError::MissingIdentity)
+            .and_then(PskCredential::try_from)
+            .map(PeerCredential::Psk),
     };
 
     match valid_cred_r
@@ -345,13 +347,13 @@ mod tests {
 
     fn make_ffi_initiator() -> EdhocInitiator {
         EdhocInitiator {
-            method: EDHOCMethod::StatStat,
             start: InitiatorStart {
                 suites_i: Default::default(),
                 method: EDHOCMethod::StatStat,
                 x: Default::default(),
                 g_x: Default::default(),
             },
+            i: BytesP256ElemLen::default(),
             wait_m2: WaitM2 {
                 method: EDHOCMethod::StatStat,
                 x: Default::default(),
@@ -393,13 +395,17 @@ mod tests {
         let responder = match method {
             EDHOCMethod::StatStat => EdhocResponder::new(
                 default_crypto(),
-                ResponderIdentity::StatStat { r: R_STATSTAT },
-                Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
+                ResponderIdentity::StatStat {
+                    r: R_STATSTAT,
+                    cred_r: PublicCredential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap())
+                        .unwrap(),
+                },
             ),
             EDHOCMethod::PSK => EdhocResponder::new(
                 default_crypto(),
-                ResponderIdentity::Psk,
-                Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap(),
+                ResponderIdentity::Psk {
+                    cred_r: PskCredential::parse_ccs(CRED_R_PSK.try_into().unwrap()).unwrap(),
+                },
             ),
             _ => panic!("unexpected method"),
         };
@@ -429,7 +435,6 @@ mod tests {
         unsafe {
             assert_eq!(initiator_new(&mut initiator, EDHOCMethod::PSK), 0);
         }
-        assert!(matches!(initiator.method, EDHOCMethod::PSK));
         assert!(matches!(initiator.start.method, EDHOCMethod::PSK));
     }
 
@@ -520,7 +525,7 @@ mod tests {
 
         assert_eq!(verify_rc, 0);
         assert!(matches!(
-            initiator.processed_m2.to_rust().method_specifics,
+            initiator.processed_m2.to_rust().unwrap().method_specifics,
             ProcessedM2MethodSpecifics::Psk { .. }
         ));
     }
@@ -544,8 +549,10 @@ mod tests {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat { r: R_STATSTAT },
-            Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
+            ResponderIdentity::StatStat {
+                r: R_STATSTAT,
+                cred_r: PublicCredential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
+            },
         );
         let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
         let (_responder, message_2) = responder

@@ -636,6 +636,12 @@ pub struct Completed {
     pub prk_exporter: BytesHashLen,
 }
 
+#[derive(Debug)]
+#[repr(C)]
+pub enum PeerCredential {
+    StatStat(Option<PublicCredential>),
+    Psk(PskCredential),
+}
 /// An enum describing options how to send credentials.
 #[cfg_attr(feature = "python-bindings", pyclass(eq, eq_int, from_py_object))]
 #[derive(Copy, Clone, Debug, PartialEq)]
