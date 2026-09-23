@@ -119,8 +119,8 @@ impl coap_handler::Handler for EdhocHandler {
                 lakers_crypto::default_crypto(),
                 ResponderIdentity::StatStat {
                     r: R.try_into().expect("Wrong length of responder private key"),
+                    cred_r: cred_r.clone(),
                 },
-                cred_r.into(),
             )
             .process_message_1(message_1)
             .map_err(render_error)?;

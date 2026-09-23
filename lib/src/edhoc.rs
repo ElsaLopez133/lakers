@@ -122,30 +122,33 @@ pub fn r_process_message_1(
 pub fn r_prepare_message_2(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
-    cred_r: Credential,
-    method_details: PrepareMessage2Details<'_>,
+    method_details: PrepareMessage2Details,
     c_r: ConnId,
     ead_2: &EadItems,
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
     let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
-    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
     let prepared = match (state.method, method_details) {
-        (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
-            r_prepare_message_2_statstat(
-                state,
-                crypto,
-                cred_r.try_into()?,
+        (
+            EDHOCMethod::StatStat,
+            PrepareMessage2Details::StatStat {
                 r,
-                c_r,
                 cred_transfer,
-                ead_2,
-                &th_2,
-                &prk_2e,
-            )?
-        }
-        (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
-            r_prepare_message_2_psk(crypto, cred_r.try_into()?, c_r, ead_2, &th_2, &prk_2e)?
+                cred_r,
+            },
+        ) => r_prepare_message_2_statstat(
+            state,
+            crypto,
+            cred_r,
+            r,
+            c_r,
+            cred_transfer,
+            ead_2,
+            &th_2,
+            &prk_2e,
+        )?,
+        (EDHOCMethod::PSK, PrepareMessage2Details::Psk { cred_r }) => {
+            r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
         }
         _ => return Err(EDHOCError::UnsupportedMethod),
     };
@@ -367,7 +370,7 @@ pub fn i_verify_message_2(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
-    i: InitiatorIdentity, // I's static private DH key when required by method
+    i: &InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
     // The overall verification flow is shared across methods, but `prk_3e2m`,
     // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
@@ -375,10 +378,11 @@ pub fn i_verify_message_2(
     // `ProcessedM2` assembly here.
     // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
     let verified = match (&state.method_specifics, &i) {
-        (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
-            i_verify_message_2_statstat(state, crypto, valid_cred_r.try_into()?, i)?
-        }
-        (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
+        (
+            ProcessingM2MethodSpecifics::StatStat { .. },
+            InitiatorIdentity::StatStat { i, cred_i: _ },
+        ) => i_verify_message_2_statstat(state, crypto, valid_cred_r.try_into()?, i)?,
+        (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk { cred_i: _ }) => {
             i_verify_message_2_psk(state, crypto, valid_cred_r.try_into()?)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.
@@ -396,18 +400,20 @@ pub fn i_verify_message_2(
 pub fn i_prepare_message_3(
     state: &ProcessedM2,
     crypto: &mut impl CryptoTrait,
-    cred_i: Credential,
+    i: InitiatorIdentity,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
-    // TEMPORARY (#435): the dispatcher still takes the legacy `Credential`.
-    let prepared = match state.method_specifics {
-        ProcessedM2MethodSpecifics::StatStat { .. } => {
-            i_prepare_message_3_statstat(state, crypto, cred_i.try_into()?, cred_transfer, ead_3)?
+    let prepared = match (&state.method_specifics, i) {
+        (
+            ProcessedM2MethodSpecifics::StatStat { .. },
+            InitiatorIdentity::StatStat { i: _, cred_i },
+        ) => i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?,
+        (ProcessedM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk { cred_i }) => {
+            i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?
         }
-        ProcessedM2MethodSpecifics::Psk { .. } => {
-            i_prepare_message_3_psk(state, crypto, cred_i.try_into()?, cred_transfer, ead_3)?
-        }
+        // the state's method and identity disagree
+        _ => return Err(EDHOCError::MissingIdentity),
     };
 
     let mut prk_out: BytesHashLen = Default::default();

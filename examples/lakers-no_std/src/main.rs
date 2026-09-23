@@ -115,8 +115,8 @@ fn main() -> ! {
             lakers_crypto::default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
+                cred_r: cred_r.clone(),
             },
-            cred_r.clone().into(),
         );
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
@@ -128,12 +128,10 @@ fn main() -> ! {
 
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
-            .set_identity(
-                InitiatorIdentity::StatStat {
-                    i: I.try_into().expect("Wrong length of initiator private key"),
-                },
-                cred_i.clone().into(),
-            )
+            .set_identity(InitiatorIdentity::StatStat {
+                i: I.try_into().expect("Wrong length of initiator private key"),
+                cred_i: cred_i.clone(),
+            })
             .unwrap(); // exposing own identity only after validating cred_r
         let initiator = initiator.verify_message_2(Some(cred_r.into())).unwrap();
 
@@ -177,8 +175,9 @@ fn main() -> ! {
         );
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
-            ResponderIdentity::Psk,
-            cred_r.clone().into(),
+            ResponderIdentity::Psk {
+                cred_r: cred_r.clone(),
+            },
         );
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
@@ -190,7 +189,9 @@ fn main() -> ! {
 
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
-            .set_identity(InitiatorIdentity::Psk, cred_i.clone().into())
+            .set_identity(InitiatorIdentity::Psk {
+                cred_i: cred_i.clone(),
+            })
             .unwrap(); // exposing own identity only after validating cred_r
         let initiator = initiator.verify_message_2(Some(cred_r.into())).unwrap();
 

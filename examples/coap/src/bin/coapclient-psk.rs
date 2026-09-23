@@ -52,7 +52,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let message_2 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, ead_2) = initiator.parse_message_2(&message_2)?;
     ead_2.processed_critical_items().unwrap();
-    initiator.set_identity(InitiatorIdentity::Psk, cred_i.into())?; // TEMPORARY (#435): API still takes the legacy `Credential`
+    initiator.set_identity(InitiatorIdentity::Psk {
+        cred_i: cred_i.clone(),
+    })?;
     let initiator = initiator.verify_message_2(Some(cred_r.into()))?; // TEMPORARY (#435): API still takes the legacy `Credential`
 
     let mut msg_3 = Vec::from(c_r.as_cbor());

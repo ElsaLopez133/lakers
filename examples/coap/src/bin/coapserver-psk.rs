@@ -35,8 +35,7 @@ fn main() {
             if request.message.payload[0] == 0xf5 {
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
-                    ResponderIdentity::Psk,
-                    cred_r.into(),
+                    ResponderIdentity::Psk { cred_r },
                 );
                 // println!("cred:{:?}", cred_psk);
 

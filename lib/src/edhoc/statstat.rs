@@ -13,7 +13,7 @@ pub(crate) fn r_prepare_message_2_statstat(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
     cred_r: PublicCredential,
-    r: &BytesP256ElemLen, // R's static private DH key
+    r: BytesP256ElemLen, // R's static private DH key
     c_r: ConnId,
     cred_transfer: CredentialTransfer,
     ead_2: &EadItems,
@@ -22,7 +22,7 @@ pub(crate) fn r_prepare_message_2_statstat(
 ) -> Result<PreparedMessage2, EDHOCError> {
     // compute prk_3e2m
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
-    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x);
+    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, &r, &state.g_x);
 
     let id_cred_r = match cred_transfer {
         CredentialTransfer::ByValue => cred_r.by_value()?,

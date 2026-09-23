@@ -50,8 +50,8 @@ fn main() {
                     lakers_crypto::default_crypto(),
                     ResponderIdentity::StatStat {
                         r: R.try_into().unwrap(),
+                        cred_r: cred_r.clone(),
                     },
-                    cred_r.into(), // TEMPORARY (#435): API still takes the legacy `Credential`
                 );
 
                 let message_1: BufferMessage1 = request.message.payload[1..]

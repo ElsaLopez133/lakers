@@ -539,13 +539,16 @@ pub struct WaitM3 {
 }
 
 /// Method-specific details required to prepare EDHOC message_2.
-#[derive(Copy, Clone, Debug)]
-pub enum PrepareMessage2Details<'a> {
+#[derive(Clone, Debug)]
+pub enum PrepareMessage2Details {
     StatStat {
-        r: &'a BytesP256ElemLen,
+        r: BytesP256ElemLen,
         cred_transfer: CredentialTransfer,
+        cred_r: PublicCredential,
     },
-    Psk,
+    Psk {
+        cred_r: PskCredential,
+    },
 }
 
 #[derive(Debug)]

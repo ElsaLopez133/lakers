@@ -11,6 +11,7 @@ use crate::*;
 #[repr(C)]
 pub struct EdhocInitiator {
     pub start: InitiatorStart,
+    pub i: BytesP256ElemLen,
     pub wait_m2: WaitM2,
     pub processing_m2: ProcessingM2C,
     pub processed_m2: ProcessedM2C,
@@ -159,14 +160,22 @@ pub unsafe extern "C" fn initiator_verify_message_2(
 
     let state = core::ptr::read(&(*initiator_c).processing_m2).to_rust();
 
+    let cred_i_rust = (*cred_i).to_rust(); // CredentialC -> Credential
     let identity = match (*initiator_c).start.method {
         EDHOCMethod::StatStat => {
             if i.is_null() {
                 return -1;
             }
-            InitiatorIdentity::StatStat { i: *i }
+            (*initiator_c).i = *i;
+            match PublicCredential::try_from(cred_i_rust) {
+                Ok(cred_i) => InitiatorIdentity::StatStat { i: *i, cred_i },
+                Err(err) => return err as i8,
+            }
         }
-        EDHOCMethod::PSK => InitiatorIdentity::Psk {},
+        EDHOCMethod::PSK => match PskCredential::try_from(cred_i_rust) {
+            Ok(cred_i) => InitiatorIdentity::Psk { cred_i },
+            Err(err) => return err as i8,
+        },
         _ => return -1,
     };
 
@@ -188,7 +197,7 @@ pub unsafe extern "C" fn initiator_verify_message_2(
     };
 
     match valid_cred_r
-        .and_then(|valid_cred_r| i_verify_message_2(&state, crypto, valid_cred_r, identity))
+        .and_then(|valid_cred_r| i_verify_message_2(&state, crypto, valid_cred_r, &identity))
     {
         Ok(state) => {
             ProcessedM2C::copy_into_c(state, &mut (*initiator_c).processed_m2);
@@ -225,13 +234,23 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
         (*ead_3_c).to_rust()
     };
 
-    match i_prepare_message_3(
-        &state,
-        crypto,
-        (*(*initiator_c).cred_i).to_rust(),
-        cred_transfer,
-        &ead_3,
-    ) {
+    let cred_i_rust = (*(*initiator_c).cred_i).to_rust();
+    let identity = match (*initiator_c).start.method {
+        EDHOCMethod::StatStat => match PublicCredential::try_from(cred_i_rust) {
+            Ok(cred_i) => InitiatorIdentity::StatStat {
+                i: (*initiator_c).i,
+                cred_i,
+            },
+            Err(err) => return err as i8,
+        },
+        EDHOCMethod::PSK => match PskCredential::try_from(cred_i_rust) {
+            Ok(cred_i) => InitiatorIdentity::Psk { cred_i },
+            Err(err) => return err as i8,
+        },
+        _ => return -1,
+    };
+
+    match i_prepare_message_3(&state, crypto, identity, cred_transfer, &ead_3) {
         Ok((state, msg_3, prk_out)) => {
             (*initiator_c).wait_m4 = state;
             *message_3 = msg_3;

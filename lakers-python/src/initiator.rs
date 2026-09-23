@@ -10,7 +10,7 @@ use crate::parse_credential;
 /// An implementation of the EDHOC protocol for the initiator side.
 #[pyclass(name = "EdhocInitiator")]
 pub struct PyEdhocInitiator {
-    cred_i: Option<Credential>,
+    identity: Option<InitiatorIdentity>,
     // FIXME: This does *not* get taken out, so some data stays available for longer than it needs
     // to be -- but that is apparently needed in selected_cipher_suite and
     // compute_ephemeral_secret.
@@ -53,7 +53,7 @@ impl PyEdhocInitiator {
         let method = parse_method(method)?;
 
         Ok(Self {
-            cred_i: None,
+            identity: None,
             start: InitiatorStart {
                 x,
                 g_x,
@@ -156,9 +156,12 @@ impl PyEdhocInitiator {
                     i: i.as_slice()
                         .try_into()
                         .map_err(|_| EDHOCError::ParsingError)?,
+                    cred_i: PublicCredential::try_from(cred_i)?,
                 }
             }
-            EDHOCMethod::PSK => InitiatorIdentity::Psk,
+            EDHOCMethod::PSK => InitiatorIdentity::Psk {
+                cred_i: PskCredential::try_from(cred_i)?,
+            },
             _ => return Err(EDHOCError::UnsupportedMethod.into()),
         };
 
@@ -166,10 +169,10 @@ impl PyEdhocInitiator {
             &self.take_processing_m2()?,
             &mut default_crypto(),
             valid_cred_r,
-            identity,
+            &identity,
         )?;
         self.processed_m2 = Some(state);
-        self.cred_i = Some(cred_i);
+        self.identity = Some(identity);
         Ok(())
     }
 
@@ -185,11 +188,15 @@ impl PyEdhocInitiator {
         ead_3: EadItems,
     ) -> PyResult<(Bound<'a, PyBytes>, Bound<'a, PyBytes>)> {
         let ead_3 = ead_3.try_into()?;
+        let mut processed_m2 = self.take_processed_m2()?;
+        let identity = self
+            .identity
+            .take()
+            .ok_or_else(|| PyValueError::new_err("verify_message_2 must be called first"))?;
         let (state, message_3, prk_out) = i_prepare_message_3(
-            &mut self.take_processed_m2()?,
+            &mut processed_m2,
             &mut default_crypto(),
-            // FIXME: take as reference rather than cloning
-            self.cred_i.as_ref().unwrap().clone(),
+            identity,
             cred_transfer,
             &ead_3,
         )?;
